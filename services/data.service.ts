@@ -4,7 +4,7 @@
  */
 import {
     User, Partner, OperationType, Transaction, AgentRechargeRequest,
-    RechargePaymentMethod, Card, Order, CardType, CommissionProfile, Contract
+    RechargePaymentMethod, Card, Order, CardType, CommissionProfile, Contract, AuditLog
 } from '../models';
 import { ApiService } from './api.service';
 
@@ -29,6 +29,7 @@ export class DataService {
     private _cardTypes: CardType[] | null = null;
     private _commissionProfiles: CommissionProfile[] | null = null;
     private _contracts: Contract[] | null = null;
+    private _auditLogs: AuditLog[] | null = null;
 
     // Private cache properties for Maps for efficient lookups
     private _userMap: Map<string, User> | null = null;
@@ -63,6 +64,7 @@ export class DataService {
     public invalidateCardTypesCache() { this._cardTypes = null; this._cardTypeMap = null; }
     public invalidateCommissionProfilesCache() { this._commissionProfiles = null; this._commissionProfileMap = null; }
     public invalidateContractsCache() { this._contracts = null; this._activeContractsMap = null; }
+    public invalidateAuditLogsCache() { this._auditLogs = null; }
 
 
     // --- Getter Methods for Arrays ---
@@ -173,6 +175,13 @@ export class DataService {
             this._contracts = await this.api.getContracts();
         }
         return this._contracts;
+    }
+
+    public async getAuditLogs(): Promise<AuditLog[]> {
+        if (!this._auditLogs) {
+            this._auditLogs = await this.api.getAuditLogs();
+        }
+        return this._auditLogs;
     }
 
 

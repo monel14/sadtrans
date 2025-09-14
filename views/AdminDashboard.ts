@@ -156,8 +156,9 @@ export async function renderAdminDashboardView(user: User): Promise<HTMLElement>
 
     const rechargeItems = pendingAgentRecharges.map(r => {
         const agent = userMap.get(r.agentId);
-        const method = methodMap.get(r.paymentMethodId);
-        const referenceText = r.reference ? ` (${r.reference})` : '';
+        // FIX: Use `methodId` and `notes` to match the AgentRechargeRequest model.
+        const method = methodMap.get(r.methodId);
+        const referenceText = r.notes ? ` (${r.notes})` : '';
         return { html:`
             <div class="leading-tight">
                 <div class="flex justify-between items-center">

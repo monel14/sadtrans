@@ -236,7 +236,63 @@ La logique complexe (calculs, opérations atomiques) doit être déplacée du fr
 
 ---
 
-### Étape 7 : Remplacer l'API Mock
+### Étape 7 : Journalisation des Actions (Audit Trail) - **NOUVEAU**
+
+Pour une traçabilité complète, une table d'audit est essentielle.
+
+#### 7.1. Créer la Table `audit_logs`
+
+```sql
+CREATE TABLE audit_logs (
+  id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  user_id TEXT REFERENCES users(id),
+  action TEXT NOT NULL, -- Ex: 'VALIDATE_TRANSACTION', 'CREATE_USER', 'REJECT_RECHARGE'
+  entity_type TEXT, -- Ex: 'transaction', 'user', 'partner'
+  entity_id TEXT, -- Ex: 'TRN001', 'user_agent_1'
+  details JSONB
+);
+```
+
+#### 7.2. Activer RLS et Définir les Politiques
+
+```sql
+ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
+
+-- Les administrateurs peuvent lire tous les logs.
+CREATE POLICY "Admins can read all audit logs"
+ON audit_logs FOR SELECT
+USING ((SELECT role FROM users WHERE email = auth.email()) IN ('admin_general', 'sous_admin'));
+
+-- Tous les utilisateurs authentifiés peuvent insérer des logs (essentiel pour les Edge Functions).
+CREATE POLICY "Authenticated users can insert logs"
+ON audit_logs FOR INSERT
+WITH CHECK (auth.role() = 'authenticated');
+```
+
+#### 7.3. Intégration dans les Edge Functions
+
+Modifiez vos Edge Functions pour enregistrer les actions. Par exemple, dans la fonction `approve-recharge` :
+
+```typescript
+// À l'intérieur de votre Edge Function, après avoir validé l'action
+// et récupéré l'ID de l'utilisateur qui fait l'appel...
+
+await supabase.from('audit_logs').insert({
+  user_id: adminUserId,
+  action: 'APPROVE_RECHARGE',
+  entity_type: 'agent_recharge_request',
+  entity_id: requestId,
+  details: {
+    approved_amount: amount,
+    agent_id: agentId
+  }
+});
+```
+
+---
+
+### Étape 8 : Remplacer l'API Mock
 
 1.  **Refactoriser `DataService` et `ApiService`** :
     *   Remplacez progressivement chaque appel mock (ex: `api.getUsers()`) par un appel réel au client Supabase (ex: `supabase.from('users').select('*')`).

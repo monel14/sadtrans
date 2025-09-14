@@ -148,10 +148,11 @@ export interface AgentRechargeRequest {
     date: string; // ISO 8601
     agentId: string;
     montant: number;
-    paymentMethodId: string;
-    reference?: string;
+    methodId: string;
     statut: 'En attente Admin' | 'Approuvée' | 'Rejetée';
-    motif_rejet?: string;
+    notes?: string;
+    processedBy?: string;
+    processedAt?: string;
 }
 
 export interface RechargePaymentMethod {
@@ -219,4 +220,16 @@ export interface Notification {
     icon: string;
     userId: string; // Can be a specific userId or 'all' for admins
     target?: NavLink;
+}
+
+// --- SYSTEM & AUDIT ---
+
+export interface AuditLog {
+    id: number;
+    created_at: string; // ISO 8601
+    user_id: string;
+    action: string; // e.g., 'VALIDATE_TRANSACTION'
+    entity_type: string | null; // e.g., 'transaction'
+    entity_id: string | null; // e.g., 'TRN001'
+    details: { [key: string]: any } | null;
 }

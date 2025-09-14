@@ -4,7 +4,7 @@
  */
 import {
     User, Partner, OperationType, Transaction, AgentRechargeRequest,
-    RechargePaymentMethod, Notification, Card, Order, CommissionConfig, CardType, OrderItem, CommissionProfile, Contract
+    RechargePaymentMethod, Notification, Card, Order, CommissionConfig, CardType, OrderItem, CommissionProfile, Contract, AuditLog
 } from '../models';
 import { DataService } from './data.service';
 import { supabase } from './supabase.service';
@@ -216,10 +216,10 @@ export class ApiService {
         return transaction;
     }
 
-    public async createAgentRechargeRequest(agentId: string, montant: number, paymentMethodId: string, reference?: string): Promise<AgentRechargeRequest> {
+    public async createAgentRechargeRequest(agentId: string, montant: number, methodId: string, reference?: string): Promise<AgentRechargeRequest> {
         const { data, error } = await supabase
             .from('agent_recharge_requests')
-            .insert({ agent_id: agentId, montant, payment_method_id: paymentMethodId, reference, statut: 'En attente Admin' })
+            .insert({ agent_id: agentId, montant, method_id: methodId, notes: reference, statut: 'En attente Admin' })
             .select()
             .single();
 
@@ -344,6 +344,19 @@ export class ApiService {
         const { data, error } = await supabase.from('contracts').upsert(contractData).select().single();
         if (error) throw error;
         DataService.getInstance().invalidateContractsCache();
+        return data;
+    }
+
+    public async getAuditLogs(): Promise<AuditLog[]> {
+        // In a real app, you would add .limit(100) and pagination
+        const { data, error } = await supabase.from('audit_logs').select('*').order('created_at', { ascending: false });
+        if (error) {
+            console.error("Error fetching audit logs", error);
+            // Return mock data on error to avoid breaking the UI completely, mimicking old behavior
+            return [
+                { id: 1, created_at: new Date().toISOString(), user_id: 'user_admin_1', action: 'FETCH_AUDIT_LOGS_FAILED', entity_type: 'system', entity_id: null, details: { error: error.message } }
+            ];
+        }
         return data;
     }
 }

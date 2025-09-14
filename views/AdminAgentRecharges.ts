@@ -12,7 +12,7 @@ function renderRequestItem(
     const { userMap, partnerMap, methodMap, allRecharges } = data;
     const agent = userMap.get(req.agentId);
     const partner = agent ? partnerMap.get(agent.partnerId!) : null;
-    const method = methodMap.get(req.paymentMethodId);
+    const method = methodMap.get(req.methodId);
 
     // Calculate historical context
     const agentRecharges = allRecharges.filter(r => r.agentId === req.agentId);
@@ -37,6 +37,10 @@ function renderRequestItem(
         ? `<span class="badge badge-success">Approuvée</span>` 
         : `<span class="badge badge-danger">Rejetée</span>`;
 
+    const referenceDisplay = req.statut !== 'Rejetée' && req.notes
+        ? `<p class="text-xs text-slate-600">Réf: <span class="font-mono bg-slate-100 p-1 rounded">${req.notes}</span></p>`
+        : '';
+
     const li = document.createElement('li');
     li.className = 'bg-white border rounded-lg overflow-hidden';
     
@@ -59,7 +63,7 @@ function renderRequestItem(
                  <p class="text-sm text-slate-500">Montant du dépôt</p>
                  <p class="font-bold text-3xl text-violet-600">${formatAmount(req.montant)}</p>
                  <p class="text-sm font-semibold text-slate-700 mt-2">${method?.name || 'Inconnu'}</p>
-                 ${req.reference ? `<p class="text-xs text-slate-600">Réf: <span class="font-mono bg-slate-100 p-1 rounded">${req.reference}</span></p>` : ''}
+                 ${referenceDisplay}
                  <hr class="my-3">
                  
                  <div class="space-y-1 text-sm">
@@ -80,10 +84,10 @@ function renderRequestItem(
     `;
 
     // Rejection reason if exists, appended at the bottom
-    if (req.motif_rejet) {
+    if (req.statut === 'Rejetée' && req.notes) {
         const reasonDiv = document.createElement('div');
         reasonDiv.className = 'bg-red-50 border-t p-3 text-sm';
-        reasonDiv.innerHTML = `<strong class="text-red-700">Motif du rejet:</strong> <span class="text-red-800">${req.motif_rejet}</span>`;
+        reasonDiv.innerHTML = `<strong class="text-red-700">Motif du rejet:</strong> <span class="text-red-800">${req.notes}</span>`;
         li.appendChild(reasonDiv);
     }
 

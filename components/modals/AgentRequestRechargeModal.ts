@@ -157,10 +157,10 @@ export class AgentRequestRechargeModal extends BaseModal {
             const submitButton = this.modalElement.querySelector('button[type="submit"]') as HTMLButtonElement;
 
             const montant = parseFloat(amountInput.value);
-            const paymentMethodId = paymentMethodInput.value;
+            const methodId = paymentMethodInput.value;
             const reference = referenceInput.value.trim();
 
-            if (!paymentMethodId) {
+            if (!methodId) {
                 document.body.dispatchEvent(new CustomEvent('showToast', { detail: { message: "Veuillez sélectionner un mode de paiement.", type: 'warning' } }));
                 paymentMethodInput.focus();
                 return;
@@ -181,7 +181,7 @@ export class AgentRequestRechargeModal extends BaseModal {
                 await api.createAgentRechargeRequest(
                     this.currentUser.id,
                     montant,
-                    paymentMethodId,
+                    methodId,
                     reference
                 );
                 document.body.dispatchEvent(new CustomEvent('showToast', { detail: { message: "Votre demande de recharge a été soumise avec succès !", type: 'success' } }));
