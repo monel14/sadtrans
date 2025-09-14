@@ -1,7 +1,7 @@
 import { User, Transaction, OperationType } from '../models';
 import { DataService } from '../services/data.service';
 import { createCard } from '../components/Card';
-import { formatAmount, formatDate } from '../utils/formatters';
+import { formatAmount, formatDate, formatTransactionStatus } from '../utils/formatters';
 import { $ } from '../utils/dom';
 
 // Helper function to show a details modal
@@ -13,7 +13,8 @@ function showDetailsModal(transaction: Transaction, opType: OperationType, userM
     modal.id = 'detailsModal';
     modal.className = 'modal visible';
     
-    const validator = userMap.get(transaction.validateurId!);
+    const validator = transaction.validateurId ? userMap.get(transaction.validateurId) : null;
+    const formattedStatus = formatTransactionStatus(transaction, userMap);
 
     let dataFields = '';
     opType.fields.forEach(field => {
@@ -47,7 +48,7 @@ function showDetailsModal(transaction: Transaction, opType: OperationType, userM
             </div>
             <div class="border-t border-b divide-y">
                 <dl class="divide-y">
-                    <div class="py-2 grid grid-cols-3 gap-4"><dt class="text-sm font-medium text-slate-500">Statut</dt><dd class="text-sm text-slate-900 col-span-2"><span class="badge ${transaction.statut === 'Validé' ? 'badge-success' : (transaction.statut.includes('En attente') || transaction.statut.includes('Assignée') ? 'badge-warning' : 'badge-danger')}">${transaction.statut}</span></dd></div>
+                    <div class="py-2 grid grid-cols-3 gap-4"><dt class="text-sm font-medium text-slate-500">Statut</dt><dd class="text-sm text-slate-900 col-span-2"><span class="badge ${transaction.statut === 'Validé' ? 'badge-success' : (transaction.statut === 'En attente de validation' || transaction.statut === 'Assignée' ? 'badge-warning' : 'badge-danger')}">${formattedStatus}</span></dd></div>
                     <div class="py-2 grid grid-cols-3 gap-4"><dt class="text-sm font-medium text-slate-500">Date</dt><dd class="text-sm text-slate-900 col-span-2">${formatDate(transaction.date)}</dd></div>
                     <div class="py-2 grid grid-cols-3 gap-4"><dt class="text-sm font-medium text-slate-500">Validateur</dt><dd class="text-sm text-slate-900 col-span-2">${validator?.name || '-'}</dd></div>
                     <div class="py-2 grid grid-cols-3 gap-4"><dt class="text-sm font-medium text-slate-500">Motif de Rejet</dt><dd class="text-sm text-slate-900 col-span-2">${transaction.motif_rejet || '-'}</dd></div>
@@ -124,13 +125,16 @@ export async function renderAgentTransactionHistoryView(user: User): Promise<HTM
                 else if (t.data.num_decodeur_canal) benefDetails = `Décodeur: ${t.data.num_decodeur_canal}`;
             }
 
+            const formattedStatus = formatTransactionStatus(t, userMap);
+            const statusClass = t.statut === 'Validé' ? 'badge-success' : (t.statut === 'En attente de validation' || t.statut === 'Assignée' ? 'badge-warning' : 'badge-danger');
+
             const li = document.createElement('li');
             li.className = 'card !p-0 overflow-hidden';
             li.innerHTML = `
                 <div class="flex flex-col md:flex-row items-start md:items-center justify-between p-4 gap-4">
                     <div class="flex-grow">
                         <div class="flex items-center gap-4">
-                            <span class="badge ${t.statut === 'Validé' ? 'badge-success' : (t.statut.includes('En attente') || t.statut.includes('Assignée') ? 'badge-warning' : 'badge-danger')}">${t.statut}</span>
+                            <span class="badge ${statusClass}">${formattedStatus}</span>
                             <p class="font-semibold text-slate-800">${opType?.name || 'Opération Inconnue'}</p>
                         </div>
                         <p class="text-sm text-slate-500 mt-1">${t.id} <span class="mx-1 text-slate-300">•</span> ${benefDetails}</p>

@@ -4,7 +4,7 @@ import { ApiService } from '../services/api.service';
 import { DataService } from '../services/data.service';
 import { createCard } from '../components/Card';
 import { User } from '../models';
-import { formatAmount, formatDate } from '../utils/formatters';
+import { formatAmount, formatDate, formatTransactionStatus } from '../utils/formatters';
 
 export async function renderAdminManagePartnersView(): Promise<HTMLElement> {
     const dataService = DataService.getInstance();
@@ -49,7 +49,7 @@ export async function renderAdminManagePartnersView(): Promise<HTMLElement> {
             
             const agentIds = agents.map(a => a.id);
             const partnerTransactions = allTransactions.filter(t => agentIds.includes(t.agentId));
-            const pendingTransactions = partnerTransactions.filter(t => t.statut.includes('En attente') || t.statut.includes('Assignée'));
+            const pendingTransactions = partnerTransactions.filter(t => t.statut === 'En attente de validation' || t.statut === 'Assignée');
             const recentTransactions = partnerTransactions.slice(0, 5);
             
             const partnerCard = document.createElement('div');
@@ -61,7 +61,8 @@ export async function renderAdminManagePartnersView(): Promise<HTMLElement> {
                     <ul class="space-y-2">
                         ${recentTransactions.map(t => {
                             const opType = opTypeMap.get(t.opTypeId);
-                            const statusClass = t.statut === 'Validé' ? 'badge-success' : (t.statut.includes('En attente') || t.statut.includes('Assignée') ? 'badge-warning' : 'badge-danger');
+                            const formattedStatus = formatTransactionStatus(t, userMap);
+                            const statusClass = t.statut === 'Validé' ? 'badge-success' : (t.statut === 'En attente de validation' || t.statut === 'Assignée' ? 'badge-warning' : 'badge-danger');
                             return `
                                 <li class="flex justify-between items-center text-sm p-2 bg-slate-50 rounded-md">
                                     <div>
@@ -70,7 +71,7 @@ export async function renderAdminManagePartnersView(): Promise<HTMLElement> {
                                     </div>
                                     <div class="text-right">
                                         <p class="font-semibold">${formatAmount(t.montant_principal)}</p>
-                                        <span class="badge ${statusClass} mt-1">${t.statut}</span>
+                                        <span class="badge ${statusClass} mt-1">${formattedStatus}</span>
                                     </div>
                                 </li>
                             `;

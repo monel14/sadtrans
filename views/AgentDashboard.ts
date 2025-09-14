@@ -1,8 +1,9 @@
 
+
 import { User } from '../models';
 import { DataService } from '../services/data.service';
 import { createCard } from '../components/Card';
-import { formatAmount, formatDate } from '../utils/formatters';
+import { formatAmount, formatDate, formatTransactionStatus } from '../utils/formatters';
 import { renderAgentTransactionHistoryView } from './AgentTransactionHistory';
 import { renderNewOperationView } from './NewOperation';
 import { renderProfileView } from './Profile';
@@ -11,9 +12,10 @@ export async function renderAgentDashboardView(user: User): Promise<HTMLElement>
     const dataService = DataService.getInstance();
     const container = document.createElement('div');
 
-    const [agentTransactions, opTypes] = await Promise.all([
+    const [agentTransactions, opTypes, userMap] = await Promise.all([
         dataService.getTransactions({ agentId: user.id, limit: 3 }),
-        dataService.getAllOperationTypes()
+        dataService.getAllOperationTypes(),
+        dataService.getUserMap()
     ]);
 
     container.innerHTML = `
@@ -59,7 +61,8 @@ export async function renderAgentDashboardView(user: User): Promise<HTMLElement>
         const opTypeMap = new Map(opTypes.map(ot => [ot.id, ot]));
         agentTransactions.forEach(op => {
             const opType = opTypeMap.get(op.opTypeId);
-            const statusClass = op.statut === 'Validé' ? 'badge-success' : (op.statut.includes('En attente') ? 'badge-warning' : 'badge-danger');
+            const statusClass = op.statut === 'Validé' ? 'badge-success' : (op.statut === 'En attente de validation' || op.statut === 'Assignée' ? 'badge-warning' : 'badge-danger');
+            const formattedStatus = formatTransactionStatus(op, userMap);
             const li = document.createElement('li');
             li.className = 'flex justify-between items-center p-3 rounded-md bg-slate-50 transition-colors hover:bg-slate-100';
             li.innerHTML = `
@@ -69,7 +72,7 @@ export async function renderAgentDashboardView(user: User): Promise<HTMLElement>
                 </div>
                 <div class="text-right">
                     <p class="font-semibold text-slate-900">${formatAmount(op.montant_principal)}</p>
-                    <span class="badge ${statusClass} mt-1">${op.statut}</span>
+                    <span class="badge ${statusClass} mt-1">${formattedStatus}</span>
                 </div>
             `;
             latestOpsList.appendChild(li);

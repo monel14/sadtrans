@@ -1,12 +1,11 @@
-import { ApiService } from './api.service';
+import { supabase } from './supabase.service';
 import { User } from '../models';
 
 export class AuthService {
-    private api: ApiService;
     private static instance: AuthService;
 
     private constructor() {
-        this.api = ApiService.getInstance();
+        // ApiService is no longer needed here.
     }
 
     public static getInstance(): AuthService {
@@ -16,12 +15,42 @@ export class AuthService {
         return AuthService.instance;
     }
 
-    public async login(email: string): Promise<User | null> {
-        const users = await this.api.getUsers();
+    public async login(email: string, password: string): Promise<User | null> {
+        const { data: { user: authUser }, error } = await supabase.auth.signInWithPassword({
+            email,
+            password,
+        });
+
+        if (error) {
+            console.error('Supabase login error:', error.message);
+            return null;
+        }
+
+        if (authUser) {
+            // The README implies the 'users' table is linked by email.
+            const { data: userProfile, error: profileError } = await supabase
+                .from('users')
+                .select('*')
+                .eq('email', authUser.email)
+                .single();
+
+            if (profileError) {
+                console.error('Error fetching user profile:', profileError.message);
+                // Log out user if profile not found to prevent being in a broken state
+                await this.logout();
+                return null;
+            }
+            
+            return userProfile as User;
+        }
         
-        // Find user by email, ignoring case. In a real app, you would also validate the password.
-        const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
-        
-        return user || null;
+        return null;
+    }
+
+    public async logout(): Promise<void> {
+        const { error } = await supabase.auth.signOut();
+        if (error) {
+            console.error('Supabase logout error:', error);
+        }
     }
 }

@@ -14,6 +14,7 @@ import { PartnerEditAgentModal } from './components/modals/PartnerEditAgentModal
 import { AdminEditUserModal } from './components/modals/AdminEditUserModal';
 import { ToastContainer, ToastType } from './components/ToastContainer';
 import { AdminEditPartnerModal } from './components/modals/AdminEditPartnerModal';
+import { AuthService } from './services/auth.service';
 
 export class App {
     private rootElement: HTMLElement;
@@ -93,7 +94,8 @@ export class App {
         this.renderMainLayout();
     }
 
-    private handleLogout() {
+    private async handleLogout() {
+        await AuthService.getInstance().logout();
         this.currentUser = null;
         this.mainLayout = null;
         this.showLoginPage();

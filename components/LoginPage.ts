@@ -6,6 +6,7 @@ export function renderLoginPage(): HTMLElement {
     page.className = 'min-h-screen flex items-center justify-center bg-gray-900 bg-gradient-to-br from-slate-900 via-gray-900 to-slate-900 p-4';
 
     const defaultEmailForDemo = 'admin.adam@example.com';
+    const defaultPasswordForDemo = 'SadTrans#P@ssw0rd!';
     
     page.innerHTML = `
         <div class="bg-slate-800/60 backdrop-blur-lg border border-slate-700 p-8 sm:p-12 rounded-2xl w-full max-w-md shadow-2xl shadow-slate-900/50">
@@ -22,7 +23,8 @@ export function renderLoginPage(): HTMLElement {
                 </div>
                 <div class="mb-6">
                     <label for="password" class="form-label text-slate-300">Mot de passe</label>
-                    <input type="password" id="password" class="form-input bg-slate-700 text-white border-slate-600 placeholder-slate-400 focus:ring-violet-500 focus:border-violet-500" placeholder="********" value="password" required>
+                    <input type="password" id="password" class="form-input bg-slate-700 text-white border-slate-600 placeholder-slate-400 focus:ring-violet-500 focus:border-violet-500" placeholder="********" value="${defaultPasswordForDemo}" required>
+                    <p class="text-xs text-slate-500 mt-2">Le mot de passe par défaut est: <strong class="text-violet-300">${defaultPasswordForDemo}</strong>. Assurez-vous que les utilisateurs de démo sont créés dans votre projet Supabase avec ce mot de passe.</p>
                 </div>
                 <button type="submit" class="btn btn-primary w-full text-lg bg-violet-600 hover:bg-violet-700">
                     <i class="fas fa-sign-in-alt mr-2"></i>Se connecter
@@ -36,6 +38,7 @@ export function renderLoginPage(): HTMLElement {
 
     const form = page.querySelector('#loginForm') as HTMLFormElement;
     const emailInput = page.querySelector('#email') as HTMLInputElement;
+    const passwordInput = page.querySelector('#password') as HTMLInputElement;
 
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -46,7 +49,7 @@ export function renderLoginPage(): HTMLElement {
         submitButton.disabled = true;
 
         const authService = AuthService.getInstance();
-        const user = await authService.login(emailInput.value);
+        const user = await authService.login(emailInput.value, passwordInput.value);
 
         if (user) {
             page.dispatchEvent(new CustomEvent('loginSuccess', {

@@ -1,3 +1,5 @@
+import { User, Transaction } from "../models";
+
 export function formatDate(dateString?: string): string {
     if (!dateString) return '-';
     try {
@@ -20,4 +22,12 @@ export function formatNumber(num?: number | null): string {
         return '-';
     }
     return Number(num).toLocaleString('fr-FR');
+}
+
+export function formatTransactionStatus(transaction: Transaction, userMap: Map<string, User>): string {
+    if (transaction.statut === 'Assignée' && transaction.assignedTo) {
+        const user = userMap.get(transaction.assignedTo);
+        return `Assignée à ${user?.name || 'Inconnu'}`;
+    }
+    return transaction.statut;
 }

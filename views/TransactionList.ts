@@ -1,7 +1,8 @@
 import { User } from '../models';
 import { ApiService } from '../services/api.service';
 import { createCard } from '../components/Card';
-import { formatAmount, formatDate } from '../utils/formatters';
+import { formatAmount, formatDate, formatTransactionStatus } from '../utils/formatters';
+import { DataService } from '../services/data.service';
 
 export interface TransactionListViewFilters {
     title: string;
@@ -10,13 +11,14 @@ export interface TransactionListViewFilters {
 
 export function renderTransactionListView(filters: TransactionListViewFilters): (user: User) => Promise<HTMLElement> {
     return async (user: User): Promise<HTMLElement> => {
-        const api = ApiService.getInstance();
+        const dataService = DataService.getInstance();
         
-        const [allTransactions, opTypes, allUsers, partners] = await Promise.all([
-            api.getTransactions({ agentId: user.role === 'agent' ? user.id : undefined }),
-            api.getAllOperationTypes(),
-            api.getUsers(),
-            api.getPartners(),
+        const [allTransactions, opTypes, allUsers, partners, userMap] = await Promise.all([
+            dataService.getTransactions({ agentId: user.role === 'agent' ? user.id : undefined }),
+            dataService.getAllOperationTypes(),
+            dataService.getUsers(),
+            dataService.getPartners(),
+            dataService.getUserMap()
         ]);
         
         const filteredTransactions = allTransactions.filter(t => 
@@ -37,12 +39,15 @@ export function renderTransactionListView(filters: TransactionListViewFilters): 
                 const partner = partners.find(p => p.id === initiator?.partnerId)
                 const opType = opTypes.find(ot => ot.id === t.opTypeId);
 
+                const formattedStatus = formatTransactionStatus(t, userMap);
+                const statusClass = t.statut === 'Validé' ? 'badge-success' : (t.statut === 'En attente de validation' || t.statut === 'Assignée' ? 'badge-warning' : 'badge-danger');
+
                 const li = document.createElement('li');
                 li.className = 'card !p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3';
                 li.innerHTML = `
                     <div class="flex-grow">
                         <div class="flex items-center gap-3">
-                            <span class="badge ${t.statut === 'Validé' ? 'badge-success' : (t.statut.includes('En attente') ? 'badge-warning' : 'badge-danger')}">${t.statut}</span>
+                            <span class="badge ${statusClass}">${formattedStatus}</span>
                              <p class="text-sm text-slate-500">${formatDate(t.date)}</p>
                         </div>
                         <p class="font-semibold text-slate-800 mt-1">${initiator?.name || 'N/A'}</p>

@@ -1,7 +1,7 @@
 import { User, Transaction, OperationType, Partner } from '../models';
 import { DataService } from '../services/data.service';
 import { createCard } from '../components/Card';
-import { formatAmount, formatDate } from '../utils/formatters';
+import { formatAmount, formatDate, formatTransactionStatus } from '../utils/formatters';
 import { $ } from '../utils/dom';
 
 // Module-level variables to hold data and state
@@ -37,11 +37,12 @@ function exportTransactionsToCSV(transactions: Transaction[]) {
         const agent = userMap.get(t.agentId);
         const partner = agent ? partnerMap.get(agent.partnerId!) : null;
         const opType = opTypeMap.get(t.opTypeId);
+        const formattedStatus = formatTransactionStatus(t, userMap);
 
         return [
             escapeCSV(t.id),
             escapeCSV(formatDate(t.date)),
-            escapeCSV(t.statut),
+            escapeCSV(formattedStatus),
             escapeCSV(opType?.name),
             escapeCSV(agent?.name),
             escapeCSV(partner?.name),
@@ -86,10 +87,11 @@ function renderTransactionList(container: HTMLElement, transactions: Transaction
         const agent = userMap.get(t.agentId);
         const partner = agent ? partnerMap.get(agent.partnerId!) : null;
         const opType = opTypeMap.get(t.opTypeId);
-
+        
+        const formattedStatus = formatTransactionStatus(t, userMap);
         const statusClass = t.statut === 'Validé' 
             ? 'badge-success' 
-            : (t.statut.includes('En attente') || t.statut.includes('Assignée') 
+            : (t.statut === 'En attente de validation' || t.statut === 'Assignée' 
                 ? 'badge-warning' 
                 : 'badge-danger');
 
@@ -99,7 +101,7 @@ function renderTransactionList(container: HTMLElement, transactions: Transaction
             <div class="flex flex-col md:flex-row items-start md:items-center justify-between p-4 gap-4">
                 <div class="flex-grow">
                     <div class="flex items-center gap-4">
-                        <span class="badge ${statusClass}">${t.statut}</span>
+                        <span class="badge ${statusClass}">${formattedStatus}</span>
                         <p class="font-semibold text-slate-800">${opType?.name || 'Opération Inconnue'}</p>
                     </div>
                     <p class="text-sm text-slate-500 mt-1">
@@ -153,7 +155,7 @@ function applyFilters(container: HTMLElement) {
     }
     if (filters.status) {
         if (filters.status === 'pending') {
-            filtered = filtered.filter(t => t.statut.includes('En attente') || t.statut.includes('Assignée'));
+            filtered = filtered.filter(t => t.statut === 'En attente de validation' || t.statut === 'Assignée');
         } else {
             filtered = filtered.filter(t => t.statut === filters.status);
         }

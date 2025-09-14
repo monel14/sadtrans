@@ -2,7 +2,7 @@ import { User, Transaction, Partner, OperationType } from '../models';
 import { ApiService } from '../services/api.service';
 import { DataService } from '../services/data.service';
 import { createCard } from '../components/Card';
-import { formatAmount, formatDate } from '../utils/formatters';
+import { formatAmount, formatDate, formatTransactionStatus } from '../utils/formatters';
 import { $ } from '../utils/dom';
 
 // Helper for category icons
@@ -430,13 +430,8 @@ export async function renderAdminTransactionValidationView(user: User, defaultFi
                 actionButton.disabled = true;
                 actionButton.innerHTML = `<i class="fas fa-spinner fa-spin"></i>`;
                 
-                const reader = new FileReader();
-                reader.onload = async (e) => {
-                    const proofUrl = e.target?.result as string;
-                    await api.validateTransaction(taskId, proofUrl);
-                    await reloadView();
-                };
-                reader.readAsDataURL(file);
+                await api.validateTransaction(taskId, file);
+                await reloadView();
                 break;
             case 'reject-confirm':
                 const reason = formContainer?.querySelector<HTMLTextAreaElement>('textarea')?.value.trim();
