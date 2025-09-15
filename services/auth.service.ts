@@ -15,6 +15,34 @@ export class AuthService {
         return AuthService.instance;
     }
 
+    public async getCurrentUser(): Promise<User | null> {
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+        if (sessionError) {
+            console.error('Error getting session:', sessionError.message);
+            return null;
+        }
+
+        if (session?.user) {
+            const { data: userProfile, error: profileError } = await supabase
+                .from('users')
+                .select('*')
+                .eq('email', session.user.email)
+                .single();
+
+            if (profileError) {
+                console.error('Error fetching user profile for session:', profileError.message);
+                // If profile is not found, the user is in an inconsistent state. Log them out.
+                await this.logout();
+                return null;
+            }
+
+            return userProfile as User;
+        }
+
+        return null;
+    }
+
     public async login(email: string, password: string): Promise<User | null> {
         const { data: { user: authUser }, error } = await supabase.auth.signInWithPassword({
             email,

@@ -54,7 +54,7 @@ export class App {
         this.handleUpdateCurrentUser = this.handleUpdateCurrentUser.bind(this);
     }
 
-    public init() {
+    public async init() {
         // Create and append the toast container
         this.toastContainer = new ToastContainer();
         document.body.prepend(this.toastContainer.element);
@@ -75,11 +75,15 @@ export class App {
         document.body.addEventListener('openAdminEditPartnerModal', this.handleOpenAdminEditPartnerModal as EventListener);
         document.body.addEventListener('showToast', this.handleShowToast as EventListener);
         
-        // Render the initial view based on authentication state
-        if (!this.currentUser) {
-            this.showLoginPage();
-        } else {
+        // Check for an active session on startup
+        const authService = AuthService.getInstance();
+        const user = await authService.getCurrentUser();
+        
+        if (user) {
+            this.currentUser = user;
             this.renderMainLayout();
+        } else {
+            this.showLoginPage();
         }
     }
 
