@@ -54,35 +54,76 @@ export class ApiService {
         if (error) throw error;
         return data;
     }
-    
+
     public async getAllOperationTypes(): Promise<OperationType[]> {
         const { data, error } = await supabase.from('operation_types').select('*');
         if (error) throw error;
-        return data;
+
+        return (data || []).map(item => {
+            let fieldsData: any[] = [];
+            if (typeof item.fields === 'string') {
+                try {
+                    const parsed = JSON.parse(item.fields);
+                    if (Array.isArray(parsed)) {
+                        fieldsData = parsed;
+                    }
+                } catch (e) {
+                    // Mute JSON parsing errors, empty array is a safe fallback.
+                }
+            } else if (Array.isArray(item.fields)) {
+                fieldsData = item.fields;
+            }
+
+            let commissionConfigData: CommissionConfig = { type: 'none' };
+            if (typeof item.commission_config === 'string') {
+                try {
+                    const parsed = JSON.parse(item.commission_config);
+                     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                        commissionConfigData = parsed;
+                    }
+                } catch (e) {
+                    // Mute JSON parsing errors
+                }
+            } else if (item.commission_config && typeof item.commission_config === 'object' && !Array.isArray(item.commission_config)) {
+                commissionConfigData = item.commission_config;
+            }
+
+            return {
+                id: item.id,
+                name: item.name,
+                description: item.description,
+                impactsBalance: item.impacts_balance,
+                status: item.status,
+                category: item.category,
+                feeApplication: item.fee_application,
+                fields: fieldsData,
+                commissionConfig: commissionConfigData,
+            };
+        });
     }
 
     public async getOperationTypes(filters: { partnerId: string }): Promise<OperationType[]> {
         return this.getAllOperationTypes(); // RLS will handle filtering on the backend
     }
-    
+
     public async getPartners(): Promise<Partner[]> {
         const { data, error } = await supabase.from('partners').select('*');
         if (error) throw error;
         return data;
     }
-    
+
     public async getPartnerById(id: string): Promise<Partner | undefined> {
         const { data, error } = await supabase.from('partners').select('*').eq('id', id).single();
         if (error && error.code !== 'PGRST116') throw error;
         return data || undefined;
     }
-    
+
     public async getCards(filters: {} = {}): Promise<Card[]> {
         const { data, error } = await supabase.from('cards').select('*');
         if (error) throw error;
         return data;
     }
-    
+
     public async getAgentRechargeRequests(filters: {} = {}): Promise<AgentRechargeRequest[]> {
         const { data, error } = await supabase.from('agent_recharge_requests').select('*');
         if (error) throw error;
@@ -90,14 +131,14 @@ export class ApiService {
     }
 
     public async getRechargePaymentMethods(filters: {} = {}): Promise<RechargePaymentMethod[]> {
-         const { data, error } = await supabase.from('recharge_payment_methods').select('*');
+        const { data, error } = await supabase.from('recharge_payment_methods').select('*');
         if (error) throw error;
         return data;
     }
 
     public async assignTask(taskId: string, type: 'transaction', userId: string | null): Promise<boolean> {
         const statut = userId ? 'Assignée' : 'En attente de validation';
-        
+
         const { error } = await supabase
             .from('transactions')
             .update({ assigned_to: userId, statut: statut })
@@ -130,7 +171,7 @@ export class ApiService {
 
     public async getNotifications(userId: string): Promise<Notification[]> {
         // This would be replaced with a real notifications table query
-        return []; 
+        return [];
     }
 
     public async transferRevenueToMainBalance(userId: string): Promise<User | null> {
@@ -161,7 +202,7 @@ export class ApiService {
         const { error: uploadError } = await supabase.storage
             .from('transaction-proofs')
             .upload(filePath, proofFile);
-        
+
         if (uploadError) {
             console.error('Error uploading proof:', uploadError);
             return false;
@@ -171,7 +212,7 @@ export class ApiService {
         const { data: { publicUrl } } = supabase.storage
             .from('transaction-proofs')
             .getPublicUrl(filePath);
-        
+
         // 3. Update transaction in DB
         const { data: { user } } = await supabase.auth.getUser();
         const { error: updateError } = await supabase
@@ -194,7 +235,7 @@ export class ApiService {
             .from('transactions')
             .update({ statut: 'Rejeté', motif_rejet: reason, validateur_id: user?.id })
             .eq('id', taskId);
-        
+
         if (error) {
             console.error('Error rejecting transaction:', error);
             return false;
@@ -210,7 +251,7 @@ export class ApiService {
         });
 
         if (error) throw error;
-        
+
         DataService.getInstance().invalidateTransactionsCache();
         DataService.getInstance().invalidateUsersCache();
         return transaction;
@@ -227,24 +268,24 @@ export class ApiService {
         DataService.getInstance().invalidateAgentRechargeRequestsCache();
         return data;
     }
-    
+
     public async updateCurrentUserProfile(userData: Partial<User>): Promise<User | null> {
-       const { data: { user: authUser } } = await supabase.auth.getUser();
-       if (!authUser) return null;
-       
-       if (userData.password) {
-           const { error: passwordError } = await supabase.auth.updateUser({ password: userData.password });
-           if (passwordError) throw passwordError;
-       }
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        if (!authUser) return null;
 
-       const profileData = { ...userData };
-       delete profileData.password;
-       
-       const { data, error } = await supabase.from('users').update(profileData).eq('id', userData.id).select().single();
-       if (error) throw error;
+        if (userData.password) {
+            const { error: passwordError } = await supabase.auth.updateUser({ password: userData.password });
+            if (passwordError) throw passwordError;
+        }
 
-       DataService.getInstance().invalidateUsersCache();
-       return data;
+        const profileData = { ...userData };
+        delete profileData.password;
+
+        const { data, error } = await supabase.from('users').update(profileData).eq('id', userData.id).select().single();
+        if (error) throw error;
+
+        DataService.getInstance().invalidateUsersCache();
+        return data;
     }
 
     public async getOrders(filters: {} = {}): Promise<Order[]> {
@@ -252,7 +293,7 @@ export class ApiService {
         if (error) throw error;
         return data;
     }
-    
+
     public async updateRechargePaymentMethod(methodData: RechargePaymentMethod): Promise<RechargePaymentMethod> {
         const { data, error } = await supabase.from('recharge_payment_methods').upsert(methodData).select().single();
         if (error) throw error;
@@ -261,11 +302,11 @@ export class ApiService {
     }
 
     public async updateAgent(agentData: Partial<User>): Promise<User> {
-       const { data, error } = await supabase.from('users').upsert(agentData).select().single();
-       if (error) throw error;
-       DataService.getInstance().invalidateUsersCache();
-       return data;
-   }
+        const { data, error } = await supabase.from('users').upsert(agentData).select().single();
+        if (error) throw error;
+        DataService.getInstance().invalidateUsersCache();
+        return data;
+    }
 
     public async adminUpdateUser(userData: Partial<User>): Promise<User> {
         const { data, error } = await supabase.from('users').upsert(userData).select().single();
@@ -275,12 +316,12 @@ export class ApiService {
     }
 
     public async updatePartnerDetails(partnerData: Partial<Partner>): Promise<Partner> {
-       const { data, error } = await supabase.from('partners').update(partnerData).eq('id', partnerData.id).select().single();
-       if (error) throw error;
-       DataService.getInstance().invalidatePartnersCache();
-       return data;
+        const { data, error } = await supabase.from('partners').update(partnerData).eq('id', partnerData.id).select().single();
+        if (error) throw error;
+        DataService.getInstance().invalidatePartnersCache();
+        return data;
     }
-    
+
     public async getCompanyRevenueStats(): Promise<any> {
         // This complex query should be moved to a database function (RPC) for performance and security.
         // For now, fetching all and processing client-side as a placeholder.
@@ -292,7 +333,7 @@ export class ApiService {
 
         const validated = (transactions || []).filter(t => t.statut === 'Validé');
         const totalRevenue = validated.reduce((sum, t) => sum + t.commission_societe, 0);
-        
+
         return { totalRevenue, revenueByPartner: [], revenueByCategory: {}, revenueTrend: {}, latestCommissions: validated.slice(0, 10) };
     }
 
@@ -304,7 +345,7 @@ export class ApiService {
     }
 
     public async createOrder(orderData: { partnerId: string, items: OrderItem[] }): Promise<Order> {
-         const { data, error } = await supabase.functions.invoke('create-order', {
+        const { data, error } = await supabase.functions.invoke('create-order', {
             body: orderData,
             headers: await this.getAuthHeader()
         });
@@ -313,7 +354,7 @@ export class ApiService {
         DataService.getInstance().invalidateOrdersCache();
         return data;
     }
-    
+
     public async updateCommissionProfile(profileData: CommissionProfile): Promise<CommissionProfile> {
         const { data, error } = await supabase.from('commission_profiles').upsert(profileData).select().single();
         if (error) throw error;
@@ -322,24 +363,77 @@ export class ApiService {
     }
 
     public async updateOperationType(opData: OperationType): Promise<OperationType> {
-        const { data, error } = await supabase.from('operation_types').update(opData).eq('id', opData.id).select().single();
+        // Transform camelCase to snake_case for database
+        const dbData = {
+            id: opData.id,
+            name: opData.name,
+            description: opData.description,
+            impacts_balance: opData.impactsBalance,
+            status: opData.status,
+            category: opData.category,
+            fee_application: opData.feeApplication,
+            fields: opData.fields,
+            commission_config: opData.commissionConfig
+        };
+
+        const { data, error } = await supabase.from('operation_types').update(dbData).eq('id', opData.id).select().single();
         if (error) throw error;
         DataService.getInstance().invalidateOperationTypesCache();
-        return data;
+
+        // Transform back to camelCase and parse JSONB fields
+        let fieldsData: any[] = [];
+        if (typeof data.fields === 'string') {
+            try {
+                const parsed = JSON.parse(data.fields);
+                 if (Array.isArray(parsed)) {
+                    fieldsData = parsed;
+                }
+            } catch (e) {
+                // Mute error
+            }
+        } else if (Array.isArray(data.fields)) {
+            fieldsData = data.fields;
+        }
+
+        let commissionConfigData: CommissionConfig = { type: 'none' };
+         if (typeof data.commission_config === 'string') {
+            try {
+                const parsed = JSON.parse(data.commission_config);
+                if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                    commissionConfigData = parsed;
+                }
+            } catch (e) {
+                // Mute error
+            }
+        } else if (data.commission_config && typeof data.commission_config === 'object' && !Array.isArray(data.commission_config)) {
+            commissionConfigData = data.commission_config;
+        }
+        
+        return {
+            id: data.id,
+            name: data.name,
+            description: data.description,
+            impactsBalance: data.impacts_balance,
+            status: data.status,
+            category: data.category,
+            feeApplication: data.fee_application,
+            fields: fieldsData,
+            commissionConfig: commissionConfigData
+        };
     }
-    
+
     public async getContracts(): Promise<Contract[]> {
         const { data, error } = await supabase.from('contracts').select('*');
         if (error) throw error;
         return data;
     }
-    
+
     public async getCommissionProfiles(): Promise<CommissionProfile[]> {
         const { data, error } = await supabase.from('commission_profiles').select('*');
         if (error) throw error;
         return data;
     }
-    
+
     public async updateContract(contractData: Contract): Promise<Contract> {
         const { data, error } = await supabase.from('contracts').upsert(contractData).select().single();
         if (error) throw error;

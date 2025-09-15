@@ -85,9 +85,35 @@ export class DataService {
     
     public async getAllOperationTypes(): Promise<OperationType[]> {
         if (!this._operationTypes) {
+            console.log('Debug - Loading operation types from API (cache miss)');
             this._operationTypes = await this.api.getAllOperationTypes();
+        } else {
+            console.log('Debug - Using cached operation types');
         }
         return this._operationTypes;
+    }
+
+    public clearOperationTypesCache(): void {
+        this._operationTypes = null;
+        this._opTypeMap = null;
+    }
+
+    public async forceReloadOperationTypes(): Promise<OperationType[]> {
+        console.log('Debug - Force reloading operation types');
+        this.clearOperationTypesCache();
+        return this.getAllOperationTypes();
+    }
+
+    // Temporary method to force cache clear on page load
+    public debugClearAllCaches(): void {
+        console.log('Debug - Clearing all caches');
+        this._operationTypes = null;
+        this._opTypeMap = null;
+        this._transactions = null;
+        this._users = null;
+        this._partners = null;
+        this._partnerMap = null;
+        this._userMap = null;
     }
 
     public async getTransactions(filters: { agentId?: string; limit?: number; status?: string } = {}): Promise<Transaction[]> {

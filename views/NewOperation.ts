@@ -1,5 +1,6 @@
-import { User, OperationType, CommissionProfile, CommissionTier } from '../models';
+import { User, OperationType, CommissionProfile, CommissionTier, CardType } from '../models';
 import { ApiService } from '../services/api.service';
+import { DataService } from '../services/data.service';
 import { createCard } from '../components/Card';
 import { $ } from '../utils/dom';
 import { renderAgentDashboardView } from './AgentDashboard';
@@ -90,6 +91,70 @@ const canalPlusReaboOptionPrices: { [key: string]: number } = {
     'netflix_03_ecrans': 7000,
 };
 
+
+async function renderDynamicFields(opType: OperationType, container: HTMLElement, cardTypes: CardType[]) {
+    container.innerHTML = '';
+    opType.fields.forEach(field => {
+        if (field.obsolete) return;
+
+        const fieldWrapper = document.createElement('div');
+        fieldWrapper.className = 'mb-4';
+
+        const label = document.createElement('label');
+        label.className = 'form-label';
+        label.htmlFor = `op_field_${field.id}`;
+        label.textContent = field.label;
+        if (field.required) {
+            label.innerHTML += ' <span class="text-red-500">*</span>';
+        }
+        fieldWrapper.appendChild(label);
+
+        let inputElement: HTMLElement;
+        if (field.type === 'select') {
+            const select = document.createElement('select');
+            select.id = `op_field_${field.id}`;
+            select.name = field.name;
+            select.className = 'form-select mt-1';
+            if (field.required) select.required = true;
+
+            // Add a default placeholder option
+            const placeholderOption = document.createElement('option');
+            placeholderOption.value = "";
+            placeholderOption.textContent = field.placeholder || `Sélectionnez...`;
+            placeholderOption.disabled = true;
+            placeholderOption.selected = true;
+            select.appendChild(placeholderOption);
+
+            let options: string[] = [];
+            if (field.dataSource === 'cardTypes') {
+                options = cardTypes.filter(ct => ct.status === 'active').map(ct => ct.name);
+            } else {
+                options = field.options || [];
+            }
+            
+            options.forEach(optionText => {
+                select.add(new Option(optionText, optionText));
+            });
+            inputElement = select;
+        } else {
+            const input = document.createElement('input');
+            input.id = `op_field_${field.id}`;
+            input.name = field.name;
+            input.className = 'form-input mt-1';
+            input.type = field.type;
+            if (field.required) input.required = true;
+            if (field.placeholder) input.placeholder = field.placeholder;
+            if (field.readonly) input.readOnly = true;
+            if (field.defaultValue) input.defaultValue = String(field.defaultValue);
+            inputElement = input;
+        }
+
+        fieldWrapper.appendChild(inputElement);
+        container.appendChild(fieldWrapper);
+    });
+
+    container.classList.remove('hidden');
+}
 
 export async function renderNewOperationView(user: User, operationTypeId?: string): Promise<HTMLElement> {
     const api = ApiService.getInstance();
@@ -326,273 +391,180 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
                 const selectedNewFormula = newFormulaSelect.value;
                 const newFormulaPrice = canalPlusReaboFormulaPrices[selectedNewFormula] || 0;
                 newFormulaPriceInput.value = newFormulaPrice.toString();
-                
+
                 const selectedOption = optionSelect.value;
                 const optionPrice = canalPlusReaboOptionPrices[selectedOption] || 0;
                 optionPriceInput.value = optionPrice.toString();
-                
-                const priceDifference = Math.max(0, newFormulaPrice - oldFormulaPrice);
-                const total = priceDifference + optionPrice;
-                
+
+                const total = (newFormulaPrice - oldFormulaPrice) + optionPrice;
                 totalInput.value = total.toString();
             }
-        } else if (selectedOperationType.id === 'op_paiement_facture') {
-            const montantPrincipalInput = opDynamicFields.querySelector<HTMLInputElement>('input[name="montant_principal"]');
-            const totalAmountInput = opDynamicFields.querySelector<HTMLInputElement>('input[name="total_amount"]');
-            
-            if (montantPrincipalInput && totalAmountInput) {
-                const montantPrincipal = parseFloat(montantPrincipalInput.value) || 0;
-                const frais = 0; // Fees are calculated in summary now
-                const totalAmount = montantPrincipal + frais;
-                
-                totalAmountInput.value = totalAmount.toString();
-            }
-        } else if (selectedOperationType.id === 'op_envoi_wu' || selectedOperationType.id === 'op_envoi_ria' || selectedOperationType.id === 'op_envoi_mg') {
-            const montantPrincipalInput = opDynamicFields.querySelector<HTMLInputElement>('input[name="montant_principal"]');
-            const fraisInput = opDynamicFields.querySelector<HTMLInputElement>('input[name="cost"]');
-            const totalAmountInput = opDynamicFields.querySelector<HTMLInputElement>('input[name="total_amount"]');
-            const amountToReceiveInput = opDynamicFields.querySelector<HTMLInputElement>('input[name="amount_to_receive"]');
+        }
+        updateOperationSummary();
+    };
     
-            if (montantPrincipalInput && fraisInput && totalAmountInput && amountToReceiveInput) {
-                const montantPrincipal = parseFloat(montantPrincipalInput.value) || 0;
-                const frais = parseFloat(fraisInput.value) || 0;
-                const totalAmount = montantPrincipal + frais;
-                
-                totalAmountInput.value = totalAmount.toString();
-                amountToReceiveInput.value = montantPrincipal.toString();
-            }
-        }
-        
-        // This will update the summary box with the new calculated values
-        updateOperationSummary();
-    };
-
-    const renderDynamicFields = async (opTypeId: string) => {
-        if (!opDynamicFields || !opPlaceholder || !opSelectionInfo) return;
-        
-        opDynamicFields.innerHTML = '';
-
-        if (!opTypeId) {
-            selectedOperationType = null;
-            opDynamicFields.classList.add('hidden');
-            opPlaceholder.style.display = 'block';
-            opSelectionInfo.classList.add('hidden');
-            submitButton.disabled = true;
-            return;
-        }
-
-        selectedOperationType = availableOpTypes.find(ot => ot.id === opTypeId) || null;
-        
-        if (selectedOperationType) {
-            document.body.dispatchEvent(new CustomEvent('updateActiveNav', { detail: { navId: `op_${opTypeId}` } }));
-
-            opPlaceholder.style.display = 'none';
-            opSelectionInfo.innerHTML = `${selectedOperationType.name} <span class="text-xs font-normal text-slate-500 ml-2">(Changer)</span>`;
+    // Use event delegation for dynamic fields
+    opDynamicFields?.addEventListener('input', updateCalculatedFields);
+    opDynamicFields?.addEventListener('change', updateCalculatedFields);
+    
+    
+    const selectOperationType = (opType: OperationType) => {
+        selectedOperationType = opType;
+        if (opPlaceholder && opSelectionInfo) {
+            opPlaceholder.classList.add('hidden');
+            opSelectionInfo.innerHTML = `<i class="fas ${categoryIcons[opType.category] || 'fa-cogs'} mr-3"></i> ${opType.name}`;
             opSelectionInfo.classList.remove('hidden');
-            opDynamicFields.classList.remove('hidden');
-            submitButton.disabled = false;
-
-            if (selectedOperationType.impactsBalance) {
-                submitButton.innerHTML = `<i class="fas fa-paper-plane mr-2"></i>Soumettre pour Validation`;
-            } else {
-                submitButton.innerHTML = `<i class="fas fa-concierge-bell mr-2"></i>Soumettre la Demande`;
-            }
-            
-            for (const field of selectedOperationType.fields) {
-                if (field.obsolete) continue;
-                const fieldDiv = document.createElement('div');
-                fieldDiv.className = 'mb-3';
-                let fieldHtml = `<label class="form-label form-label-sm" for="${field.id}">${field.label} ${field.required ? '<span class="text-red-500">*</span>' : ''}</label>`;
-                
-                const readonlyAttr = field.readonly ? ' readonly' : '';
-                const readonlyClasses = field.readonly ? ' bg-slate-200 cursor-not-allowed' : '';
-
-                if (field.type === 'select') {
-                    let optionsHtml = `<option value="">-- Choisir --</option>`;
-                    if (field.dataSource === 'cardTypes') {
-                        const cardTypes = await api.getCardTypes();
-                        cardTypes.filter(ct => ct.status === 'active').forEach(ct => {
-                            optionsHtml += `<option value="${ct.name}">${ct.name}</option>`;
-                        });
-                    } else {
-                        (field.options || []).forEach(opt => optionsHtml += `<option value="${opt.toLowerCase().replace(/\s+/g, '_').replace('+', '')}">${opt}</option>`);
-                    }
-                    fieldHtml += `<select id="${field.id}" name="${field.name}" class="form-select form-select-sm${readonlyClasses}"${field.required ? ' required' : ''}${readonlyAttr}>${optionsHtml}</select>`;
-                } else if (field.type === 'file') {
-                     fieldHtml += `<input type="file" id="${field.id}" name="${field.name}" class="form-input form-input-sm"${field.required ? ' required' : ''}>`;
-                } else {
-                    fieldHtml += `<input type="${field.type}" id="${field.id}" name="${field.name}" class="form-input form-input-sm${readonlyClasses}" placeholder="${field.placeholder || ''}"${field.required ? ' required' : ''}${field.defaultValue ? ` value="${field.defaultValue}"` : ''}${readonlyAttr}>`;
-                }
-                fieldDiv.innerHTML = fieldHtml;
-                opDynamicFields.appendChild(fieldDiv);
-            }
-
-            if (selectedOperationType.id === 'op_abo_decodeur_canal') {
-                opDynamicFields.querySelector('select[name="decoder_concept_id"]')?.addEventListener('change', updateCalculatedFields);
-                opDynamicFields.querySelector('input[name="nbr_month"]')?.addEventListener('input', updateCalculatedFields);
-                updateCalculatedFields();
-            } else if (selectedOperationType.id === 'op_reabo_canal') {
-                opDynamicFields.querySelector('select[name="formule"]')?.addEventListener('change', updateCalculatedFields);
-                opDynamicFields.querySelector('select[name="option"]')?.addEventListener('change', updateCalculatedFields);
-                opDynamicFields.querySelector('input[name="nb_mois"]')?.addEventListener('input', updateCalculatedFields);
-                updateCalculatedFields();
-            } else if (selectedOperationType.id === 'op_complement_canal') {
-                const oldFormulaSelect = opDynamicFields.querySelector('select[name="ancienne_formule"]');
-                const newFormulaSelect = opDynamicFields.querySelector('select[name="nouvelle_formule"]');
-                const optionSelect = opDynamicFields.querySelector('select[name="option"]');
-
-                if (oldFormulaSelect) oldFormulaSelect.addEventListener('change', updateCalculatedFields);
-                if (newFormulaSelect) newFormulaSelect.addEventListener('change', updateCalculatedFields);
-                if (optionSelect) optionSelect.addEventListener('change', updateCalculatedFields);
-                
-                updateCalculatedFields();
-            } else if (selectedOperationType.id === 'op_paiement_facture') {
-                opDynamicFields.querySelector('input[name="montant_principal"]')?.addEventListener('input', updateCalculatedFields);
-                
-                const warningDiv = document.createElement('div');
-                warningDiv.className = 'mt-4 p-3 bg-amber-50 border-l-4 border-amber-400 text-amber-800 text-sm';
-                warningDiv.innerHTML = `<i class="fas fa-exclamation-triangle mr-2"></i><strong>Attention :</strong> En cas de délai de paiement dépassé, notre responsabilité n'est pas engagée.`;
-                opDynamicFields.appendChild(warningDiv);
-            
-                updateCalculatedFields();
-            } else if (selectedOperationType.id === 'op_envoi_wu' || selectedOperationType.id === 'op_envoi_ria' || selectedOperationType.id === 'op_envoi_mg') {
-                opDynamicFields.querySelector('input[name="montant_principal"]')?.addEventListener('input', updateCalculatedFields);
-                opDynamicFields.querySelector('input[name="cost"]')?.addEventListener('input', updateCalculatedFields);
-                updateCalculatedFields();
-            }
-
-        } else {
-             opDynamicFields.innerHTML = `<p class="text-red-500">Erreur: impossible de charger les champs pour ce type d'opération.</p>`;
-             opDynamicFields.classList.remove('hidden');
         }
-        updateOperationSummary();
+        if (opSelectionModal) {
+            opSelectionModal.classList.add('hidden');
+        }
+        
+        const dataService = DataService.getInstance();
+        dataService.getCardTypes().then(cardTypes => {
+            renderDynamicFields(opType, opDynamicFields as HTMLElement, cardTypes);
+            updateCalculatedFields(); // Initial calculation
+        });
+        submitButton.disabled = false;
     };
 
-    const populateSelectionModal = () => {
-        if (!opSelectionModal) return;
-        const grid = $('#opSelectionGrid', opSelectionModal);
-        if (!grid) return;
-        grid.innerHTML = '';
 
+    const openOpSelectionModal = async () => {
+        if (!opSelectionModal) return;
+
+        const opGrid = $('#opSelectionGrid', opSelectionModal);
+        if (!opGrid) return;
+        
+        opGrid.innerHTML = '<div class="text-center p-8"><i class="fas fa-spinner fa-spin text-3xl text-slate-400"></i></div>';
+        opSelectionModal.classList.remove('hidden');
+
+        if (availableOpTypes.length === 0) {
+            availableOpTypes = await DataService.getInstance().getAllOperationTypes();
+        }
+        
         const groupedOps = availableOpTypes.reduce((acc, op) => {
+            if (op.status !== 'active') return acc;
             const category = op.category || 'Autres Services';
-            if (!acc[category]) acc[category] = [];
+            if (!acc[category]) {
+                acc[category] = [];
+            }
             acc[category].push(op);
             return acc;
         }, {} as Record<string, OperationType[]>);
 
-        for (const category in groupedOps) {
-            const categoryWrapper = document.createElement('div');
-            const categoryIcon = categoryIcons[category] || 'fa-concierge-bell';
-            categoryWrapper.innerHTML = `<h4 class="text-lg font-semibold text-slate-700 mb-3"><i class="fas ${categoryIcon} mr-2 text-violet-500"></i>${category}</h4>`;
-
-            const opsGrid = document.createElement('div');
-            opsGrid.className = 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3';
-            
+        opGrid.innerHTML = ''; // Clear spinner
+        Object.keys(groupedOps).sort().forEach(category => {
+            const categorySection = document.createElement('div');
+            categorySection.innerHTML = `
+                <h4 class="text-lg font-semibold text-slate-700 mb-3 flex items-center">
+                   <i class="fas ${categoryIcons[category] || 'fa-cogs'} mr-3 text-violet-500"></i>
+                   ${category}
+                </h4>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 category-grid">
+                    <!-- Operation buttons go here -->
+                </div>
+            `;
+            const gridContainer = categorySection.querySelector('.category-grid');
             groupedOps[category].forEach(op => {
-                const opCard = document.createElement('button');
-                opCard.type = 'button';
-                opCard.dataset.opId = op.id;
-                opCard.dataset.opName = op.name;
-                opCard.dataset.opCategory = category;
-                opCard.className = 'operation-card text-left p-3 border rounded-lg hover:border-violet-500 hover:bg-violet-50 transition-all duration-200';
-                opCard.innerHTML = `
+                const button = document.createElement('button');
+                button.className = 'operation-item text-left p-3 border rounded-lg hover:border-violet-400 hover:bg-violet-50 transition-colors';
+                button.dataset.opId = op.id;
+                button.innerHTML = `
                     <p class="font-semibold text-slate-800">${op.name}</p>
-                    <p class="text-xs text-slate-500">${op.description}</p>
+                    <p class="text-xs text-slate-500 mt-1">${op.description}</p>
                 `;
-                opCard.addEventListener('click', async () => {
-                    await renderDynamicFields(op.id);
-                    opSelectionModal?.classList.add('hidden');
-                });
-                opsGrid.appendChild(opCard);
+                gridContainer?.appendChild(button);
             });
-            categoryWrapper.appendChild(opsGrid);
-            grid.appendChild(categoryWrapper);
-        }
+            opGrid.appendChild(categorySection);
+        });
     };
     
-    (async () => {
-        if (!user.partnerId) return;
-        try {
-            availableOpTypes = await api.getOperationTypes({ partnerId: user.partnerId });
-            populateSelectionModal();
-            if (operationTypeId) {
-                await renderDynamicFields(operationTypeId);
+    opDisplay?.addEventListener('click', openOpSelectionModal);
+    $('#closeOpModalBtn', opSelectionModal)?.addEventListener('click', () => opSelectionModal?.classList.add('hidden'));
+
+    opSelectionModal?.addEventListener('click', e => {
+        const target = e.target as HTMLElement;
+        const opButton = target.closest<HTMLButtonElement>('.operation-item');
+        if (opButton) {
+            const opId = opButton.dataset.opId;
+            const selectedOp = availableOpTypes.find(op => op.id === opId);
+            if (selectedOp) {
+                selectOperationType(selectedOp);
             }
-        } catch (error) {
-            console.error("Failed to load operation types", error);
         }
-    })();
+        // Close if clicking on the backdrop
+        if (target.id === 'operationSelectionModal') {
+            opSelectionModal?.classList.add('hidden');
+        }
+    });
 
-    const attachEventListeners = () => {
-        if (!opSelectionModal) return;
-        const form = $('#newOperationForm', container) as HTMLFormElement;
-        const cancelBtn = $('#cancelOperationBtn', container);
-        const closeOpModalBtn = $('#closeOpModalBtn', opSelectionModal);
-        
-        opDisplay?.addEventListener('click', () => opSelectionModal?.classList.remove('hidden'));
-        closeOpModalBtn?.addEventListener('click', () => opSelectionModal?.classList.add('hidden'));
-
-        opSearchInput?.addEventListener('input', () => {
-            const searchTerm = opSearchInput.value.toLowerCase().trim();
-            opSelectionModal?.querySelectorAll('.operation-card').forEach(cardEl => {
-                const card = cardEl as HTMLElement;
-                const name = card.dataset.opName?.toLowerCase() || '';
-                const category = card.dataset.opCategory?.toLowerCase() || '';
-                const isVisible = name.includes(searchTerm) || category.includes(searchTerm);
-                card.style.display = isVisible ? 'block' : 'none';
-            });
+    opSearchInput?.addEventListener('input', () => {
+        const searchTerm = opSearchInput.value.toLowerCase().trim();
+        opSelectionModal?.querySelectorAll('.operation-item').forEach(item => {
+            const itemElement = item as HTMLElement;
+            const itemText = itemElement.textContent?.toLowerCase() || '';
+            itemElement.style.display = itemText.includes(searchTerm) ? '' : 'none';
         });
 
-        opDynamicFields?.addEventListener('input', updateOperationSummary);
-
-        form?.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            if (!selectedOperationType) {
-                document.body.dispatchEvent(new CustomEvent('showToast', {
-                    detail: { message: 'Veuillez sélectionner un type d\'opération.', type: 'warning' }
-                }));
-                return;
-            }
-        
-            submitButton.disabled = true;
-            submitButton.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i>Soumission...`;
-        
-            const formData = new FormData(form);
-            const data: { [key: string]: any } = {};
-            formData.forEach((value, key) => {
-                data[key] = value;
-            });
-        
-            try {
-                await api.createTransaction(user.id, selectedOperationType.id, data);
-                document.body.dispatchEvent(new CustomEvent('showToast', {
-                    detail: { message: 'Opération soumise pour validation !', type: 'success' }
-                }));
-                handleCancelNavigation(container, user);
-            } catch (error) {
-                console.error("Failed to create transaction", error);
-                document.body.dispatchEvent(new CustomEvent('showToast', {
-                    detail: { message: 'Erreur lors de la soumission.', type: 'error' }
-                }));
-                submitButton.disabled = false;
-                submitButton.innerHTML = `<i class="fas fa-paper-plane mr-2"></i>Soumettre pour Validation`;
+        opSelectionModal?.querySelectorAll('.category-grid').forEach(grid => {
+            const gridElement = grid as HTMLElement;
+            const hasVisibleItems = !!gridElement.querySelector('.operation-item[style*="display:"]');
+            const section = gridElement.parentElement;
+            if(section) {
+                section.style.display = hasVisibleItems ? '' : 'none';
             }
         });
-        
-        cancelBtn?.addEventListener('click', () => {
-             handleCancelNavigation(container, user);
-        });
+    });
+
+    $('#cancelOperationBtn', container)?.addEventListener('click', () => handleCancelNavigation(container, user));
+
+    container.querySelector('form')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const form = e.target as HTMLFormElement;
+        if (!selectedOperationType) {
+            document.body.dispatchEvent(new CustomEvent('showToast', {
+                detail: { message: "Veuillez d'abord sélectionner une opération.", type: 'warning' }
+            }));
+            return;
+        }
+
+        const formData = new FormData(form);
+        const data: { [key: string]: any } = {};
+        for (let [key, value] of formData.entries()) {
+            data[key] = value;
+        }
+
+        const originalBtnHtml = submitButton.innerHTML;
+        submitButton.disabled = true;
+        submitButton.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i>Soumission en cours...`;
+
+        try {
+            const newTransaction = await api.createTransaction(user.id, selectedOperationType.id, data);
+             document.body.dispatchEvent(new CustomEvent('showToast', {
+                detail: { message: `Opération #${newTransaction.id} soumise avec succès !`, type: 'success' }
+            }));
+            handleCancelNavigation(container, user);
+        } catch (error) {
+            console.error("Transaction creation failed:", error);
+            document.body.dispatchEvent(new CustomEvent('showToast', {
+                detail: { message: "La soumission a échoué. Vérifiez votre solde et les informations.", type: 'error' }
+            }));
+            submitButton.disabled = false;
+            submitButton.innerHTML = originalBtnHtml;
+        }
+    });
+
+    const initializeView = async () => {
+        if (operationTypeId) {
+            const dataService = DataService.getInstance();
+            const allOps = await dataService.getAllOperationTypes();
+            const opToSelect = allOps.find(op => op.id === operationTypeId);
+            if (opToSelect) {
+                selectOperationType(opToSelect);
+            }
+        }
     };
 
-    attachEventListeners();
-
-    // Hide modal if user navigates away using browser back/forward
-    const navigationHandler = () => {
-        opSelectionModal?.classList.add('hidden');
-        window.removeEventListener('popstate', navigationHandler);
-    };
-    window.addEventListener('popstate', navigationHandler);
+    initializeView();
 
     return container;
 }
