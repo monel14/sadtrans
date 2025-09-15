@@ -240,6 +240,7 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
         const summaryBalanceInfo = $('#summary-balance-info', container);
         const summaryDetails = $('#summary-details', container);
         const summaryDebitInfo = $('#summary-debit-info', container);
+        const submitBtn = container.querySelector('button[type="submit"]') as HTMLButtonElement;
 
         if (!opDynamicFields || !summaryContainer || !selectedOperationType || !summaryBalanceInfo || !summaryDetails || !summaryDebitInfo) {
             summaryContainer?.classList.add('hidden');
@@ -249,7 +250,23 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
         const amountInput = opDynamicFields.querySelector<HTMLInputElement>('input[name="montant_principal"]');
         const baseAmount = parseFloat(amountInput?.value || '0') || 0;
 
-        const { totalFee, partnerShare } = await calculateFeeAndCommissionPreview(baseAmount, user, selectedOperationType, api);
+        let totalFee: number;
+        let partnerShare: number;
+
+        try {
+            const preview = await calculateFeeAndCommissionPreview(baseAmount, user, selectedOperationType, api);
+            totalFee = preview.totalFee;
+            partnerShare = preview.partnerShare;
+            if (submitBtn && selectedOperationType) submitBtn.disabled = false; // Re-enable on success
+        } catch (error) {
+            console.error("Failed to calculate fee preview:", error);
+            summaryContainer.classList.remove('hidden');
+            summaryBalanceInfo.classList.add('hidden');
+            summaryDebitInfo.classList.add('hidden');
+            summaryDetails.innerHTML = `<p class="text-sm font-medium text-red-700"><i class="fas fa-exclamation-triangle mr-2"></i>Impossible de calculer les frais. La soumission est désactivée.</p>`;
+            if (submitBtn) submitBtn.disabled = true;
+            return;
+        }
         
         if (!selectedOperationType.impactsBalance && totalFee <= 0) {
             summaryContainer.classList.add('hidden');
