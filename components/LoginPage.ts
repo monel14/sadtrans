@@ -5,8 +5,8 @@ export function renderLoginPage(): HTMLElement {
     page.id = 'loginPage';
     page.className = 'min-h-screen flex items-center justify-center bg-gray-900 bg-gradient-to-br from-slate-900 via-gray-900 to-slate-900 p-4';
 
-    const defaultEmailForDemo = 'admin.adam@example.com';
-    const defaultPasswordForDemo = 'SadTrans#P@ssw0rd!';
+    const defaultEmailForDemo = 'agent@example.com';
+    const defaultPasswordForDemo = 'Password123!';
     
     page.innerHTML = `
         <div class="bg-slate-800/60 backdrop-blur-lg border border-slate-700 p-8 sm:p-12 rounded-2xl w-full max-w-md shadow-2xl shadow-slate-900/50">
