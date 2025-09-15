@@ -1,5 +1,3 @@
-
-
 import { User, UserRole } from './models';
 import { renderLoginPage } from './components/LoginPage';
 import { renderSidebar } from './components/Sidebar';
@@ -200,6 +198,7 @@ export class App {
         document.body.addEventListener('agentUpdated', reloadCurrentView);
         document.body.addEventListener('userUpdated', reloadCurrentView);
         document.body.addEventListener('partnerUpdated', reloadCurrentView);
+        document.body.addEventListener('operationTypeUpdated', reloadCurrentView);
     }
 
     private handleOpenAgentRechargeModal() {

@@ -5,7 +5,7 @@
 
 // --- USER & AUTH ---
 
-export type UserRole = 'agent' | 'partner' | 'admin_general' | 'sous_admin';
+export type UserRole = 'agent' | 'partner' | 'admin_general' | 'sous_admin' | 'developer';
 
 export interface User {
   id: string;

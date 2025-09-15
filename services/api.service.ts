@@ -376,7 +376,7 @@ export class ApiService {
             commission_config: opData.commissionConfig
         };
 
-        const { data, error } = await supabase.from('operation_types').update(dbData).eq('id', opData.id).select().single();
+        const { data, error } = await supabase.from('operation_types').upsert(dbData).select().single();
         if (error) throw error;
         DataService.getInstance().invalidateOperationTypesCache();
 

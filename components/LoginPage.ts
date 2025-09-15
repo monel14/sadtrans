@@ -19,7 +19,7 @@ export function renderLoginPage(): HTMLElement {
                  <div class="mb-6">
                     <label for="email" class="form-label text-slate-300">Adresse Email</label>
                     <input type="email" id="email" class="form-input bg-slate-700 text-white border-slate-600 placeholder-slate-400 focus:ring-violet-500 focus:border-violet-500" placeholder="votreadresse@email.com" value="${defaultEmailForDemo}" required>
-                    <p class="text-xs text-slate-500 mt-2">Emails de démo: admin.adam@example.com, partner.patrice@example.com, agent.alice@example.com</p>
+                    <p class="text-xs text-slate-500 mt-2">Emails de démo: admin.adam@example.com, partner.patrice@example.com, agent.alice@example.com, dev@example.com</p>
                 </div>
                 <div class="mb-6">
                     <label for="password" class="form-label text-slate-300">Mot de passe</label>

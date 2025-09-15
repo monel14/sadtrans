@@ -1,4 +1,3 @@
-
 import { User, UserRole, NavLink } from "../models";
 import { renderAgentDashboardView } from "../views/AgentDashboard";
 import { renderAgentTransactionHistoryView } from "../views/AgentTransactionHistory";
@@ -21,6 +20,8 @@ import { renderAdminManageUsersView } from "../views/AdminManageUsers";
 import { renderAdminRevenueDashboardView } from "../views/AdminRevenueDashboard";
 import { renderAdminCommissionConfigView } from "../views/AdminCommissionConfig";
 import { renderAllTransactionsView } from "../views/AllTransactions";
+import { renderDeveloperDashboardView } from "../views/DeveloperDashboard";
+import { renderDeveloperManageOperationTypesView } from "../views/DeveloperManageOperationTypes";
 
 // Import new, refactored views
 import { renderProfileView } from '../views/Profile';
@@ -156,5 +157,29 @@ export const navigationLinks: Record<UserRole, NavLink[]> = {
     sous_admin: [
         { label: 'Tableau de Bord', navId: 'subadmin_dashboard', icon: 'fa-tachometer-alt', viewFn: renderSubAdminDashboardView },
         { label: 'Validation Transactions', navId: 'subadmin_validate_tx', icon: 'fa-check-square', viewFn: (user: User) => renderAdminTransactionValidationView(user, 'unassigned') },
+    ],
+    developer: [
+        { label: 'Developer Dashboard', navId: 'dev_dashboard', icon: 'fa-code', viewFn: renderDeveloperDashboardView },
+        {
+            label: 'System Configuration',
+            navId: 'dev_system_config',
+            icon: 'fa-cogs',
+            children: [
+                { label: 'Operation Types', navId: 'dev_manage_op_types', icon: 'fa-stream', viewFn: renderDeveloperManageOperationTypesView },
+                { label: 'Commission Profiles', navId: 'admin_commission_config', icon: 'fa-file-signature', viewFn: renderAdminCommissionConfigView },
+                { label: 'Recharge Methods', navId: 'admin_config_recharge_methods', icon: 'fa-cash-register', viewFn: renderAdminManageRechargeMethodsView },
+            ]
+        },
+        {
+            label: 'Data Management',
+            navId: 'dev_data_management',
+            icon: 'fa-database',
+            children: [
+                { label: 'All Users', navId: 'admin_manage_users', icon: 'fa-users', viewFn: renderAdminManageUsersView },
+                { label: 'Partners', navId: 'admin_manage_partners', icon: 'fa-building', viewFn: renderAdminManagePartnersView },
+                { label: 'Card Inventory', navId: 'admin_card_management', icon: 'fa-credit-card', viewFn: renderAdminCardManagementView },
+            ]
+        },
+        { label: 'Audit Log', navId: 'admin_audit_log', icon: 'fa-clipboard-list', viewFn: renderAuditLogView },
     ],
 };
