@@ -1,7 +1,7 @@
 import { User, Transaction } from '../models';
 import { ApiService } from '../services/api.service';
 import { DataService } from '../services/data.service';
-import { formatAmount, formatDate } from '../utils/formatters';
+import { formatAmount, formatDate, formatNumber } from '../utils/formatters';
 import { renderAdminTransactionValidationView } from './AdminTransactionValidation';
 import { renderAdminAgentRechargesView } from './AdminAgentRecharges';
 import { renderAdminManagePartnersView } from './AdminManagePartners';
@@ -124,6 +124,13 @@ export async function renderAdminDashboardView(user: User): Promise<HTMLElement>
     const pendingTransactionsCount = unassignedTransactions.length;
     const pendingAgentRechargesCount = allPendingAgentRecharges.length;
 
+    // --- Dynamic KPI Calculations ---
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthlyTransactions = allTransactions.filter(t => new Date(t.date) >= startOfMonth && t.statut === 'Validé');
+    const monthlyVolume = monthlyTransactions.reduce((sum, tx) => sum + tx.montant_principal, 0);
+    const monthlyOperationsCount = monthlyTransactions.length;
+
     // --- Prepare data for queues ---
     const transactionItems = pendingTransactionsForQueue.map(t => {
         const agent = userMap.get(t.agentId);
@@ -221,8 +228,8 @@ export async function renderAdminDashboardView(user: User): Promise<HTMLElement>
     container.innerHTML = `
         <!-- KPIs Row -->
         <div class="flex flex-col lg:flex-row gap-4 mb-6">
-            ${createKpiCard('Volume Total (Mois)', '50,2M XOF', 'fa-chart-line')}
-            ${createKpiCard('Opérations (Mois)', '7,850', 'fa-exchange-alt')}
+            ${createKpiCard('Volume Total (Mois)', formatAmount(monthlyVolume), 'fa-chart-line')}
+            ${createKpiCard('Opérations (Mois)', formatNumber(monthlyOperationsCount), 'fa-exchange-alt')}
             ${createKpiCard('Partenaires Actifs', String(allPartners.length), 'fa-building')}
         </div>
 

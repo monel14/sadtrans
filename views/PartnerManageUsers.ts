@@ -7,6 +7,10 @@ import { formatAmount } from '../utils/formatters';
 export async function renderPartnerManageUsersView(partnerUser: User): Promise<HTMLElement> {
     const api = ApiService.getInstance();
     const allUsers = await api.getUsers();
+    
+    const fullPartnerUser = allUsers.find(u => u.id === partnerUser.id);
+    const agencyBalance = (fullPartnerUser as any).agency?.solde_principal;
+    
     const myAgents = allUsers.filter(u => u.role === 'agent' && u.partnerId === partnerUser.partnerId);
 
     const container = document.createElement('div');
@@ -38,8 +42,8 @@ export async function renderPartnerManageUsersView(partnerUser: User): Promise<H
                      </div>
                 </div>
                 <div class="text-left sm:text-right">
-                    <p class="font-semibold text-slate-700">${formatAmount(agent.solde)}</p>
-                    <p class="text-xs text-slate-400">Solde actuel (partagé)</p>
+                    <p class="font-semibold text-slate-700">${formatAmount(agencyBalance)}</p>
+                    <p class="text-xs text-slate-400">Solde agence (partagé)</p>
                 </div>
                  <div class="flex items-center gap-4 w-full sm:w-auto mt-2 sm:mt-0">
                     ${statusBadge}

@@ -1,19 +1,52 @@
 
+
 import { User } from '../models';
 import { ApiService } from '../services/api.service';
+import { DataService } from '../services/data.service';
 import { createCard } from '../components/Card';
 import { formatAmount } from '../utils/formatters';
 import { navigationLinks } from '../config/navigation';
 import { NavLink } from '../models';
 
 export async function renderPartnerDashboardView(user: User): Promise<HTMLElement> {
-    if (!user.partnerId) return document.createElement('div');
+    const dataService = DataService.getInstance();
+    const api = ApiService.getInstance(); // Keep for the transfer function
 
-    const api = ApiService.getInstance();
+    // Force cache invalidation to get fresh data with agency information
+    dataService.invalidateUsersCache();
+    dataService.invalidateTransactionsCache();
+    dataService.invalidateCardsCache();
+    dataService.invalidateAgentRechargeRequestsCache();
+
+    // Fetch fresh, complete user data to ensure agency balances are included.
+    const allUsers = await dataService.getUsers(); // This fetches users with agency data
+    const fullUser = allUsers.find(u => u.id === user.id);
+
+    console.log('PartnerDashboard Debug:', {
+        originalUser: user,
+        allUsersCount: allUsers.length,
+        fullUser: fullUser,
+        fullUserAgency: (fullUser as any)?.agency
+    });
+
+    // If for some reason the logged-in user isn't found or isn't a partner, show an error.
+    if (!fullUser || fullUser.role !== 'partner') {
+        const errorEl = document.createElement('div');
+        errorEl.innerHTML = `<div class="card"><p class="text-red-500 p-4">Erreur: Impossible de charger les données du partenaire. Utilisateur: ${fullUser?.name || 'Non trouvé'}, Rôle: ${fullUser?.role || 'Non défini'}</p></div>`;
+        return errorEl;
+    }
+
+    const agency = (fullUser as any).agency;
+
+    // Prioritize agency balance, with fallback to user's own balance fields.
+    const mainBalance = agency?.solde_principal ?? fullUser.solde ?? 0;
+    const revenueBalance = agency?.solde_revenus ?? fullUser.solde_revenus ?? 0;
+
     const container = document.createElement('div');
 
+    // Use DataService to get filtered cards, not ApiService
     const [unactivatedCards] = await Promise.all([
-        api.getCards({ partnerId: user.partnerId, status: "En attente d'activation" }),
+        dataService.getCards({ partnerId: fullUser.partnerId, status: "En attente d'activation" }),
     ]);
 
     const balancesGrid = `
@@ -22,7 +55,7 @@ export async function renderPartnerDashboardView(user: User): Promise<HTMLElemen
             <div class="card p-6 flex flex-col justify-between">
                 <div>
                     <p class="text-sm text-slate-500">Solde Principal (Opérations)</p>
-                    <p class="text-4xl font-bold text-emerald-600">${formatAmount(user.solde)}</p>
+                    <p class="text-4xl font-bold text-emerald-600">${formatAmount(mainBalance)}</p>
                 </div>
                 <p class="text-xs text-slate-400 mt-2">Utilisé pour toutes les transactions de vos agents.</p>
             </div>
@@ -31,10 +64,10 @@ export async function renderPartnerDashboardView(user: User): Promise<HTMLElemen
             <div class="card p-6 flex flex-col justify-between bg-violet-50 border-violet-200">
                 <div>
                     <p class="text-sm text-violet-700">Solde Secondaire (Revenus Agence)</p>
-                    <p class="text-4xl font-bold text-violet-600">${formatAmount(user.solde_revenus)}</p>
+                    <p class="text-4xl font-bold text-violet-600">${formatAmount(revenueBalance)}</p>
                     <p class="text-xs text-violet-500 mt-2">Total des commissions perçues par votre agence.</p>
                 </div>
-                <button id="transfer-revenue-btn" class="btn btn-primary mt-4 w-full" ${!user.solde_revenus || user.solde_revenus === 0 ? 'disabled' : ''}>
+                <button id="transfer-revenue-btn" class="btn btn-primary mt-4 w-full" ${!revenueBalance || revenueBalance === 0 ? 'disabled' : ''}>
                     <i class="fas fa-exchange-alt mr-2"></i> Transférer vers le Solde Principal
                 </button>
             </div>
@@ -67,27 +100,27 @@ export async function renderPartnerDashboardView(user: User): Promise<HTMLElemen
     `;
     quickAccessCard.appendChild(createCard('Accès Rapides', quickAccessContent, 'fa-rocket', ''));
     container.appendChild(quickAccessCard);
-    
+
     // --- Grid for info cards ---
     const infoGrid = document.createElement('div');
     infoGrid.className = 'grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6';
     container.appendChild(infoGrid);
-    
+
     // --- Card for Partner Info ---
     const partnerInfoContent = document.createElement('div');
     partnerInfoContent.className = 'space-y-3';
     partnerInfoContent.innerHTML = `
         <div>
             <p class="text-xs text-slate-500">Personne à contacter</p>
-            <p class="font-semibold text-slate-800">${user.contactPerson?.name || 'Non renseigné'}</p>
+            <p class="font-semibold text-slate-800">${fullUser.contactPerson?.name || 'Non renseigné'}</p>
         </div>
          <div>
             <p class="text-xs text-slate-500">Téléphone Contact</p>
-            <p class="font-semibold text-slate-800">${user.contactPerson?.phone || 'Non renseigné'}</p>
+            <p class="font-semibold text-slate-800">${fullUser.contactPerson?.phone || 'Non renseigné'}</p>
         </div>
          <div>
             <p class="text-xs text-slate-500">Adresse</p>
-            <p class="font-semibold text-slate-800">${user.agencyName || 'Non renseignée'}</p>
+            <p class="font-semibold text-slate-800">${fullUser.agencyName || 'Non renseignée'}</p>
         </div>
     `;
     const partnerInfoCard = createCard('Informations de Contact', partnerInfoContent, 'fa-address-card', '');
@@ -161,14 +194,14 @@ export async function renderPartnerDashboardView(user: User): Promise<HTMLElemen
         });
     };
     flattenNavs(navigationLinks.partner);
-    
+
     container.addEventListener('click', async (e) => {
         const target = e.target as HTMLElement;
         const transferBtn = target.closest('#transfer-revenue-btn');
         const navButton = target.closest<HTMLButtonElement>('[data-nav-id]');
 
         if (transferBtn) {
-            const amountToTransfer = user.solde_revenus || 0;
+            const amountToTransfer = revenueBalance;
             if (amountToTransfer <= 0) return;
 
             if (confirm(`Voulez-vous vraiment transférer ${formatAmount(amountToTransfer)} de vos revenus vers votre solde principal ? Cette action est irréversible.`)) {
@@ -177,7 +210,7 @@ export async function renderPartnerDashboardView(user: User): Promise<HTMLElemen
                 btn.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i> Transfert en cours...`;
 
                 try {
-                    const updatedUser = await api.transferRevenueToMainBalance(user.id);
+                    const updatedUser = await api.transferRevenueToMainBalance(fullUser.id);
                     if (updatedUser) {
                         document.body.dispatchEvent(new CustomEvent('showToast', {
                             detail: { message: 'Transfert effectué avec succès !', type: 'success' }
@@ -187,14 +220,15 @@ export async function renderPartnerDashboardView(user: User): Promise<HTMLElemen
                             bubbles: true,
                             composed: true
                         }));
-                        
+
+                        // Re-render the view to show updated balances
                         const newDashboardView = await renderPartnerDashboardView(updatedUser);
                         if (container.parentElement) {
                             container.parentElement.replaceChild(newDashboardView, container);
                         }
 
                     } else {
-                         throw new Error('API returned null');
+                        throw new Error('API returned null');
                     }
                 } catch (error) {
                     console.error('Transfer failed', error);

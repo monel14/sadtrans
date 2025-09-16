@@ -1,3 +1,4 @@
+
 import { User, Transaction } from "../models";
 
 export function formatDate(dateString?: string): string {
@@ -28,6 +29,10 @@ export function formatTransactionStatus(transaction: Transaction, userMap: Map<s
     if (transaction.statut === 'Assignée' && transaction.assignedTo) {
         const user = userMap.get(transaction.assignedTo);
         return `Assignée à ${user?.name || 'Inconnu'}`;
+    }
+    // Handle legacy format for backward compatibility if needed, though clean data is preferred.
+    if (transaction.statut.startsWith('Assignée à')) {
+        return transaction.statut;
     }
     return transaction.statut;
 }

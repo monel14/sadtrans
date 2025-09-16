@@ -58,7 +58,7 @@ export async function renderDeveloperDashboardView(user: User): Promise<HTMLElem
             
             <!-- Side Column -->
             <div class="lg:col-span-1 space-y-6">
-                <div id="system-status-card-container"></div>
+                <!-- System Status Card Removed -->
             </div>
         </div>
     `;
@@ -117,20 +117,6 @@ export async function renderDeveloperDashboardView(user: User): Promise<HTMLElem
     const recentActivityCard = createCard('Recent System Activity', recentActivityContent, 'fa-history');
     container.querySelector('#recent-activity-card-container')?.appendChild(recentActivityCard);
     
-    // --- Inject System Status Card ---
-    const systemStatusContent = document.createElement('ul');
-    systemStatusContent.className = 'space-y-3';
-    systemStatusContent.innerHTML = `
-        <li class="flex justify-between items-center"><span class="font-medium text-slate-600">Supabase API</span><span class="badge badge-success">Operational</span></li>
-        <li class="flex justify-between items-center"><span class="font-medium text-slate-600">Database</span><span class="badge badge-success">Operational</span></li>
-        <li class="flex justify-between items-center"><span class="font-medium text-slate-600">Authentication</span><span class="badge badge-success">Operational</span></li>
-        <li class="flex justify-between items-center"><span class="font-medium text-slate-600">Storage</span><span class="badge badge-success">Operational</span></li>
-        <li class="flex justify-between items-center"><span class="font-medium text-slate-600">Edge Functions</span><span class="badge badge-warning">Partial Outage</span></li>
-    `;
-    const systemStatusCard = createCard('System Status', systemStatusContent, 'fa-server');
-    container.querySelector('#system-status-card-container')?.appendChild(systemStatusCard);
-
-
     // --- Event Listeners ---
     const navMap: { [key: string]: { viewFn: Function, label: string, navId: string } } = {
         'dev_manage_op_types': { viewFn: renderDeveloperManageOperationTypesView, label: 'Manage Operation Types', navId: 'dev_manage_op_types' },

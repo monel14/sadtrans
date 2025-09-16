@@ -1,5 +1,4 @@
 
-
 import { User } from '../models';
 import { DataService } from '../services/data.service';
 import { createCard } from '../components/Card';
@@ -7,10 +6,17 @@ import { formatAmount, formatDate, formatTransactionStatus } from '../utils/form
 import { renderAgentTransactionHistoryView } from './AgentTransactionHistory';
 import { renderNewOperationView } from './NewOperation';
 import { renderProfileView } from './Profile';
+import { ApiService } from '../services/api.service';
 
 export async function renderAgentDashboardView(user: User): Promise<HTMLElement> {
     const dataService = DataService.getInstance();
+    const api = ApiService.getInstance();
     const container = document.createElement('div');
+
+    // Fetch the full user object with agency data to get the correct shared balance
+    const fullUserResponse = await api.getUserWithAgency(user.id);
+    const agency = fullUserResponse?.agency;
+    const mainBalance = agency?.solde_principal ?? user.solde ?? 0;
 
     const [agentTransactions, opTypes, userMap] = await Promise.all([
         dataService.getTransactions({ agentId: user.id, limit: 3 }),
@@ -25,7 +31,7 @@ export async function renderAgentDashboardView(user: User): Promise<HTMLElement>
     `;
 
     const gridContainer = container.querySelector('.grid') as HTMLElement;
-    gridContainer.appendChild(createCard('Solde Actuel', `<p class="text-3xl font-bold text-emerald-600">${formatAmount(user.solde)}</p>`, 'fa-wallet', ''));
+    gridContainer.appendChild(createCard('Solde Partagé Agence', `<p class="text-3xl font-bold text-emerald-600">${formatAmount(mainBalance)}</p>`, 'fa-wallet', ''));
     
     const quickAccessContent = document.createElement('div');
     quickAccessContent.className = 'grid grid-cols-2 gap-3';
@@ -61,7 +67,7 @@ export async function renderAgentDashboardView(user: User): Promise<HTMLElement>
         const opTypeMap = new Map(opTypes.map(ot => [ot.id, ot]));
         agentTransactions.forEach(op => {
             const opType = opTypeMap.get(op.opTypeId);
-            const statusClass = op.statut === 'Validé' ? 'badge-success' : (op.statut === 'En attente de validation' || op.statut === 'Assignée' ? 'badge-warning' : 'badge-danger');
+            const statusClass = op.statut === 'Validé' ? 'badge-success' : (op.statut === 'En attente de validation' || op.statut.startsWith('Assignée') ? 'badge-warning' : 'badge-danger');
             const formattedStatus = formatTransactionStatus(op, userMap);
             const li = document.createElement('li');
             li.className = 'flex justify-between items-center p-3 rounded-md bg-slate-50 transition-colors hover:bg-slate-100';

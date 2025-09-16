@@ -1,3 +1,4 @@
+
 import { User, AgentRechargeRequest, Partner, RechargePaymentMethod } from '../models';
 import { ApiService } from '../services/api.service';
 import { DataService } from '../services/data.service';
@@ -7,12 +8,17 @@ import { $ } from '../utils/dom';
 
 function renderRequestItem(
     req: AgentRechargeRequest, 
-    data: { userMap: Map<string, User>, partnerMap: Map<string, Partner>, methodMap: Map<string, RechargePaymentMethod>, allRecharges: AgentRechargeRequest[] }
+    data: { userMap: Map<string, User>, partnerMap: Map<string, Partner>, methodMap: Map<string, RechargePaymentMethod>, allRecharges: AgentRechargeRequest[], allUsers: User[] }
 ): HTMLElement {
-    const { userMap, partnerMap, methodMap, allRecharges } = data;
+    const { userMap, partnerMap, methodMap, allRecharges, allUsers } = data;
     const agent = userMap.get(req.agentId);
     const partner = agent ? partnerMap.get(agent.partnerId!) : null;
     const method = methodMap.get(req.methodId);
+
+    // Get the full user object to access agency data for the correct balance
+    const fullAgent = allUsers.find(u => u.id === req.agentId);
+    const agencyBalance = (fullAgent as any)?.agency?.solde_principal;
+
 
     // Calculate historical context
     const agentRecharges = allRecharges.filter(r => r.agentId === req.agentId);
@@ -53,8 +59,8 @@ function renderRequestItem(
                 <p class="text-sm text-slate-600">${partner?.name || 'N/A'}</p>
                 <p class="text-sm text-slate-500 mt-1"><i class="fas fa-phone-alt fa-xs mr-1"></i> ${agent?.phone || 'N/A'}</p>
                 <hr class="my-2">
-                <p class="text-sm text-slate-500">Solde actuel</p>
-                <p class="font-bold text-lg text-slate-800">${agent ? formatAmount(agent.solde) : '-'}</p>
+                <p class="text-sm text-slate-500">Solde agence actuel</p>
+                <p class="font-bold text-lg text-slate-800">${agencyBalance !== undefined ? formatAmount(agencyBalance) : '-'}</p>
                 <p class="text-xs text-slate-400 mt-2">${formatDate(req.date)} <span class="badge badge-purple ml-2">${rechargeCountText}</span></p>
             </div>
 
@@ -100,11 +106,12 @@ export async function renderAdminAgentRechargesView(): Promise<HTMLElement> {
     const dataService = DataService.getInstance();
     const cardContent = document.createElement('div');
     
-    const [allRecharges, userMap, partnerMap, methodMap] = await Promise.all([
+    const [allRecharges, userMap, partnerMap, methodMap, allUsers] = await Promise.all([
         dataService.getAgentRechargeRequests(),
         dataService.getUserMap(),
         dataService.getPartnerMap(),
         dataService.getMethodMap(),
+        dataService.getUsers(), // Fetch all users to get agency data
     ]);
 
     const pendingRecharges = allRecharges.filter(r => r.statut === 'En attente Admin');
@@ -134,7 +141,7 @@ export async function renderAdminAgentRechargesView(): Promise<HTMLElement> {
         const list = document.createElement('ul');
         list.className = 'space-y-4';
         itemsToRender.forEach(req => {
-            list.appendChild(renderRequestItem(req, { userMap, partnerMap, methodMap, allRecharges }));
+            list.appendChild(renderRequestItem(req, { userMap, partnerMap, methodMap, allRecharges, allUsers }));
         });
         listContainer.appendChild(list);
     }

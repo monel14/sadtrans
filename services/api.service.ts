@@ -38,14 +38,48 @@ export class ApiService {
     }
 
     public async getUsers(): Promise<User[]> {
-        const { data, error } = await supabase.from('users').select('*');
-        if (error) throw error;
+        const { data, error } = await supabase
+            .from('users')
+            .select(`
+                *,
+                agency:agencies(*)
+            `);
+        if (error) {
+            console.error('Error fetching users with agencies:', error);
+            throw error;
+        }
+        console.log('ApiService.getUsers() result:', data);
         return data;
     }
 
     public async getUserById(id: string): Promise<User | undefined> {
         const { data, error } = await supabase.from('users').select('*').eq('id', id).single();
         if (error && error.code !== 'PGRST116') throw error; // Ignore "exact one row" error for not found
+        return data || undefined;
+    }
+
+    public async getUserWithAgency(id: string): Promise<{ user: User; agency: any } | undefined> {
+        const { data, error } = await supabase
+            .from('users')
+            .select(`
+                *,
+                agency:agencies(*)
+            `)
+            .eq('id', id)
+            .single();
+        
+        if (error && error.code !== 'PGRST116') throw error;
+        if (!data) return undefined;
+        
+        return {
+            user: data,
+            agency: data.agency
+        };
+    }
+
+    public async getAgencyById(id: string): Promise<any | undefined> {
+        const { data, error } = await supabase.from('agencies').select('*').eq('id', id).single();
+        if (error && error.code !== 'PGRST116') throw error;
         return data || undefined;
     }
 

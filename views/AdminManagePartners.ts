@@ -1,5 +1,4 @@
 
-
 import { ApiService } from '../services/api.service';
 import { DataService } from '../services/data.service';
 import { createCard } from '../components/Card';
@@ -42,6 +41,10 @@ export async function renderAdminManagePartnersView(): Promise<HTMLElement> {
 
         allPartners.forEach(partner => {
             const manager = userMap.get(partner.partnerManagerId);
+            // Get the full manager user object which includes the nested agency
+            const fullManager = allUsers.find(u => u.id === partner.partnerManagerId);
+            const agencyBalance = (fullManager as any)?.agency?.solde_principal;
+
             const agents = allUsers.filter(u => u.role === 'agent' && u.partnerId === partner.id);
             
             const partnerContract = activeContractsMap.get(partner.id);
@@ -102,8 +105,8 @@ export async function renderAdminManagePartnersView(): Promise<HTMLElement> {
                 <!-- KPIs -->
                 <div class="grid grid-cols-3 gap-4 my-4 text-center border-t border-b py-4">
                     <div>
-                        <p class="text-xs text-slate-500">Solde Actuel</p>
-                        <p class="text-xl font-bold text-emerald-600">${formatAmount(manager?.solde)}</p>
+                        <p class="text-xs text-slate-500">Solde Agence</p>
+                        <p class="text-xl font-bold text-emerald-600">${formatAmount(agencyBalance)}</p>
                     </div>
                     <div>
                         <p class="text-xs text-slate-500">Agents Actifs</p>

@@ -8,37 +8,53 @@
 export type UserRole = 'agent' | 'partner' | 'admin_general' | 'sous_admin' | 'developer';
 
 export interface User {
-  id: string;
-  name: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-  role: UserRole;
-  avatarSeed: string;
-  status: 'active' | 'suspended' | 'inactive';
-  password?: string;
-  
-  // Role-specific properties
-  partnerId?: string; // For Agent & Partner Manager
-  solde?: number; // Agent & Partner
-  
-  // Agent specific
-  commissions_mois_estimees?: number;
-  commissions_dues?: number;
+    id: string;
+    name: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    role: UserRole;
+    avatarSeed: string;
+    status: 'active' | 'suspended' | 'inactive';
+    password?: string;
 
-  // Partner specific
-  solde_revenus?: number;
-  volume_partner_mois?: number;
-  commissions_partner_mois?: number;
-  agents_actifs?: number;
-  phone?: string;
-  contactPerson?: { name: string; phone: string };
-  agencyName?: string;
-  idCardNumber?: string;
-  ifu?: string;
-  rccm?: string;
-  address?: string;
-  idCardImageUrl?: string | null;
+    // Role-specific properties
+    partnerId?: string; // For Agent & Partner Manager
+    agencyId?: string; // Reference to shared agency balance
+    solde?: number; // Individual balance (deprecated - use agency.solde_principal)
+
+    // Agent specific
+    commissions_mois_estimees?: number;
+    commissions_dues?: number;
+
+    // Partner specific
+    solde_revenus?: number; // Individual revenue balance (deprecated - use agency.solde_revenus)
+    volume_partner_mois?: number;
+    commissions_partner_mois?: number;
+    agents_actifs?: number;
+    phone?: string;
+    contactPerson?: { name: string; phone: string };
+    agencyName?: string;
+    idCardNumber?: string;
+    ifu?: string;
+    rccm?: string;
+    address?: string;
+    idCardImageUrl?: string | null;
+}
+
+// --- AGENCY (NEW) ---
+
+export interface Agency {
+    id: string;
+    name: string;
+    partnerId?: string;
+    solde_principal: number; // Shared balance for all agents/partners in this agency
+    solde_revenus: number; // Shared revenue balance
+    address?: string;
+    phone?: string;
+    status: 'active' | 'inactive' | 'suspended';
+    createdAt: string;
+    updatedAt: string;
 }
 
 // --- PARTNER & CONTRACTS ---

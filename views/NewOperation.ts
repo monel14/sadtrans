@@ -193,7 +193,7 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
                 <div id="summary-balance-info" class="hidden">
                     <div class="flex justify-between items-center">
                         <span class="text-sm text-slate-600">Votre solde actuel :</span>
-                        <span class="text-sm font-medium text-slate-800">${formatAmount(user.solde)}</span>
+                        <span class="text-sm font-medium text-slate-800">${formatAmount((user as any).agency?.solde_principal ?? user.solde ?? 0)}</span>
                     </div>
                     <div class="border-t border-violet-200 my-3"></div>
                 </div>
@@ -325,7 +325,8 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
         summaryDebitInfo.classList.toggle('hidden', !selectedOperationType.impactsBalance);
 
         if (selectedOperationType.impactsBalance) {
-            const currentBalance = user.solde || 0;
+            // Use agency balance if available, otherwise fall back to individual balance
+            const currentBalance = (user as any).agency?.solde_principal ?? user.solde ?? 0;
             const finalBalance = currentBalance - totalDebit;
             
             const summaryTotalDebitEl = $('#summaryTotalDebit', summaryDebitInfo);
