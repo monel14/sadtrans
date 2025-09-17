@@ -7,7 +7,7 @@ import { formatAmount, formatDate } from '../utils/formatters';
 import { $ } from '../utils/dom';
 
 function renderRequestItem(
-    req: AgentRechargeRequest, 
+    req: AgentRechargeRequest,
     data: { userMap: Map<string, User>, partnerMap: Map<string, Partner>, methodMap: Map<string, RechargePaymentMethod>, allRecharges: AgentRechargeRequest[], allUsers: User[] }
 ): HTMLElement {
     const { userMap, partnerMap, methodMap, allRecharges, allUsers } = data;
@@ -39,8 +39,8 @@ function renderRequestItem(
     const amountToReceive = req.montant - calculatedFee;
 
     const isPending = req.statut === 'En attente';
-    const statusBadge = req.statut === 'Approuvée' 
-        ? `<span class="badge badge-success">Approuvée</span>` 
+    const statusBadge = req.statut === 'Approuvée'
+        ? `<span class="badge badge-success">Approuvée</span>`
         : `<span class="badge badge-danger">Rejetée</span>`;
 
     const referenceDisplay = req.statut !== 'Rejetée' && req.notes
@@ -49,7 +49,7 @@ function renderRequestItem(
 
     const li = document.createElement('li');
     li.className = 'bg-white border rounded-lg overflow-hidden';
-    
+
     li.innerHTML = `
         <div class="p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
             <!-- Agent & Context -->
@@ -105,7 +105,7 @@ export async function renderAdminAgentRechargesView(): Promise<HTMLElement> {
     const api = ApiService.getInstance();
     const dataService = DataService.getInstance();
     const cardContent = document.createElement('div');
-    
+
     const [allRecharges, userMap, partnerMap, methodMap, allUsers] = await Promise.all([
         dataService.getAgentRechargeRequests(),
         dataService.getUserMap(),
@@ -131,7 +131,7 @@ export async function renderAdminAgentRechargesView(): Promise<HTMLElement> {
 
     function renderList(tab: 'pending' | 'history') {
         const itemsToRender = tab === 'pending' ? pendingRecharges : historyRecharges;
-        
+
         listContainer.innerHTML = '';
         if (itemsToRender.length === 0) {
             listContainer.innerHTML = `<p class="text-center text-slate-500 p-8">Aucune demande dans cette catégorie.</p>`;
@@ -145,9 +145,9 @@ export async function renderAdminAgentRechargesView(): Promise<HTMLElement> {
         });
         listContainer.appendChild(list);
     }
-    
+
     const card = createCard('Demandes de Recharge des Agents', cardContent, 'fa-wallet');
-    
+
     card.addEventListener('click', async (e) => {
         const target = e.target as HTMLElement;
 
@@ -166,7 +166,7 @@ export async function renderAdminAgentRechargesView(): Promise<HTMLElement> {
         const action = actionButton.dataset.action as 'approve' | 'reject';
 
         if (!requestId || !action) return;
-        
+
         if (action === 'approve') {
             const originalHtml = actionButton.innerHTML;
             actionButton.disabled = true;

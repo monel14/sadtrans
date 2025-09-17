@@ -37,7 +37,34 @@ export class AuthService {
                 return null;
             }
 
-            return userProfile as User;
+            // Map snake_case to camelCase to match User interface
+            return {
+                id: userProfile.id,
+                name: userProfile.name,
+                firstName: userProfile.first_name,
+                lastName: userProfile.last_name,
+                email: userProfile.email,
+                role: userProfile.role,
+                avatarSeed: userProfile.avatar_seed,
+                status: userProfile.status,
+                partnerId: userProfile.partner_id,
+                agencyId: userProfile.agency_id,
+                solde: userProfile.solde,
+                commissions_mois_estimees: userProfile.commissions_mois_estimees,
+                commissions_dues: userProfile.commissions_dues,
+                solde_revenus: userProfile.solde_revenus,
+                volume_partner_mois: userProfile.volume_partner_mois,
+                commissions_partner_mois: userProfile.commissions_partner_mois,
+                agents_actifs: userProfile.agents_actifs,
+                phone: userProfile.phone,
+                contactPerson: userProfile.contact_person,
+                agencyName: userProfile.agency_name,
+                idCardNumber: userProfile.id_card_number,
+                ifu: userProfile.ifu,
+                rccm: userProfile.rccm,
+                address: userProfile.address,
+                idCardImageUrl: userProfile.id_card_image_url
+            } as User;
         }
 
         return null;
@@ -69,7 +96,34 @@ export class AuthService {
                 return null;
             }
             
-            return userProfile as User;
+            // Map snake_case to camelCase to match User interface
+            return {
+                id: userProfile.id,
+                name: userProfile.name,
+                firstName: userProfile.first_name,
+                lastName: userProfile.last_name,
+                email: userProfile.email,
+                role: userProfile.role,
+                avatarSeed: userProfile.avatar_seed,
+                status: userProfile.status,
+                partnerId: userProfile.partner_id,
+                agencyId: userProfile.agency_id,
+                solde: userProfile.solde,
+                commissions_mois_estimees: userProfile.commissions_mois_estimees,
+                commissions_dues: userProfile.commissions_dues,
+                solde_revenus: userProfile.solde_revenus,
+                volume_partner_mois: userProfile.volume_partner_mois,
+                commissions_partner_mois: userProfile.commissions_partner_mois,
+                agents_actifs: userProfile.agents_actifs,
+                phone: userProfile.phone,
+                contactPerson: userProfile.contact_person,
+                agencyName: userProfile.agency_name,
+                idCardNumber: userProfile.id_card_number,
+                ifu: userProfile.ifu,
+                rccm: userProfile.rccm,
+                address: userProfile.address,
+                idCardImageUrl: userProfile.id_card_image_url
+            } as User;
         }
         
         return null;
