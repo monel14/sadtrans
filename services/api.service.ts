@@ -48,8 +48,36 @@ export class ApiService {
             console.error('Error fetching users with agencies:', error);
             throw error;
         }
-        console.log('ApiService.getUsers() result:', data);
-        return data;
+        
+        // FIX: The Supabase client returns snake_case properties. This maps them to the mixed-case User model.
+        return (data || []).map((item: any) => ({
+            id: item.id,
+            name: item.name,
+            firstName: item.first_name,
+            lastName: item.last_name,
+            email: item.email,
+            role: item.role,
+            avatarSeed: item.avatar_seed,
+            status: item.status,
+            partnerId: item.partner_id,
+            agencyId: item.agency_id,
+            solde: item.solde,
+            commissions_mois_estimees: item.commissions_mois_estimees,
+            commissions_dues: item.commissions_dues,
+            solde_revenus: item.solde_revenus,
+            volume_partner_mois: item.volume_partner_mois,
+            commissions_partner_mois: item.commissions_partner_mois,
+            agents_actifs: item.agents_actifs,
+            phone: item.phone,
+            contactPerson: item.contact_person,
+            agencyName: item.agency_name,
+            idCardNumber: item.id_card_number,
+            ifu: item.ifu,
+            rccm: item.rccm,
+            address: item.address,
+            idCardImageUrl: item.id_card_image_url,
+            agency: item.agency,
+        }));
     }
 
     public async getUserById(id: string): Promise<User | undefined> {
@@ -161,7 +189,18 @@ export class ApiService {
     public async getAgentRechargeRequests(filters: {} = {}): Promise<AgentRechargeRequest[]> {
         const { data, error } = await supabase.from('agent_recharge_requests').select('*');
         if (error) throw error;
-        return data;
+        // FIX: The Supabase client returns snake_case properties. This maps them to the camelCase model.
+        return (data || []).map((item: any) => ({
+            id: item.id,
+            date: item.created_at || item.date,
+            agentId: item.agent_id,
+            montant: item.montant,
+            methodId: item.method_id,
+            statut: item.statut,
+            notes: item.notes,
+            processedBy: item.processed_by,
+            processedAt: item.processed_at,
+        }));
     }
 
     public async getRechargePaymentMethods(filters: {} = {}): Promise<RechargePaymentMethod[]> {
@@ -294,7 +333,7 @@ export class ApiService {
     public async createAgentRechargeRequest(agentId: string, montant: number, methodId: string, reference?: string): Promise<AgentRechargeRequest> {
         const { data, error } = await supabase
             .from('agent_recharge_requests')
-            .insert({ agent_id: agentId, montant, method_id: methodId, notes: reference, statut: 'En attente Admin' })
+            .insert({ agent_id: agentId, montant, method_id: methodId, notes: reference, statut: 'En attente' })
             .select()
             .single();
 

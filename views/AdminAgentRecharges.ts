@@ -38,7 +38,7 @@ function renderRequestItem(
     }
     const amountToReceive = req.montant - calculatedFee;
 
-    const isPending = req.statut === 'En attente Admin';
+    const isPending = req.statut === 'En attente';
     const statusBadge = req.statut === 'Approuvée' 
         ? `<span class="badge badge-success">Approuvée</span>` 
         : `<span class="badge badge-danger">Rejetée</span>`;
@@ -114,8 +114,8 @@ export async function renderAdminAgentRechargesView(): Promise<HTMLElement> {
         dataService.getUsers(), // Fetch all users to get agency data
     ]);
 
-    const pendingRecharges = allRecharges.filter(r => r.statut === 'En attente Admin');
-    const historyRecharges = allRecharges.filter(r => r.statut !== 'En attente Admin').slice(0, 20);
+    const pendingRecharges = allRecharges.filter(r => r.statut === 'En attente');
+    const historyRecharges = allRecharges.filter(r => r.statut !== 'En attente').slice(0, 20);
 
     cardContent.innerHTML = `
         <div class="tabs">

@@ -108,7 +108,7 @@ export async function renderAdminDashboardView(user: User): Promise<HTMLElement>
         dataService.getUsers(),
         dataService.getPartners(),
         dataService.getTransactions(),
-        dataService.getAgentRechargeRequests({ status: 'En attente Admin' }),
+        dataService.getAgentRechargeRequests({ status: 'En attente' }),
         dataService.getUserMap(),
         dataService.getPartnerMap(),
         dataService.getOpTypeMap(),

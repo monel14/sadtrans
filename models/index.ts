@@ -165,7 +165,7 @@ export interface AgentRechargeRequest {
     agentId: string;
     montant: number;
     methodId: string;
-    statut: 'En attente Admin' | 'Approuvée' | 'Rejetée';
+    statut: 'En attente' | 'Approuvée' | 'Rejetée';
     notes?: string;
     processedBy?: string;
     processedAt?: string;
