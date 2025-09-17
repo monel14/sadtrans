@@ -167,31 +167,25 @@ export async function renderAdminAgentRechargesView(): Promise<HTMLElement> {
 
         if (!requestId || !action) return;
         
-        const originalHtml = actionButton.innerHTML;
-        actionButton.disabled = true;
-        actionButton.innerHTML = `<i class="fas fa-spinner fa-spin"></i>`;
-
-        let success = false;
         if (action === 'approve') {
-            success = await api.updateAgentRechargeRequestStatus(requestId, 'Approuvée');
-        } else if (action === 'reject') {
-            const reason = prompt("Veuillez entrer le motif du rejet :");
-            if (reason && reason.trim()) {
-                success = await api.updateAgentRechargeRequestStatus(requestId, 'Rejetée', reason.trim());
+            const originalHtml = actionButton.innerHTML;
+            actionButton.disabled = true;
+            actionButton.innerHTML = `<i class="fas fa-spinner fa-spin"></i>`;
+            const success = await api.updateAgentRechargeRequestStatus(requestId, 'Approuvée');
+            if (success) {
+                document.body.dispatchEvent(new CustomEvent('rechargeRequestUpdated'));
+                document.body.dispatchEvent(new CustomEvent('showToast', { detail: { message: "Demande approuvée.", type: 'success' } }));
             } else {
+                document.body.dispatchEvent(new CustomEvent('showToast', { detail: { message: "Une erreur s'est produite.", type: 'error' } }));
                 actionButton.disabled = false;
                 actionButton.innerHTML = originalHtml;
-                return;
             }
-        }
-        
-        if (success) {
-            const newView = await renderAdminAgentRechargesView();
-            card.parentElement?.replaceChild(newView, card);
-        } else {
-            document.body.dispatchEvent(new CustomEvent('showToast', { detail: { message: "Une erreur s'est produite.", type: 'error' } }));
-            actionButton.disabled = false;
-            actionButton.innerHTML = originalHtml;
+        } else if (action === 'reject') {
+            document.body.dispatchEvent(new CustomEvent('openAdminRejectRechargeModal', {
+                detail: { requestId },
+                bubbles: true,
+                composed: true
+            }));
         }
     });
 

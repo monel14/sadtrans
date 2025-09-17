@@ -13,6 +13,8 @@ import { AdminEditUserModal } from './components/modals/AdminEditUserModal';
 import { ToastContainer, ToastType } from './components/ToastContainer';
 import { AdminEditPartnerModal } from './components/modals/AdminEditPartnerModal';
 import { AuthService } from './services/auth.service';
+import { AdminRejectRechargeModal } from './components/modals/AdminRejectRechargeModal';
+import { PartnerTransferRevenueModal } from './components/modals/PartnerTransferRevenueModal';
 
 export class App {
     private rootElement: HTMLElement;
@@ -32,6 +34,8 @@ export class App {
     private partnerEditAgentModal: PartnerEditAgentModal | null = null;
     private adminEditUserModal: AdminEditUserModal | null = null;
     private adminEditPartnerModal: AdminEditPartnerModal | null = null;
+    private adminRejectRechargeModal: AdminRejectRechargeModal | null = null;
+    private partnerTransferRevenueModal: PartnerTransferRevenueModal | null = null;
     private toastContainer: ToastContainer | null = null;
 
     constructor(rootElement: HTMLElement) {
@@ -50,6 +54,8 @@ export class App {
         this.handleOpenAdminEditPartnerModal = this.handleOpenAdminEditPartnerModal.bind(this);
         this.handleShowToast = this.handleShowToast.bind(this);
         this.handleUpdateCurrentUser = this.handleUpdateCurrentUser.bind(this);
+        this.handleOpenAdminRejectRechargeModal = this.handleOpenAdminRejectRechargeModal.bind(this);
+        this.handleOpenPartnerTransferRevenueModal = this.handleOpenPartnerTransferRevenueModal.bind(this);
     }
 
     public async init() {
@@ -71,6 +77,8 @@ export class App {
         document.body.addEventListener('openPartnerEditAgentModal', this.handleOpenPartnerEditAgentModal as EventListener);
         document.body.addEventListener('openAdminEditUserModal', this.handleOpenAdminEditUserModal as EventListener);
         document.body.addEventListener('openAdminEditPartnerModal', this.handleOpenAdminEditPartnerModal as EventListener);
+        document.body.addEventListener('openAdminRejectRechargeModal', this.handleOpenAdminRejectRechargeModal as EventListener);
+        document.body.addEventListener('openPartnerTransferRevenueModal', this.handleOpenPartnerTransferRevenueModal as EventListener);
         document.body.addEventListener('showToast', this.handleShowToast as EventListener);
         
         // Check for an active session on startup
@@ -180,6 +188,8 @@ export class App {
         this.partnerEditAgentModal = new PartnerEditAgentModal();
         this.adminEditUserModal = new AdminEditUserModal();
         this.adminEditPartnerModal = new AdminEditPartnerModal();
+        this.adminRejectRechargeModal = new AdminRejectRechargeModal();
+        this.partnerTransferRevenueModal = new PartnerTransferRevenueModal();
 
         const dataService = DataService.getInstance();
         const allUsers = await dataService.getUsers();
@@ -199,6 +209,15 @@ export class App {
         document.body.addEventListener('userUpdated', reloadCurrentView);
         document.body.addEventListener('partnerUpdated', reloadCurrentView);
         document.body.addEventListener('operationTypeUpdated', reloadCurrentView);
+        document.body.addEventListener('rechargeRequestUpdated', reloadCurrentView);
+        document.body.addEventListener('revenueTransferred', (event: CustomEvent) => {
+            this.rootElement.dispatchEvent(new CustomEvent('updateCurrentUser', {
+                detail: { user: event.detail.user },
+                bubbles: true,
+                composed: true
+            }));
+            reloadCurrentView();
+        });
     }
 
     private handleOpenAgentRechargeModal() {
@@ -225,6 +244,20 @@ export class App {
         const { partner } = event.detail;
         if (this.adminEditPartnerModal) {
             this.adminEditPartnerModal.show(partner);
+        }
+    }
+    
+    private handleOpenAdminRejectRechargeModal(event: CustomEvent) {
+        const { requestId } = event.detail;
+        if (this.adminRejectRechargeModal) {
+            this.adminRejectRechargeModal.show(requestId);
+        }
+    }
+
+    private handleOpenPartnerTransferRevenueModal(event: CustomEvent) {
+        const { userId, amount } = event.detail;
+        if (this.partnerTransferRevenueModal && this.currentUser) {
+            this.partnerTransferRevenueModal.show(userId, amount);
         }
     }
 

@@ -113,7 +113,7 @@ export async function renderAgentDashboardView(user: User): Promise<HTMLElement>
                 document.body.dispatchEvent(new CustomEvent('openAgentRechargeModal'));
             } else if (navAction === 'history') {
                 container.dispatchEvent(new CustomEvent('navigateTo', {
-                    detail: { viewFn: renderAgentTransactionHistoryView, label: 'Historique des Opérations', navId: 'agent_history' },
+                    detail: { viewFn: renderAgentTransactionHistoryView, label: 'Historique des Opérations', navId: 'agent_history_ops' },
                     bubbles: true, composed: true
                 }));
             } else if (navAction === 'profile') {
@@ -127,7 +127,7 @@ export async function renderAgentDashboardView(user: User): Promise<HTMLElement>
         if (link && seeAllLink.contains(link)) {
             e.preventDefault();
             container.dispatchEvent(new CustomEvent('navigateTo', {
-                detail: { viewFn: renderAgentTransactionHistoryView, label: 'Historique Opérations', navId: 'agent_history' },
+                detail: { viewFn: renderAgentTransactionHistoryView, label: 'Historique Opérations', navId: 'agent_history_ops' },
                 bubbles: true, composed: true
             }));
         }

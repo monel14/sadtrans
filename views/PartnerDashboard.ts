@@ -204,41 +204,11 @@ export async function renderPartnerDashboardView(user: User): Promise<HTMLElemen
             const amountToTransfer = revenueBalance;
             if (amountToTransfer <= 0) return;
 
-            if (confirm(`Voulez-vous vraiment transférer ${formatAmount(amountToTransfer)} de vos revenus vers votre solde principal ? Cette action est irréversible.`)) {
-                const btn = transferBtn as HTMLButtonElement;
-                btn.disabled = true;
-                btn.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i> Transfert en cours...`;
-
-                try {
-                    const updatedUser = await api.transferRevenueToMainBalance(fullUser.id);
-                    if (updatedUser) {
-                        document.body.dispatchEvent(new CustomEvent('showToast', {
-                            detail: { message: 'Transfert effectué avec succès !', type: 'success' }
-                        }));
-                        container.dispatchEvent(new CustomEvent('updateCurrentUser', {
-                            detail: { user: updatedUser },
-                            bubbles: true,
-                            composed: true
-                        }));
-
-                        // Re-render the view to show updated balances
-                        const newDashboardView = await renderPartnerDashboardView(updatedUser);
-                        if (container.parentElement) {
-                            container.parentElement.replaceChild(newDashboardView, container);
-                        }
-
-                    } else {
-                        throw new Error('API returned null');
-                    }
-                } catch (error) {
-                    console.error('Transfer failed', error);
-                    document.body.dispatchEvent(new CustomEvent('showToast', {
-                        detail: { message: 'Le transfert a échoué. Veuillez réessayer.', type: 'error' }
-                    }));
-                    btn.disabled = false;
-                    btn.innerHTML = `<i class="fas fa-exchange-alt mr-2"></i> Transférer vers le Solde Principal`;
-                }
-            }
+            document.body.dispatchEvent(new CustomEvent('openPartnerTransferRevenueModal', {
+                detail: { userId: fullUser.id, amount: amountToTransfer },
+                bubbles: true,
+                composed: true
+            }));
         }
 
         if (navButton) {

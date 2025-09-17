@@ -28,6 +28,7 @@ import { renderProfileView } from '../views/Profile';
 import { renderOrderListView } from '../views/OrderList';
 import { renderServiceHubView } from '../views/ServiceHub';
 import { renderPartnerContractView } from "../views/PartnerContractView";
+import { renderAgentRechargeHistoryView } from "../views/AgentRechargeHistory";
 
 const partnerAndAgentServices: NavLink[] = [
     { label: 'Cartes VISA', navId: 'hub_visa', icon: 'fa-credit-card', viewFn: renderServiceHubView('Gestion des Cartes VISA', 'fa-credit-card', [
@@ -85,7 +86,15 @@ export const navigationLinks: Record<UserRole, NavLink[]> = {
             icon: 'fa-concierge-bell',
             children: partnerAndAgentServices,
         },
-        { label: 'Historique des Opérations', navId: 'agent_history', icon: 'fa-history', viewFn: renderAgentTransactionHistoryView },
+        { 
+            label: 'Mon Activité', 
+            navId: 'agent_activity', 
+            icon: 'fa-history',
+            children: [
+                { label: 'Historique des Opérations', navId: 'agent_history_ops', icon: 'fa-exchange-alt', viewFn: renderAgentTransactionHistoryView },
+                { label: 'Historique des Recharges', navId: 'agent_history_recharges', icon: 'fa-wallet', viewFn: renderAgentRechargeHistoryView },
+            ]
+        },
         { label: 'Demander Recharge', navId: 'agent_request_recharge', icon: 'fa-hand-holding-usd', action: () => document.body.dispatchEvent(new CustomEvent('openAgentRechargeModal')) },
         { label: 'Mon Profil', navId: 'agent_profile', icon: 'fa-user-circle', viewFn: renderProfileView },
     ],
