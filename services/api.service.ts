@@ -80,6 +80,37 @@ export class ApiService {
         }));
     }
 
+    private mapUserFromDb(item: any): User {
+        return {
+            id: item.id,
+            name: item.name,
+            firstName: item.first_name,
+            lastName: item.last_name,
+            email: item.email,
+            role: item.role,
+            avatarSeed: item.avatar_seed,
+            status: item.status,
+            partnerId: item.partner_id,
+            agencyId: item.agency_id,
+            solde: item.solde,
+            commissions_mois_estimees: item.commissions_mois_estimees,
+            commissions_dues: item.commissions_dues,
+            solde_revenus: item.solde_revenus,
+            volume_partner_mois: item.volume_partner_mois,
+            commissions_partner_mois: item.commissions_partner_mois,
+            agents_actifs: item.agents_actifs,
+            phone: item.phone,
+            contactPerson: item.contact_person,
+            agencyName: item.agency_name,
+            idCardNumber: item.id_card_number,
+            ifu: item.ifu,
+            rccm: item.rccm,
+            address: item.address,
+            idCardImageUrl: item.id_card_image_url,
+            agency: item.agency,
+        };
+    }
+
     public async getUserById(id: string): Promise<User | undefined> {
         const { data, error } = await supabase.from('users').select('*').eq('id', id).single();
         if (error && error.code !== 'PGRST116') throw error; // Ignore "exact one row" error for not found
@@ -375,17 +406,107 @@ export class ApiService {
     }
 
     public async updateAgent(agentData: Partial<User>): Promise<User> {
-        const { data, error } = await supabase.from('users').upsert(agentData).select().single();
+        // Map camelCase to snake_case for database
+        const dbData: any = {
+            id: agentData.id,
+            name: agentData.name,
+            first_name: agentData.firstName,
+            last_name: agentData.lastName,
+            email: agentData.email,
+            role: agentData.role,
+            avatar_seed: agentData.avatarSeed,
+            status: agentData.status,
+            partner_id: agentData.partnerId,
+            agency_id: agentData.agencyId,
+            solde: agentData.solde,
+            commissions_mois_estimees: agentData.commissions_mois_estimees,
+            commissions_dues: agentData.commissions_dues,
+            solde_revenus: agentData.solde_revenus,
+            volume_partner_mois: agentData.volume_partner_mois,
+            commissions_partner_mois: agentData.commissions_partner_mois,
+            agents_actifs: agentData.agents_actifs,
+            phone: agentData.phone,
+            contact_person: agentData.contactPerson,
+            agency_name: agentData.agencyName,
+            id_card_number: agentData.idCardNumber,
+            ifu: agentData.ifu,
+            rccm: agentData.rccm,
+            address: agentData.address,
+            id_card_image_url: agentData.idCardImageUrl
+        };
+
+        // Remove undefined values
+        Object.keys(dbData).forEach(key => {
+            if (dbData[key] === undefined) {
+                delete dbData[key];
+            }
+        });
+
+        const { data, error } = await supabase.from('users').upsert(dbData).select().single();
         if (error) throw error;
         DataService.getInstance().invalidateUsersCache();
-        return data;
+        
+        // Map back to camelCase
+        return this.mapUserFromDb(data);
+    }
+
+    public async updateUserStatus(userId: string, status: 'active' | 'suspended'): Promise<User> {
+        const { data, error } = await supabase
+            .from('users')
+            .update({ status })
+            .eq('id', userId)
+            .select()
+            .single();
+
+        if (error) throw error;
+        DataService.getInstance().invalidateUsersCache();
+        
+        return this.mapUserFromDb(data);
     }
 
     public async adminUpdateUser(userData: Partial<User>): Promise<User> {
-        const { data, error } = await supabase.from('users').upsert(userData).select().single();
+        // Map camelCase to snake_case for database
+        const dbData: any = {
+            id: userData.id,
+            name: userData.name,
+            first_name: userData.firstName,
+            last_name: userData.lastName,
+            email: userData.email,
+            role: userData.role,
+            avatar_seed: userData.avatarSeed,
+            status: userData.status,
+            partner_id: userData.partnerId,
+            agency_id: userData.agencyId,
+            solde: userData.solde,
+            commissions_mois_estimees: userData.commissions_mois_estimees,
+            commissions_dues: userData.commissions_dues,
+            solde_revenus: userData.solde_revenus,
+            volume_partner_mois: userData.volume_partner_mois,
+            commissions_partner_mois: userData.commissions_partner_mois,
+            agents_actifs: userData.agents_actifs,
+            phone: userData.phone,
+            contact_person: userData.contactPerson,
+            agency_name: userData.agencyName,
+            id_card_number: userData.idCardNumber,
+            ifu: userData.ifu,
+            rccm: userData.rccm,
+            address: userData.address,
+            id_card_image_url: userData.idCardImageUrl
+        };
+
+        // Remove undefined values
+        Object.keys(dbData).forEach(key => {
+            if (dbData[key] === undefined) {
+                delete dbData[key];
+            }
+        });
+
+        const { data, error } = await supabase.from('users').upsert(dbData).select().single();
         if (error) throw error;
         DataService.getInstance().invalidateUsersCache();
-        return data;
+        
+        // Map back to camelCase
+        return this.mapUserFromDb(data);
     }
 
     public async updatePartnerDetails(partnerData: Partial<Partner>): Promise<Partner> {
@@ -493,6 +614,21 @@ export class ApiService {
             fields: fieldsData,
             commissionConfig: commissionConfigData
         };
+    }
+
+    public async deleteOperationType(opTypeId: string): Promise<boolean> {
+        const { error } = await supabase
+            .from('operation_types')
+            .delete()
+            .eq('id', opTypeId);
+        
+        if (error) {
+            console.error('Error deleting operation type:', error);
+            return false;
+        }
+
+        DataService.getInstance().invalidateOperationTypesCache();
+        return true;
     }
 
     public async getContracts(): Promise<Contract[]> {

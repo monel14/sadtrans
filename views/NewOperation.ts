@@ -1,4 +1,5 @@
-import { User, OperationType, CommissionProfile, CommissionTier, CardType } from '../models';
+// Fix: Import 'OperationTypeField' and 'OperationTypeFieldOption' to resolve type errors.
+import { User, OperationType, CommissionProfile, CommissionTier, CardType, OperationTypeField, OperationTypeFieldOption } from '../models';
 import { ApiService } from '../services/api.service';
 import { DataService } from '../services/data.service';
 import { createCard } from '../components/Card';
@@ -62,37 +63,29 @@ async function calculateFeeAndCommissionPreview(montant: number, user: User, opT
 }
 
 
-// Prices for Canal+ formulas (new subscriptions)
-const canalPlusPrices: { [key: string]: number } = {
-    'kwabo': 2500,
-    'netflix_01_ecran': 3000,
-    'access': 5000,
-    'dstv_english_plus': 5000,
-    'netflix_02_ecrans': 5500,
-    'netflix_03_ecrans': 7000,
-    'evasion': 10000,
-    'access+': 15000,
-    'tout_canal': 25000,
-};
+// Helper function to get price from a select option
+function getPriceFromSelectOption(selectElement: HTMLSelectElement): number {
+    const selectedOption = selectElement.options[selectElement.selectedIndex];
+    if (selectedOption && selectedOption.hasAttribute('data-prix')) {
+        return parseInt(selectedOption.getAttribute('data-prix') || '0', 10);
+    }
+    return 0;
+}
 
-// Prices for Canal+ formulas (re-subscriptions)
-const canalPlusReaboFormulaPrices: { [key: string]: number } = {
-    'kwabo': 2500,
-    'access': 5000,
-    'evasion': 10000,
-    'access+': 15000,
-    'tout_canal': 25000,
-};
-const canalPlusReaboOptionPrices: { [key: string]: number } = {
-    'aucune': 0,
-    'netflix_01_ecran': 3000,
-    'dstv_english_plus': 5000,
-    'netflix_02_ecrans': 5500,
-    'netflix_03_ecrans': 7000,
-};
+// Helper function to get price from field options by value
+function getPriceFromFieldOptions(field: OperationTypeField, value: string): number {
+    if (!field.options || !value) return 0;
+    
+    for (const option of field.options) {
+        if (typeof option === 'object' && option.valeur === value && option.prix !== undefined) {
+            return option.prix;
+        }
+    }
+    return 0;
+}
 
 
-async function renderDynamicFields(opType: OperationType, container: HTMLElement, cardTypes: CardType[]) {
+async function renderDynamicFields(opType: OperationType, container: HTMLElement, cardTypes: CardType[], updateCallback?: () => void) {
     container.innerHTML = '';
     opType.fields.forEach(field => {
         if (field.obsolete) return;
@@ -125,16 +118,36 @@ async function renderDynamicFields(opType: OperationType, container: HTMLElement
             placeholderOption.selected = true;
             select.appendChild(placeholderOption);
 
-            let options: string[] = [];
             if (field.dataSource === 'cardTypes') {
-                options = cardTypes.filter(ct => ct.status === 'active').map(ct => ct.name);
-            } else {
-                options = field.options || [];
+                // Utiliser les types de cartes depuis l'API
+                const options = cardTypes.filter(ct => ct.status === 'active').map(ct => ct.name);
+                options.forEach(optionText => {
+                    select.add(new Option(optionText, optionText));
+                });
+            } else if (field.options) {
+                // Supporter les deux formats : string[] et OperationTypeFieldOption[]
+                field.options.forEach(option => {
+                    if (typeof option === 'string') {
+                        // Format simple : string[]
+                        select.add(new Option(option, option));
+                    } else {
+                        // Format enrichi : OperationTypeFieldOption[]
+                        const optionElement = new Option(option.libelle, option.valeur);
+                        // Stocker le prix dans un attribut data pour récupération ultérieure
+                        if (option.prix !== undefined) {
+                            optionElement.setAttribute('data-prix', option.prix.toString());
+                        }
+                        select.appendChild(optionElement);
+                    }
+                });
             }
-            
-            options.forEach(optionText => {
-                select.add(new Option(optionText, optionText));
-            });
+
+            // Ajouter les événements directement sur le select
+            if (updateCallback) {
+                select.addEventListener('change', updateCallback);
+                select.addEventListener('input', updateCallback);
+            }
+
             inputElement = select;
         } else {
             const input = document.createElement('input');
@@ -146,6 +159,15 @@ async function renderDynamicFields(opType: OperationType, container: HTMLElement
             if (field.placeholder) input.placeholder = field.placeholder;
             if (field.readonly) input.readOnly = true;
             if (field.defaultValue) input.defaultValue = String(field.defaultValue);
+
+            // Ajouter les événements directement sur l'input
+            if (updateCallback) {
+                input.addEventListener('input', updateCallback);
+                input.addEventListener('change', updateCallback);
+                input.addEventListener('keyup', updateCallback);
+                input.addEventListener('blur', updateCallback);
+            }
+
             inputElement = input;
         }
 
@@ -164,7 +186,7 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
     // Store fetched operation types to avoid refetching
     let availableOpTypes: OperationType[] = [];
     let selectedOperationType: OperationType | null = null;
-    
+
     // --- Get or create the modal on document.body to avoid stacking context issues ---
     let opSelectionModal = document.getElementById('operationSelectionModal');
     if (!opSelectionModal) {
@@ -224,14 +246,14 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
 
     const card = createCard('Nouvelle Opération', formContent, 'fa-plus-circle');
     container.appendChild(card);
-    
+
     // Selectors for elements inside the view
     const opDisplay = $('#selectedOpDisplay', container);
     const opPlaceholder = $('#opPlaceholder', container);
     const opSelectionInfo = $('#opSelectionInfo', container);
     const opDynamicFields = $('#opDynamicFields', container);
     const submitButton = container.querySelector('button[type="submit"]') as HTMLButtonElement;
-    
+
     // Selector for elements inside the modal, which is now on document.body
     const opSearchInput = $('#opSearchInput', opSelectionModal) as HTMLInputElement;
 
@@ -267,12 +289,12 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
             if (submitBtn) submitBtn.disabled = true;
             return;
         }
-        
+
         if (!selectedOperationType.impactsBalance && totalFee <= 0) {
             summaryContainer.classList.add('hidden');
             return;
         }
-        
+
         summaryContainer.classList.remove('hidden');
 
         const feeApplication = selectedOperationType.feeApplication || 'additive';
@@ -309,7 +331,7 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
                 </div>
             `;
         }
-        
+
         if (partnerShare > 0) {
             summaryHtml += `
                  <div class="flex justify-between items-center text-sm mt-2 pt-2 border-t border-violet-200">
@@ -320,7 +342,7 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
         }
 
         summaryDetails.innerHTML = summaryHtml;
-        
+
         summaryBalanceInfo.classList.toggle('hidden', !selectedOperationType.impactsBalance);
         summaryDebitInfo.classList.toggle('hidden', !selectedOperationType.impactsBalance);
 
@@ -328,18 +350,19 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
             // Use agency balance if available, otherwise fall back to individual balance
             const currentBalance = (user as any).agency?.solde_principal ?? user.solde ?? 0;
             const finalBalance = currentBalance - totalDebit;
-            
+
             const summaryTotalDebitEl = $('#summaryTotalDebit', summaryDebitInfo);
             const summaryFinalBalanceEl = $('#summaryFinalBalance', summaryDebitInfo);
-            
-            if(summaryTotalDebitEl) summaryTotalDebitEl.textContent = formatAmount(totalDebit);
-            if(summaryFinalBalanceEl) summaryFinalBalanceEl.textContent = formatAmount(finalBalance);
+
+            if (summaryTotalDebitEl) summaryTotalDebitEl.textContent = formatAmount(totalDebit);
+            if (summaryFinalBalanceEl) summaryFinalBalanceEl.textContent = formatAmount(finalBalance);
         }
     };
-    
+
     const updateCalculatedFields = () => {
+        console.log('updateCalculatedFields called', selectedOperationType?.id);
         if (!selectedOperationType || !opDynamicFields) return;
-    
+
         if (selectedOperationType.id === 'op_abo_decodeur_canal') {
             const formulaSelect = opDynamicFields.querySelector<HTMLSelectElement>('select[name="decoder_concept_id"]');
             const nbrMonthInput = opDynamicFields.querySelector<HTMLInputElement>('input[name="nbr_month"]');
@@ -348,15 +371,25 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
 
             if (formulaSelect && nbrMonthInput && conceptPriceInput && totalInput) {
                 const selectedFormula = formulaSelect.value;
-                const formulaPrice = canalPlusPrices[selectedFormula] || 0;
-                
+                // Récupérer le prix depuis l'option sélectionnée
+                const formulaPrice = getPriceFromSelectOption(formulaSelect);
+                console.log('Canal+ nouveau abo:', selectedFormula, 'price:', formulaPrice);
+
+                // Toujours remplir le prix unitaire dès qu'une formule est sélectionnée
+                if (selectedFormula && formulaPrice > 0) {
+                    conceptPriceInput.value = formulaPrice.toString();
+                    console.log('Prix unitaire rempli:', formulaPrice);
+                }
+
                 const numberOfMonths = parseInt(nbrMonthInput.value, 10);
                 const finalNumberOfMonths = (isNaN(numberOfMonths) || numberOfMonths < 1) ? 1 : numberOfMonths;
 
-                const total = formulaPrice * finalNumberOfMonths;
-
-                conceptPriceInput.value = formulaPrice.toString();
-                totalInput.value = total.toString();
+                // Calculer le total seulement si on a une formule et un nombre de mois valide
+                if (selectedFormula && formulaPrice > 0) {
+                    const total = formulaPrice * finalNumberOfMonths;
+                    totalInput.value = total.toString();
+                    console.log('Total calculé:', total);
+                }
             }
         } else if (selectedOperationType.id === 'op_reabo_canal') {
             const formulaSelect = opDynamicFields.querySelector<HTMLSelectElement>('select[name="formule"]');
@@ -367,16 +400,20 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
             if (formulaSelect && optionSelect && nbrMonthInput && totalInput) {
                 const selectedFormula = formulaSelect.value;
                 const selectedOption = optionSelect.value;
-                
-                const formulaPrice = canalPlusReaboFormulaPrices[selectedFormula] || 0;
-                const optionPrice = canalPlusReaboOptionPrices[selectedOption] || 0;
-                
+
+                // Récupérer les prix depuis les options sélectionnées
+                const formulaPrice = getPriceFromSelectOption(formulaSelect);
+                const optionPrice = getPriceFromSelectOption(optionSelect);
+
                 const numberOfMonths = parseInt(nbrMonthInput.value, 10);
                 const finalNumberOfMonths = (isNaN(numberOfMonths) || numberOfMonths < 1) ? 1 : numberOfMonths;
 
-                const total = (formulaPrice + optionPrice) * finalNumberOfMonths;
-
-                totalInput.value = total.toString();
+                // Calculer le total si on a au moins une formule
+                if (selectedFormula && formulaPrice > 0) {
+                    const total = (formulaPrice + optionPrice) * finalNumberOfMonths;
+                    totalInput.value = total.toString();
+                    console.log('Canal+ réabo - Formule:', formulaPrice, 'Option:', optionPrice, 'Total:', total);
+                }
             }
         } else if (selectedOperationType.id === 'op_complement_canal') {
             const oldFormulaSelect = opDynamicFields.querySelector<HTMLSelectElement>('select[name="ancienne_formule"]');
@@ -389,43 +426,62 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
 
             if (oldFormulaSelect && oldFormulaPriceInput && newFormulaSelect && newFormulaPriceInput && optionSelect && optionPriceInput && totalInput) {
                 const selectedOldFormula = oldFormulaSelect.value;
-                const oldFormulaPrice = canalPlusReaboFormulaPrices[selectedOldFormula] || 0;
-                oldFormulaPriceInput.value = oldFormulaPrice.toString();
+                // Récupérer le prix depuis l'option sélectionnée
+                const oldFormulaPrice = getPriceFromSelectOption(oldFormulaSelect);
+
+                // Remplir automatiquement le prix de l'ancienne formule
+                if (selectedOldFormula && oldFormulaPrice > 0) {
+                    oldFormulaPriceInput.value = oldFormulaPrice.toString();
+                }
 
                 // Filter new formulas to only show upgrades
                 const newFormulaOptions = newFormulaSelect.options;
                 for (let i = 0; i < newFormulaOptions.length; i++) {
                     const option = newFormulaOptions[i];
-                    const optionPrice = canalPlusReaboFormulaPrices[option.value] || 0;
+                    const optionPrice = parseInt(option.getAttribute('data-prix') || '0', 10);
                     const isDisabled = !option.value || optionPrice <= oldFormulaPrice;
                     option.disabled = isDisabled;
                     option.hidden = isDisabled;
                 }
                 if (newFormulaSelect.options[newFormulaSelect.selectedIndex]?.disabled) {
                     newFormulaSelect.value = '';
+                    newFormulaPriceInput.value = '0';
                 }
                 newFormulaSelect.disabled = !selectedOldFormula;
 
                 const selectedNewFormula = newFormulaSelect.value;
-                const newFormulaPrice = canalPlusReaboFormulaPrices[selectedNewFormula] || 0;
-                newFormulaPriceInput.value = newFormulaPrice.toString();
+                // Récupérer le prix depuis l'option sélectionnée
+                const newFormulaPrice = getPriceFromSelectOption(newFormulaSelect);
+
+                // Remplir automatiquement le prix de la nouvelle formule
+                if (selectedNewFormula && newFormulaPrice > 0) {
+                    newFormulaPriceInput.value = newFormulaPrice.toString();
+                }
 
                 const selectedOption = optionSelect.value;
-                const optionPrice = canalPlusReaboOptionPrices[selectedOption] || 0;
+                // Récupérer le prix depuis l'option sélectionnée
+                const optionPrice = getPriceFromSelectOption(optionSelect);
+
+                // Remplir automatiquement le prix de l'option
                 optionPriceInput.value = optionPrice.toString();
 
-                const total = (newFormulaPrice - oldFormulaPrice) + optionPrice;
-                totalInput.value = total.toString();
+                // Calculer le total seulement si on a les deux formules
+                if (selectedOldFormula && selectedNewFormula && oldFormulaPrice > 0 && newFormulaPrice > 0) {
+                    const total = Math.max(0, (newFormulaPrice - oldFormulaPrice) + optionPrice);
+                    totalInput.value = total.toString();
+                }
             }
         }
         updateOperationSummary();
     };
-    
-    // Use event delegation for dynamic fields
+
+    // Use event delegation for dynamic fields - écouter tous les changements
     opDynamicFields?.addEventListener('input', updateCalculatedFields);
     opDynamicFields?.addEventListener('change', updateCalculatedFields);
-    
-    
+    opDynamicFields?.addEventListener('keyup', updateCalculatedFields);
+    opDynamicFields?.addEventListener('blur', updateCalculatedFields);
+
+
     const selectOperationType = (opType: OperationType) => {
         selectedOperationType = opType;
         if (opPlaceholder && opSelectionInfo) {
@@ -436,11 +492,14 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
         if (opSelectionModal) {
             opSelectionModal.classList.add('hidden');
         }
-        
+
         const dataService = DataService.getInstance();
         dataService.getCardTypes().then(cardTypes => {
-            renderDynamicFields(opType, opDynamicFields as HTMLElement, cardTypes);
-            updateCalculatedFields(); // Initial calculation
+            renderDynamicFields(opType, opDynamicFields as HTMLElement, cardTypes, updateCalculatedFields);
+            // Attendre que les champs soient rendus avant le calcul initial
+            setTimeout(() => {
+                updateCalculatedFields(); // Initial calculation
+            }, 100);
         });
         submitButton.disabled = false;
     };
@@ -451,16 +510,20 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
 
         const opGrid = $('#opSelectionGrid', opSelectionModal);
         if (!opGrid) return;
-        
+
         opGrid.innerHTML = '<div class="text-center p-8"><i class="fas fa-spinner fa-spin text-3xl text-slate-400"></i></div>';
         opSelectionModal.classList.remove('hidden');
 
         if (availableOpTypes.length === 0) {
             availableOpTypes = await DataService.getInstance().getAllOperationTypes();
         }
-        
+
         const groupedOps = availableOpTypes.reduce((acc, op) => {
-            if (op.status !== 'active') return acc;
+            // For agents and partners, only show active operation types.
+            // Other roles (like developer, admin) can see all statuses.
+            if ((user.role === 'agent' || user.role === 'partner') && op.status !== 'active') {
+                return acc;
+            }
             const category = op.category || 'Autres Services';
             if (!acc[category]) {
                 acc[category] = [];
@@ -486,8 +549,14 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
                 const button = document.createElement('button');
                 button.className = 'operation-item text-left p-3 border rounded-lg hover:border-violet-400 hover:bg-violet-50 transition-colors';
                 button.dataset.opId = op.id;
+
+                const inactiveBadge = op.status !== 'active' ? '<span class="badge badge-gray">Inactif</span>' : '';
+                
                 button.innerHTML = `
-                    <p class="font-semibold text-slate-800">${op.name}</p>
+                    <div class="flex justify-between items-start">
+                        <p class="font-semibold text-slate-800 pr-2">${op.name}</p>
+                        ${inactiveBadge}
+                    </div>
                     <p class="text-xs text-slate-500 mt-1">${op.description}</p>
                 `;
                 gridContainer?.appendChild(button);
@@ -495,7 +564,7 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
             opGrid.appendChild(categorySection);
         });
     };
-    
+
     opDisplay?.addEventListener('click', openOpSelectionModal);
     $('#closeOpModalBtn', opSelectionModal)?.addEventListener('click', () => opSelectionModal?.classList.add('hidden'));
 
@@ -527,7 +596,7 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
             const gridElement = grid as HTMLElement;
             const hasVisibleItems = !!gridElement.querySelector('.operation-item[style*="display:"]');
             const section = gridElement.parentElement;
-            if(section) {
+            if (section) {
                 section.style.display = hasVisibleItems ? '' : 'none';
             }
         });
@@ -557,7 +626,7 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
 
         try {
             const newTransaction = await api.createTransaction(user.id, selectedOperationType.id, data);
-             document.body.dispatchEvent(new CustomEvent('showToast', {
+            document.body.dispatchEvent(new CustomEvent('showToast', {
                 detail: { message: `Opération #${newTransaction.id} soumise avec succès !`, type: 'success' }
             }));
             handleCancelNavigation(container, user);
@@ -577,6 +646,15 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
             const allOps = await dataService.getAllOperationTypes();
             const opToSelect = allOps.find(op => op.id === operationTypeId);
             if (opToSelect) {
+                // For agents and partners, prevent selecting an inactive service directly.
+                if ((user.role === 'agent' || user.role === 'partner') && opToSelect.status !== 'active') {
+                    document.body.dispatchEvent(new CustomEvent('showToast', {
+                        detail: { message: "Ce service est actuellement indisponible.", type: 'warning' }
+                    }));
+                    // Clear operationTypeId to prevent re-selection on view reload
+                    operationTypeId = undefined;
+                    return;
+                }
                 selectOperationType(opToSelect);
             }
         }

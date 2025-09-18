@@ -255,6 +255,16 @@ export class AdminEditUserModal extends BaseModal {
                 const userRole = this.editingUser?.role || this.roleToCreate;
                 if (userRole === 'agent') {
                     userData.partnerId = formData.get('partnerId') as string;
+                    
+                    // For new agents, find the agency associated with the selected partner
+                    if (!this.editingUser && userData.partnerId) {
+                        const dataService = DataService.getInstance();
+                        const users = await dataService.getUsers();
+                        const partnerUser = users.find(u => u.partnerId === userData.partnerId && u.role === 'partner');
+                        if (partnerUser?.agencyId) {
+                            userData.agencyId = partnerUser.agencyId;
+                        }
+                    }
                 } else if (userRole === 'partner') {
                     userData.agencyName = formData.get('agencyName') as string;
                     userData.contactPerson = {

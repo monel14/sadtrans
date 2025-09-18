@@ -40,6 +40,8 @@ export interface User {
     rccm?: string;
     address?: string;
     idCardImageUrl?: string | null;
+    // Fix: Added optional agency property to hold joined agency data.
+    agency?: Agency;
 }
 
 // --- AGENCY (NEW) ---
@@ -91,6 +93,12 @@ export interface ContractException {
 
 // --- OPERATIONS & COMMISSIONS ---
 
+export interface OperationTypeFieldOption {
+    valeur: string;
+    libelle: string;
+    prix?: number; // Prix associé à cette option (optionnel)
+}
+
 export interface OperationTypeField {
     id: string;
     name: string; // key in the `data` object of a transaction
@@ -98,7 +106,7 @@ export interface OperationTypeField {
     type: 'text' | 'number' | 'select' | 'tel' | 'date' | 'file';
     required: boolean;
     obsolete: boolean;
-    options?: string[];
+    options?: string[] | OperationTypeFieldOption[]; // Support des deux formats
     placeholder?: string;
     readonly?: boolean;
     defaultValue?: string | number;

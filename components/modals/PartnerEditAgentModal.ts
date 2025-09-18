@@ -60,9 +60,12 @@ export class PartnerEditAgentModal extends BaseModal {
         this.setContent(title, body, footer);
     }
 
-    public show(agent: User | null, partnerId: string) {
+    private agencyId: string | null = null;
+
+    public show(agent: User | null, partnerId: string, agencyId?: string) {
         this.editingAgent = agent;
         this.partnerId = partnerId;
+        this.agencyId = agencyId || null;
         this.updateTitle();
         this.populateForm();
         super.show();
@@ -117,11 +120,14 @@ export class PartnerEditAgentModal extends BaseModal {
                     name: formData.get('name') as string,
                     email: formData.get('email') as string,
                     phone: formData.get('phone') as string,
-                    status: statusToggle.checked ? 'active' : 'suspended'
+                    status: statusToggle.checked ? 'active' : 'suspended',
+                    role: 'agent', // Required field for new agents
+                    partnerId: this.partnerId,
+                    agencyId: this.agencyId // Set agency for new agents
                 };
 
                 const api = ApiService.getInstance();
-                await api.updateAgent({ ...agentData, partnerId: this.partnerId });
+                await api.updateAgent(agentData);
                 
                 document.body.dispatchEvent(new CustomEvent('agentUpdated', { bubbles: true, composed: true }));
                 this.hide();

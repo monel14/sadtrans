@@ -37,6 +37,13 @@ export class AuthService {
                 return null;
             }
 
+            // Check if user is suspended
+            if (userProfile.status === 'suspended' || userProfile.status === 'inactive') {
+                console.log('User account is suspended or inactive, logging out');
+                await this.logout();
+                return null;
+            }
+
             // Map snake_case to camelCase to match User interface
             return {
                 id: userProfile.id,
@@ -94,6 +101,14 @@ export class AuthService {
                 // Log out user if profile not found to prevent being in a broken state
                 await this.logout();
                 return null;
+            }
+
+            // Check if user is suspended or inactive
+            if (userProfile.status === 'suspended' || userProfile.status === 'inactive') {
+                console.log('User account is suspended or inactive, login denied');
+                await this.logout();
+                // Throw a specific error for suspended accounts
+                throw new Error(`ACCOUNT_${userProfile.status.toUpperCase()}`);
             }
             
             // Map snake_case to camelCase to match User interface

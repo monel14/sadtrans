@@ -1,8 +1,21 @@
 import { createCard } from '../components/Card';
 import { DataService } from '../services/data.service';
-import { User, OperationType, OperationTypeField, CommissionTier } from '../models';
+import { User, OperationType, OperationTypeField, CommissionTier, OperationTypeFieldOption } from '../models';
 import { ApiService } from '../services/api.service';
 import { $ } from '../utils/dom';
+
+// Helper function to display options in the form (supports both string[] and OperationTypeFieldOption[])
+function getOptionsDisplayValue(options: string[] | OperationTypeFieldOption[] | undefined): string {
+    if (!options || options.length === 0) return '';
+    
+    // Check if it's the new enriched format
+    if (typeof options[0] === 'object' && 'valeur' in options[0]) {
+        return (options as OperationTypeFieldOption[]).map(opt => opt.valeur).join(',');
+    }
+    
+    // Old format: simple string array
+    return (options as string[]).join(',');
+}
 
 // Store component state locally
 let allOpTypes: OperationType[] = [];
@@ -10,6 +23,50 @@ let selectedOpType: OperationType | null = null;
 let detailView: HTMLElement | null = null;
 let masterList: HTMLElement | null = null;
 let tierCounter = 0;
+
+
+function showConfirmationModal(title: string, message: string, onConfirm: () => Promise<void>) {
+    // Remove any existing modal
+    document.getElementById('confirmation-modal')?.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'confirmation-modal';
+    modal.className = 'modal visible';
+    modal.innerHTML = `
+        <div class="modal-content modal-sm">
+            <h3 class="text-xl font-semibold mb-4">${title}</h3>
+            <p class="text-slate-600 mb-6">${message}</p>
+            <div class="flex justify-end space-x-2">
+                <button id="confirm-cancel" class="btn btn-secondary">Annuler</button>
+                <button id="confirm-action" class="btn btn-danger">Confirmer la suppression</button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    const closeModal = () => modal.remove();
+    const confirmBtn = modal.querySelector('#confirm-action') as HTMLButtonElement;
+    
+    modal.querySelector('#confirm-cancel')?.addEventListener('click', closeModal);
+    modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+
+    confirmBtn.addEventListener('click', async () => {
+        const originalText = confirmBtn.innerHTML;
+        confirmBtn.disabled = true;
+        confirmBtn.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i>Suppression...`;
+
+        try {
+            await onConfirm();
+            closeModal();
+        } catch (e) {
+            // Error toast is handled by the caller
+            confirmBtn.disabled = false;
+            confirmBtn.innerHTML = originalText;
+        }
+    });
+}
+
 
 /**
  * Renders the main detail view for a selected operation type.
@@ -184,7 +241,7 @@ function createFieldEditor(field: OperationTypeField, index: number, total: numb
                         <option value="select" ${field.type === 'select' ? 'selected' : ''}>Liste</option>
                     </select>
                 </div>
-                <div><label class="form-label form-label-sm">Options (séparées par ,)</label><input type="text" class="form-input form-input-sm" data-prop="options" value="${(field.options || []).join(',')}"></div>
+                <div><label class="form-label form-label-sm">Options (séparées par ,)</label><input type="text" class="form-input form-input-sm" data-prop="options" value="${getOptionsDisplayValue(field.options)}"></div>
             </div>
             <div class="flex gap-4 mt-3">
                 <div class="flex items-center"><input type="checkbox" data-prop="required" class="mr-2" ${field.required ? 'checked' : ''}><label class="form-label form-label-sm">Requis</label></div>
@@ -246,11 +303,16 @@ function renderMasterList() {
         list.className = 'space-y-1';
         groupedOpTypes[category].sort((a,b) => a.name.localeCompare(b.name)).forEach(op => {
             const item = document.createElement('button');
-            item.className = `w-full text-left p-2 rounded-md text-sm flex items-center justify-between ${selectedOpType?.id === op.id ? 'bg-violet-100 text-violet-800 font-semibold' : 'hover:bg-slate-100'}`;
+            item.className = `group w-full text-left p-2 rounded-md text-sm flex items-center justify-between ${selectedOpType?.id === op.id ? 'bg-violet-100 text-violet-800 font-semibold' : 'hover:bg-slate-100'}`;
             item.dataset.id = op.id;
             item.innerHTML = `
-                <span>${op.name}</span>
-                <i class="fas fa-circle text-xs ${op.status === 'active' ? 'text-green-500' : 'text-slate-300'}"></i>
+                <span class="flex-grow truncate pr-2">${op.name}</span>
+                <div class="flex-shrink-0 flex items-center">
+                    <button data-action="delete-op" data-id="${op.id}" data-name="${op.name}" title="Supprimer ce service" class="btn btn-xs !p-1 h-5 w-5 text-red-400 hover:bg-red-100 hover:text-red-600 hidden group-hover:inline-flex opacity-75 hover:opacity-100">
+                        <i class="fas fa-trash-alt fa-sm"></i>
+                    </button>
+                    <i class="fas fa-circle text-xs ${op.status === 'active' ? 'text-green-500' : 'text-slate-300'} ml-2"></i>
+                </div>
             `;
             list.appendChild(item);
         });
@@ -285,6 +347,44 @@ export async function renderDeveloperManageOperationTypesView(user: User): Promi
     viewContainer.addEventListener('click', async (e) => {
         const target = e.target as HTMLElement;
 
+        const deleteBtn = target.closest<HTMLButtonElement>('[data-action="delete-op"]');
+        if (deleteBtn) {
+            e.stopPropagation(); // Prevent selecting the item when clicking delete
+            const opId = deleteBtn.dataset.id!;
+            const opName = deleteBtn.dataset.name!;
+
+            showConfirmationModal(
+                'Confirmer la Suppression',
+                `Êtes-vous sûr de vouloir supprimer le service "<strong>${opName}</strong>" ? Les transactions existantes ne seront pas affectées, mais il ne sera plus possible d'en créer de nouvelles. Cette action est irréversible.`,
+                async () => {
+                    try {
+                        const api = ApiService.getInstance();
+                        const success = await api.deleteOperationType(opId);
+                        if (success) {
+                            document.body.dispatchEvent(new CustomEvent('showToast', { detail: { message: `Service "${opName}" supprimé.`, type: 'success' } }));
+                            
+                            // Update local state
+                            allOpTypes = allOpTypes.filter(op => op.id !== opId);
+                            if (selectedOpType?.id === opId) {
+                                selectedOpType = null;
+                            }
+                            
+                            // Re-render UI
+                            renderMasterList();
+                            renderDetailView();
+                        } else {
+                            throw new Error("API call to delete operation type failed.");
+                        }
+                    } catch (error) {
+                        console.error("Delete failed", error);
+                        document.body.dispatchEvent(new CustomEvent('showToast', { detail: { message: `La suppression a échoué. Vérifiez s'il existe des transactions liées.`, type: 'error' } }));
+                        throw error; // Re-throw to keep the modal's confirm button in its loading state, indicating failure.
+                    }
+                }
+            );
+            return;
+        }
+
         // Master list item selection
         const masterItem = target.closest<HTMLButtonElement>('#master-list button[data-id]');
         if (masterItem) {
@@ -301,19 +401,106 @@ export async function renderDeveloperManageOperationTypesView(user: User): Promi
             saveBtn.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i>Sauvegarde...`;
             (saveBtn as HTMLButtonElement).disabled = true;
 
-            // Gather data from all forms
-            const settingsForm = new FormData(detailView.querySelector('#settingsForm') as HTMLFormElement);
-            const feesForm = new FormData(detailView.querySelector('#feesForm') as HTMLFormElement);
+            // Ensure all forms exist by temporarily rendering them if needed
+            let settingsFormElement = detailView.querySelector('#settingsForm') as HTMLFormElement;
+            let feesFormElement = detailView.querySelector('#feesForm') as HTMLFormElement;
+            
+            // Create temporary container to render missing forms
+            const tempContainer = document.createElement('div');
+            tempContainer.style.display = 'none';
+            detailView.appendChild(tempContainer);
+            
+            if (!settingsFormElement) {
+                tempContainer.innerHTML = `
+                    <form id="settingsForm" class="space-y-4 p-4 border rounded-b-lg">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="form-label">Nom</label>
+                                <input type="text" name="name" class="form-input" value="${selectedOpType.name}" required>
+                            </div>
+                            <div>
+                                <label class="form-label">Catégorie</label>
+                                <input type="text" name="category" class="form-input" value="${selectedOpType.category}" required>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="form-label">Description</label>
+                            <textarea name="description" class="form-input" rows="3">${selectedOpType.description}</textarea>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="form-label">Statut</label>
+                                <select name="status" class="form-select">
+                                    <option value="active" ${selectedOpType.status === 'active' ? 'selected' : ''}>Actif</option>
+                                    <option value="inactive" ${selectedOpType.status === 'inactive' ? 'selected' : ''}>Inactif</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="form-label">Impact sur le solde</label>
+                                <select name="impactsBalance" class="form-select">
+                                    <option value="true" ${selectedOpType.impactsBalance ? 'selected' : ''}>Oui</option>
+                                    <option value="false" ${!selectedOpType.impactsBalance ? 'selected' : ''}>Non</option>
+                                </select>
+                            </div>
+                        </div>
+                    </form>
+                `;
+                settingsFormElement = tempContainer.querySelector('#settingsForm') as HTMLFormElement;
+            }
+            
+            if (!feesFormElement) {
+                const config = selectedOpType.commissionConfig;
+                tempContainer.innerHTML += `
+                    <form id="feesForm" class="space-y-4 p-4 border rounded-b-lg">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="form-label">Application des frais</label>
+                                <select name="feeApplication" class="form-select">
+                                    <option value="additive" ${selectedOpType.feeApplication === 'additive' ? 'selected' : ''}>Additifs (ajoutés au montant)</option>
+                                    <option value="inclusive" ${selectedOpType.feeApplication === 'inclusive' ? 'selected' : ''}>Inclusifs (inclus dans le montant)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="form-label">Part société (%)</label>
+                                <input type="number" name="partageSociete" class="form-input" value="${config.partageSociete || 0}" min="0" max="100">
+                            </div>
+                        </div>
+                    </form>
+                `;
+                feesFormElement = tempContainer.querySelector('#feesForm') as HTMLFormElement;
+            }
+            
+            const settingsForm = new FormData(settingsFormElement);
+            const feesForm = new FormData(feesFormElement);
             
             const fields: OperationTypeField[] = [];
             detailView.querySelectorAll<HTMLElement>('.field-editor').forEach(editor => {
                 const id = editor.dataset.id!;
+                const optionsInput = (editor.querySelector('[data-prop="options"]') as HTMLInputElement).value;
+                const newOptionsArray = optionsInput.split(',').map(s=>s.trim()).filter(Boolean);
+                
+                // Find the original field to preserve enriched options if they exist
+                const originalField = selectedOpType?.fields.find(f => f.id === id);
+                let finalOptions: string[] | OperationTypeFieldOption[] = newOptionsArray;
+                
+                // If original field had enriched options and the values match, preserve the enriched format
+                if (originalField?.options && typeof originalField.options[0] === 'object') {
+                    const originalEnrichedOptions = originalField.options as OperationTypeFieldOption[];
+                    const originalValues = originalEnrichedOptions.map(opt => opt.valeur);
+                    
+                    // Check if the new options match the original values (same order and content)
+                    if (JSON.stringify(newOptionsArray) === JSON.stringify(originalValues)) {
+                        finalOptions = originalEnrichedOptions; // Preserve enriched options
+                    }
+                    // If values changed, create new simple options (developer is modifying)
+                }
+                
                 fields.push({
                     id: id,
                     label: (editor.querySelector('[data-prop="label"]') as HTMLInputElement).value,
                     name: (editor.querySelector('[data-prop="name"]') as HTMLInputElement).value,
                     type: (editor.querySelector('[data-prop="type"]') as HTMLSelectElement).value as any,
-                    options: (editor.querySelector('[data-prop="options"]') as HTMLInputElement).value.split(',').map(s=>s.trim()).filter(Boolean),
+                    options: finalOptions,
                     required: (editor.querySelector('[data-prop="required"]') as HTMLInputElement).checked,
                     readonly: (editor.querySelector('[data-prop="readonly"]') as HTMLInputElement).checked,
                     obsolete: false
@@ -363,6 +550,12 @@ export async function renderDeveloperManageOperationTypesView(user: User): Promi
                 document.body.dispatchEvent(new CustomEvent('showToast', { detail: { message: `La sauvegarde a échoué.`, type: 'error' } }));
                 saveBtn.innerHTML = `<i class="fas fa-save mr-2"></i>Enregistrer les modifications`;
                 (saveBtn as HTMLButtonElement).disabled = false;
+            } finally {
+                // Clean up temporary container
+                const tempContainer = detailView.querySelector('div[style*="display: none"]');
+                if (tempContainer) {
+                    tempContainer.remove();
+                }
             }
         }
     });

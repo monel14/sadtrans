@@ -88,6 +88,7 @@ export class App {
         if (user) {
             this.currentUser = user;
             this.renderMainLayout();
+            this.startUserStatusCheck();
         } else {
             this.showLoginPage();
         }
@@ -104,7 +105,30 @@ export class App {
         this.renderMainLayout();
     }
 
+    private statusCheckInterval: number | null = null;
+
+    private startUserStatusCheck() {
+        // Check user status every 30 seconds
+        this.statusCheckInterval = window.setInterval(async () => {
+            const authService = AuthService.getInstance();
+            const user = await authService.getCurrentUser();
+            
+            if (!user) {
+                // User was logged out (probably due to suspended status)
+                this.handleLogout();
+            }
+        }, 30000); // 30 seconds
+    }
+
+    private stopUserStatusCheck() {
+        if (this.statusCheckInterval) {
+            clearInterval(this.statusCheckInterval);
+            this.statusCheckInterval = null;
+        }
+    }
+
     private async handleLogout() {
+        this.stopUserStatusCheck();
         await AuthService.getInstance().logout();
         this.currentUser = null;
         this.mainLayout = null;
@@ -227,9 +251,9 @@ export class App {
     }
     
     private handleOpenPartnerEditAgentModal(event: CustomEvent) {
-        const { agent, partnerId } = event.detail;
+        const { agent, partnerId, agencyId } = event.detail;
         if (this.partnerEditAgentModal) {
-            this.partnerEditAgentModal.show(agent, partnerId);
+            this.partnerEditAgentModal.show(agent, partnerId, agencyId);
         }
     }
 

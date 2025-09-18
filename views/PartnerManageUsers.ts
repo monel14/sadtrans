@@ -16,7 +16,7 @@ interface AgentStats {
 export async function renderPartnerManageUsersView(partnerUser: User): Promise<HTMLElement> {
     const api = ApiService.getInstance();
     const dataService = DataService.getInstance();
-    
+
     // --- 1. DATA FETCHING ---
     // Invalidate cache to get fresh data
     dataService.invalidateUsersCache();
@@ -39,7 +39,7 @@ export async function renderPartnerManageUsersView(partnerUser: User): Promise<H
         transactionCount: 0,
         lastActivity: null
     }]));
-    
+
     // Calculate stats per agent
     allTransactions.forEach(tx => {
         if (myAgentIds.includes(tx.agentId)) {
@@ -109,7 +109,7 @@ export async function renderPartnerManageUsersView(partnerUser: User): Promise<H
         <!-- User List Container -->
         <ul id="user-list-container" class="space-y-3"></ul>
     `;
-    
+
     const userListContainer = $('#user-list-container', container) as HTMLUListElement;
 
     function renderUserList(agentsToRender: User[]) {
@@ -119,7 +119,7 @@ export async function renderPartnerManageUsersView(partnerUser: User): Promise<H
             return;
         }
 
-        agentsToRender.sort((a,b) => a.name.localeCompare(b.name)).forEach(agent => {
+        agentsToRender.sort((a, b) => a.name.localeCompare(b.name)).forEach(agent => {
             const stats = agentStats.get(agent.id) || { volume: 0, commissions: 0, transactionCount: 0, lastActivity: null };
             const statusBadge = agent.status === 'active'
                 ? `<span class="badge badge-success">Actif</span>`
@@ -196,10 +196,10 @@ export async function renderPartnerManageUsersView(partnerUser: User): Promise<H
                 agent.email.toLowerCase().includes(currentSearchTerm)
             );
         }
-        
+
         renderUserList(filteredAgents);
     }
-    
+
     // Initial render
     renderUserList(myAgents);
 
@@ -216,7 +216,7 @@ export async function renderPartnerManageUsersView(partnerUser: User): Promise<H
         const button = target.closest<HTMLButtonElement>('[data-status]');
         if (button) {
             currentStatusFilter = button.dataset.status!;
-            
+
             // Update button styles
             filterButtonsContainer.querySelectorAll('button').forEach(btn => {
                 btn.classList.remove('btn-secondary');
@@ -228,7 +228,7 @@ export async function renderPartnerManageUsersView(partnerUser: User): Promise<H
             filterAndRender();
         }
     });
-    
+
     // Action listeners (delegated to main container)
     container.addEventListener('click', async (e: Event) => {
         const target = e.target as HTMLElement;
@@ -239,7 +239,7 @@ export async function renderPartnerManageUsersView(partnerUser: User): Promise<H
         if (button.id === 'create-agent-btn') {
             document.body.dispatchEvent(new CustomEvent('openPartnerEditAgentModal', {
                 bubbles: true, composed: true,
-                detail: { agent: null, partnerId: partnerUser.partnerId }
+                detail: { agent: null, partnerId: partnerUser.partnerId, agencyId: partnerUser.agencyId }
             }));
             return;
         }
@@ -254,21 +254,21 @@ export async function renderPartnerManageUsersView(partnerUser: User): Promise<H
             if (agent) {
                 document.body.dispatchEvent(new CustomEvent('openPartnerEditAgentModal', {
                     bubbles: true, composed: true,
-                    detail: { agent: agent, partnerId: partnerUser.partnerId }
+                    detail: { agent: agent, partnerId: partnerUser.partnerId, agencyId: partnerUser.agencyId }
                 }));
             }
         }
-        
+
         // Toggle status button
         if (action === 'toggle-status') {
             const currentStatus = button.dataset.currentStatus;
             const newStatus = currentStatus === 'active' ? 'suspended' : 'active';
-            
+
             button.disabled = true;
             button.innerHTML = `<i class="fas fa-spinner fa-spin"></i>`;
 
             try {
-                await api.updateAgent({ id: agentId, status: newStatus });
+                await api.updateUserStatus(agentId, newStatus);
                 document.body.dispatchEvent(new CustomEvent('showToast', {
                     detail: { message: `Utilisateur ${newStatus === 'active' ? 'activé' : 'suspendu'}.`, type: 'success' }
                 }));

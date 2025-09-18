@@ -48,18 +48,36 @@ export function renderLoginPage(): HTMLElement {
         submitButton.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i>Connexion...`;
         submitButton.disabled = true;
 
-        const authService = AuthService.getInstance();
-        const user = await authService.login(emailInput.value, passwordInput.value);
+        try {
+            const authService = AuthService.getInstance();
+            const user = await authService.login(emailInput.value, passwordInput.value);
 
-        if (user) {
-            page.dispatchEvent(new CustomEvent('loginSuccess', {
-                detail: { user },
-                bubbles: true,
-                composed: true
-            }));
-        } else {
+            if (user) {
+                page.dispatchEvent(new CustomEvent('loginSuccess', {
+                    detail: { user },
+                    bubbles: true,
+                    composed: true
+                }));
+            } else {
+                document.body.dispatchEvent(new CustomEvent('showToast', {
+                    detail: { message: 'Email ou mot de passe incorrect.', type: 'error' }
+                }));
+                submitButton.innerHTML = originalButtonHtml;
+                submitButton.disabled = false;
+            }
+        } catch (error) {
+            let errorMessage = 'Email ou mot de passe incorrect.';
+            
+            if (error instanceof Error) {
+                if (error.message === 'ACCOUNT_SUSPENDED') {
+                    errorMessage = 'Votre compte a été suspendu. Contactez un administrateur.';
+                } else if (error.message === 'ACCOUNT_INACTIVE') {
+                    errorMessage = 'Votre compte est inactif. Contactez un administrateur.';
+                }
+            }
+            
             document.body.dispatchEvent(new CustomEvent('showToast', {
-                detail: { message: 'Email ou mot de passe incorrect.', type: 'error' }
+                detail: { message: errorMessage, type: 'error' }
             }));
             submitButton.innerHTML = originalButtonHtml;
             submitButton.disabled = false;
