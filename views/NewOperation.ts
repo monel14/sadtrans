@@ -75,7 +75,7 @@ function getPriceFromSelectOption(selectElement: HTMLSelectElement): number {
 // Helper function to get price from field options by value
 function getPriceFromFieldOptions(field: OperationTypeField, value: string): number {
     if (!field.options || !value) return 0;
-    
+
     for (const option of field.options) {
         if (typeof option === 'object' && option.valeur === value && option.prix !== undefined) {
             return option.prix;
@@ -551,7 +551,7 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
                 button.dataset.opId = op.id;
 
                 const inactiveBadge = op.status !== 'active' ? '<span class="badge badge-gray">Inactif</span>' : '';
-                
+
                 button.innerHTML = `
                     <div class="flex justify-between items-start">
                         <p class="font-semibold text-slate-800 pr-2">${op.name}</p>

@@ -145,7 +145,23 @@ export class ApiService {
     public async getTransactions(filters: {} = {}): Promise<Transaction[]> {
         const { data, error } = await supabase.from('transactions').select('*');
         if (error) throw error;
-        return data;
+        return (data || []).map((item: any) => ({
+            id: item.id,
+            date: item.created_at,
+            agentId: item.agent_id,
+            opTypeId: item.op_type_id,
+            data: item.data,
+            montant_principal: item.montant_principal,
+            frais: item.frais,
+            montant_total: item.montant_total,
+            statut: item.statut,
+            preuveUrl: item.preuve_url,
+            commission_societe: item.commission_societe,
+            commission_partenaire: item.commission_partenaire,
+            validateurId: item.validateur_id,
+            motif_rejet: item.motif_rejet,
+            assignedTo: item.assigned_to,
+        }));
     }
 
     public async getAllOperationTypes(): Promise<OperationType[]> {

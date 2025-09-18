@@ -15,6 +15,7 @@ import { AdminEditPartnerModal } from './components/modals/AdminEditPartnerModal
 import { AuthService } from './services/auth.service';
 import { AdminRejectRechargeModal } from './components/modals/AdminRejectRechargeModal';
 import { PartnerTransferRevenueModal } from './components/modals/PartnerTransferRevenueModal';
+import { ConfirmationModal } from './components/modals/ConfirmationModal';
 
 export class App {
     private rootElement: HTMLElement;
@@ -36,6 +37,7 @@ export class App {
     private adminEditPartnerModal: AdminEditPartnerModal | null = null;
     private adminRejectRechargeModal: AdminRejectRechargeModal | null = null;
     private partnerTransferRevenueModal: PartnerTransferRevenueModal | null = null;
+    private confirmationModal: ConfirmationModal | null = null;
     private toastContainer: ToastContainer | null = null;
 
     constructor(rootElement: HTMLElement) {
@@ -56,6 +58,7 @@ export class App {
         this.handleUpdateCurrentUser = this.handleUpdateCurrentUser.bind(this);
         this.handleOpenAdminRejectRechargeModal = this.handleOpenAdminRejectRechargeModal.bind(this);
         this.handleOpenPartnerTransferRevenueModal = this.handleOpenPartnerTransferRevenueModal.bind(this);
+        this.handleOpenConfirmationModal = this.handleOpenConfirmationModal.bind(this);
     }
 
     public async init() {
@@ -79,6 +82,7 @@ export class App {
         document.body.addEventListener('openAdminEditPartnerModal', this.handleOpenAdminEditPartnerModal as EventListener);
         document.body.addEventListener('openAdminRejectRechargeModal', this.handleOpenAdminRejectRechargeModal as EventListener);
         document.body.addEventListener('openPartnerTransferRevenueModal', this.handleOpenPartnerTransferRevenueModal as EventListener);
+        document.body.addEventListener('openConfirmationModal', this.handleOpenConfirmationModal as EventListener);
         document.body.addEventListener('showToast', this.handleShowToast as EventListener);
         
         // Check for an active session on startup
@@ -214,6 +218,7 @@ export class App {
         this.adminEditPartnerModal = new AdminEditPartnerModal();
         this.adminRejectRechargeModal = new AdminRejectRechargeModal();
         this.partnerTransferRevenueModal = new PartnerTransferRevenueModal();
+        this.confirmationModal = new ConfirmationModal();
 
         const dataService = DataService.getInstance();
         const allUsers = await dataService.getUsers();
@@ -282,6 +287,13 @@ export class App {
         const { userId, amount } = event.detail;
         if (this.partnerTransferRevenueModal && this.currentUser) {
             this.partnerTransferRevenueModal.show(userId, amount);
+        }
+    }
+
+    private handleOpenConfirmationModal(event: CustomEvent) {
+        const { title, message, onConfirm, options } = event.detail;
+        if (this.confirmationModal) {
+            this.confirmationModal.show(title, message, onConfirm, options);
         }
     }
 

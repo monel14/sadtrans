@@ -7,15 +7,17 @@ import { $ } from '../utils/dom';
 // Helper function to display options in the form (supports both string[] and OperationTypeFieldOption[])
 function getOptionsDisplayValue(options: string[] | OperationTypeFieldOption[] | undefined): string {
     if (!options || options.length === 0) return '';
-    
+
     // Check if it's the new enriched format
     if (typeof options[0] === 'object' && 'valeur' in options[0]) {
         return (options as OperationTypeFieldOption[]).map(opt => opt.valeur).join(',');
     }
-    
+
     // Old format: simple string array
     return (options as string[]).join(',');
 }
+
+
 
 // Store component state locally
 let allOpTypes: OperationType[] = [];
@@ -23,49 +25,6 @@ let selectedOpType: OperationType | null = null;
 let detailView: HTMLElement | null = null;
 let masterList: HTMLElement | null = null;
 let tierCounter = 0;
-
-
-function showConfirmationModal(title: string, message: string, onConfirm: () => Promise<void>) {
-    // Remove any existing modal
-    document.getElementById('confirmation-modal')?.remove();
-
-    const modal = document.createElement('div');
-    modal.id = 'confirmation-modal';
-    modal.className = 'modal visible';
-    modal.innerHTML = `
-        <div class="modal-content modal-sm">
-            <h3 class="text-xl font-semibold mb-4">${title}</h3>
-            <p class="text-slate-600 mb-6">${message}</p>
-            <div class="flex justify-end space-x-2">
-                <button id="confirm-cancel" class="btn btn-secondary">Annuler</button>
-                <button id="confirm-action" class="btn btn-danger">Confirmer la suppression</button>
-            </div>
-        </div>
-    `;
-
-    document.body.appendChild(modal);
-
-    const closeModal = () => modal.remove();
-    const confirmBtn = modal.querySelector('#confirm-action') as HTMLButtonElement;
-    
-    modal.querySelector('#confirm-cancel')?.addEventListener('click', closeModal);
-    modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
-
-    confirmBtn.addEventListener('click', async () => {
-        const originalText = confirmBtn.innerHTML;
-        confirmBtn.disabled = true;
-        confirmBtn.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i>Suppression...`;
-
-        try {
-            await onConfirm();
-            closeModal();
-        } catch (e) {
-            // Error toast is handled by the caller
-            confirmBtn.disabled = false;
-            confirmBtn.innerHTML = originalText;
-        }
-    });
-}
 
 
 /**
@@ -86,7 +45,7 @@ function renderDetailView() {
         }
         return;
     }
-    
+
     // Deep copy for editing, allowing cancellation
     const opTypeForEditing = JSON.parse(JSON.stringify(selectedOpType));
     tierCounter = 0;
@@ -157,7 +116,7 @@ function renderDetailView() {
             fieldsContainer.appendChild(createFieldEditor(field, index, opTypeForEditing.fields.length));
         });
     };
-    
+
     const renderFeesTab = () => {
         const config = opTypeForEditing.commissionConfig;
         tabContent.innerHTML = `
@@ -183,14 +142,14 @@ function renderDetailView() {
             </form>
         `;
         const tiersContainer = $('#tiers-list-container', tabContent) as HTMLElement;
-        if(config.type === 'tiers' && config.tiers) {
+        if (config.type === 'tiers' && config.tiers) {
             config.tiers.forEach((tier: CommissionTier) => tiersContainer.appendChild(createTierEditor(tier)));
         } else {
-             tiersContainer.innerHTML = `<p class="text-sm text-slate-500 p-2 bg-slate-100 rounded">Ce service utilise une commission simple (fixe/pourcentage), non éditable ici.</p>`;
-             (tiersContainer.nextElementSibling as HTMLButtonElement).style.display = 'none';
+            tiersContainer.innerHTML = `<p class="text-sm text-slate-500 p-2 bg-slate-100 rounded">Ce service utilise une commission simple (fixe/pourcentage), non éditable ici.</p>`;
+            (tiersContainer.nextElementSibling as HTMLButtonElement).style.display = 'none';
         }
     };
-    
+
     // Initial tab load
     renderSettingsTab();
 
@@ -202,7 +161,7 @@ function renderDetailView() {
         detailView?.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
         target.classList.add('active');
 
-        switch(target.dataset.tab) {
+        switch (target.dataset.tab) {
             case 'form': renderFormTab(); break;
             case 'fees': renderFeesTab(); break;
             default: renderSettingsTab(); break;
@@ -285,7 +244,7 @@ function renderMasterList() {
             <button id="create-new-op-type-btn" class="btn btn-success w-full"><i class="fas fa-plus-circle mr-2"></i>Nouveau Service</button>
         </div>
     `;
-    
+
     const groupedOpTypes = allOpTypes.reduce((acc, opType) => {
         const category = opType.category || 'Uncategorized';
         if (!acc[category]) acc[category] = [];
@@ -298,10 +257,10 @@ function renderMasterList() {
         categoryHeader.className = 'text-xs uppercase text-slate-400 font-semibold p-2 mt-2';
         categoryHeader.textContent = category;
         masterList?.appendChild(categoryHeader);
-        
+
         const list = document.createElement('div');
         list.className = 'space-y-1';
-        groupedOpTypes[category].sort((a,b) => a.name.localeCompare(b.name)).forEach(op => {
+        groupedOpTypes[category].sort((a, b) => a.name.localeCompare(b.name)).forEach(op => {
             const item = document.createElement('button');
             item.className = `group w-full text-left p-2 rounded-md text-sm flex items-center justify-between ${selectedOpType?.id === op.id ? 'bg-violet-100 text-violet-800 font-semibold' : 'hover:bg-slate-100'}`;
             item.dataset.id = op.id;
@@ -324,10 +283,10 @@ export async function renderDeveloperManageOperationTypesView(user: User): Promi
     const dataService = DataService.getInstance();
     allOpTypes = await dataService.getAllOperationTypes();
     selectedOpType = null;
-    
+
     const viewContainer = document.createElement('div');
     viewContainer.className = 'grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-4 gap-6 h-full';
-    
+
     viewContainer.innerHTML = `
         <div class="lg:col-span-1 xl:col-span-1 card !p-2 h-full overflow-y-auto">
             <div id="master-list"></div>
@@ -352,36 +311,45 @@ export async function renderDeveloperManageOperationTypesView(user: User): Promi
             e.stopPropagation(); // Prevent selecting the item when clicking delete
             const opId = deleteBtn.dataset.id!;
             const opName = deleteBtn.dataset.name!;
+            const message = `Êtes-vous sûr de vouloir supprimer le service "<strong>${opName}</strong>" ?<br><br><small>Note: Les transactions existantes seront conservées mais ne seront plus liées à un type d'opération valide. Cette action est irréversible.</small>`;
 
-            showConfirmationModal(
-                'Confirmer la Suppression',
-                `Êtes-vous sûr de vouloir supprimer le service "<strong>${opName}</strong>" ? Les transactions existantes ne seront pas affectées, mais il ne sera plus possible d'en créer de nouvelles. Cette action est irréversible.`,
-                async () => {
-                    try {
-                        const api = ApiService.getInstance();
-                        const success = await api.deleteOperationType(opId);
-                        if (success) {
-                            document.body.dispatchEvent(new CustomEvent('showToast', { detail: { message: `Service "${opName}" supprimé.`, type: 'success' } }));
-                            
-                            // Update local state
-                            allOpTypes = allOpTypes.filter(op => op.id !== opId);
-                            if (selectedOpType?.id === opId) {
-                                selectedOpType = null;
-                            }
-                            
-                            // Re-render UI
-                            renderMasterList();
-                            renderDetailView();
-                        } else {
-                            throw new Error("API call to delete operation type failed.");
-                        }
-                    } catch (error) {
-                        console.error("Delete failed", error);
-                        document.body.dispatchEvent(new CustomEvent('showToast', { detail: { message: `La suppression a échoué. Vérifiez s'il existe des transactions liées.`, type: 'error' } }));
-                        throw error; // Re-throw to keep the modal's confirm button in its loading state, indicating failure.
+            const onConfirmDelete = async () => {
+                try {
+                    const api = ApiService.getInstance();
+                    const success = await api.deleteOperationType(opId);
+                    if (!success) {
+                         throw new Error("API call to delete operation type failed.");
+                    }
+                    document.body.dispatchEvent(new CustomEvent('showToast', { detail: { message: `Service "${opName}" supprimé.`, type: 'success' } }));
+                    // Update local state
+                    allOpTypes = allOpTypes.filter(op => op.id !== opId);
+                    if (selectedOpType?.id === opId) {
+                        selectedOpType = null;
+                    }
+                    // Re-render UI
+                    renderMasterList();
+                    renderDetailView();
+                } catch (error) {
+                    console.error("Delete failed", error);
+                    document.body.dispatchEvent(new CustomEvent('showToast', { detail: { message: `La suppression a échoué.`, type: 'error' } }));
+                    // Re-throw to signal failure to the modal
+                    throw error;
+                }
+            };
+            
+            document.body.dispatchEvent(new CustomEvent('openConfirmationModal', {
+                bubbles: true,
+                composed: true,
+                detail: {
+                    title: 'Confirmer la Suppression',
+                    message: message,
+                    onConfirm: onConfirmDelete,
+                    options: {
+                        confirmButtonText: 'Oui, Supprimer',
+                        confirmButtonClass: 'btn-danger'
                     }
                 }
-            );
+            }));
             return;
         }
 
@@ -393,10 +361,10 @@ export async function renderDeveloperManageOperationTypesView(user: User): Promi
             renderDetailView();
             return;
         }
-        
+
         // Save button
         const saveBtn = target.closest('#save-op-type-btn');
-        if(saveBtn) {
+        if (saveBtn) {
             if (!selectedOpType || !detailView) return;
             saveBtn.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i>Sauvegarde...`;
             (saveBtn as HTMLButtonElement).disabled = true;
@@ -404,12 +372,12 @@ export async function renderDeveloperManageOperationTypesView(user: User): Promi
             // Ensure all forms exist by temporarily rendering them if needed
             let settingsFormElement = detailView.querySelector('#settingsForm') as HTMLFormElement;
             let feesFormElement = detailView.querySelector('#feesForm') as HTMLFormElement;
-            
+
             // Create temporary container to render missing forms
             const tempContainer = document.createElement('div');
             tempContainer.style.display = 'none';
             detailView.appendChild(tempContainer);
-            
+
             if (!settingsFormElement) {
                 tempContainer.innerHTML = `
                     <form id="settingsForm" class="space-y-4 p-4 border rounded-b-lg">
@@ -447,7 +415,7 @@ export async function renderDeveloperManageOperationTypesView(user: User): Promi
                 `;
                 settingsFormElement = tempContainer.querySelector('#settingsForm') as HTMLFormElement;
             }
-            
+
             if (!feesFormElement) {
                 const config = selectedOpType.commissionConfig;
                 tempContainer.innerHTML += `
@@ -469,43 +437,52 @@ export async function renderDeveloperManageOperationTypesView(user: User): Promi
                 `;
                 feesFormElement = tempContainer.querySelector('#feesForm') as HTMLFormElement;
             }
-            
+
             const settingsForm = new FormData(settingsFormElement);
             const feesForm = new FormData(feesFormElement);
-            
+
             const fields: OperationTypeField[] = [];
-            detailView.querySelectorAll<HTMLElement>('.field-editor').forEach(editor => {
-                const id = editor.dataset.id!;
-                const optionsInput = (editor.querySelector('[data-prop="options"]') as HTMLInputElement).value;
-                const newOptionsArray = optionsInput.split(',').map(s=>s.trim()).filter(Boolean);
-                
-                // Find the original field to preserve enriched options if they exist
-                const originalField = selectedOpType?.fields.find(f => f.id === id);
-                let finalOptions: string[] | OperationTypeFieldOption[] = newOptionsArray;
-                
-                // If original field had enriched options and the values match, preserve the enriched format
-                if (originalField?.options && typeof originalField.options[0] === 'object') {
-                    const originalEnrichedOptions = originalField.options as OperationTypeFieldOption[];
-                    const originalValues = originalEnrichedOptions.map(opt => opt.valeur);
-                    
-                    // Check if the new options match the original values (same order and content)
-                    if (JSON.stringify(newOptionsArray) === JSON.stringify(originalValues)) {
-                        finalOptions = originalEnrichedOptions; // Preserve enriched options
+            const fieldEditors = detailView.querySelectorAll<HTMLElement>('.field-editor');
+
+            if (fieldEditors.length > 0) {
+                // If field editors are visible (user is on the Fields tab), collect from UI
+                fieldEditors.forEach(editor => {
+                    const id = editor.dataset.id!;
+                    const optionsInput = (editor.querySelector('[data-prop="options"]') as HTMLInputElement).value;
+                    const newOptionsArray = optionsInput.split(',').map(s => s.trim()).filter(Boolean);
+
+                    // Find the original field to preserve enriched options if they exist
+                    const originalField = selectedOpType?.fields.find(f => f.id === id);
+                    let finalOptions: string[] | OperationTypeFieldOption[] = newOptionsArray;
+
+                    // If original field had enriched options and the values match, preserve the enriched format
+                    if (originalField?.options && typeof originalField.options[0] === 'object') {
+                        const originalEnrichedOptions = originalField.options as OperationTypeFieldOption[];
+                        const originalValues = originalEnrichedOptions.map(opt => opt.valeur);
+
+                        // Check if the new options match the original values (same order and content)
+                        if (JSON.stringify(newOptionsArray) === JSON.stringify(originalValues)) {
+                            finalOptions = originalEnrichedOptions; // Preserve enriched options
+                        }
+                        // If values changed, create new simple options (developer is modifying)
                     }
-                    // If values changed, create new simple options (developer is modifying)
-                }
-                
-                fields.push({
-                    id: id,
-                    label: (editor.querySelector('[data-prop="label"]') as HTMLInputElement).value,
-                    name: (editor.querySelector('[data-prop="name"]') as HTMLInputElement).value,
-                    type: (editor.querySelector('[data-prop="type"]') as HTMLSelectElement).value as any,
-                    options: finalOptions,
-                    required: (editor.querySelector('[data-prop="required"]') as HTMLInputElement).checked,
-                    readonly: (editor.querySelector('[data-prop="readonly"]') as HTMLInputElement).checked,
-                    obsolete: false
+
+                    fields.push({
+                        id: id,
+                        label: (editor.querySelector('[data-prop="label"]') as HTMLInputElement).value,
+                        name: (editor.querySelector('[data-prop="name"]') as HTMLInputElement).value,
+                        type: (editor.querySelector('[data-prop="type"]') as HTMLSelectElement).value as any,
+                        options: finalOptions,
+                        required: (editor.querySelector('[data-prop="required"]') as HTMLInputElement).checked,
+                        readonly: (editor.querySelector('[data-prop="readonly"]') as HTMLInputElement).checked,
+                        obsolete: false
+                    });
                 });
-            });
+            } else {
+                // If field editors are not visible, preserve existing fields
+                console.log('Field editors not visible, preserving existing fields');
+                fields.push(...(selectedOpType.fields || []));
+            }
 
             const tiers: CommissionTier[] = [];
             detailView.querySelectorAll<HTMLElement>('.tier-editor').forEach(editor => {
@@ -517,7 +494,7 @@ export async function renderDeveloperManageOperationTypesView(user: User): Promi
                     value: parseFloat((editor.querySelector('[data-prop="value"]') as HTMLInputElement).value)
                 });
             });
-            
+
             const updatedOpType: OperationType = {
                 ...selectedOpType,
                 name: settingsForm.get('name') as string,
@@ -533,7 +510,7 @@ export async function renderDeveloperManageOperationTypesView(user: User): Promi
                     tiers: tiers,
                 }
             };
-            
+
             try {
                 const api = ApiService.getInstance();
                 const savedOp = await api.updateOperationType(updatedOpType);
