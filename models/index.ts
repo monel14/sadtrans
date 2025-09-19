@@ -21,14 +21,12 @@ export interface User {
     // Role-specific properties
     partnerId?: string; // For Agent & Partner Manager
     agencyId?: string; // Reference to shared agency balance
-    solde?: number; // Individual balance (deprecated - use agency.solde_principal)
 
     // Agent specific
     commissions_mois_estimees?: number;
     commissions_dues?: number;
 
-    // Partner specific
-    solde_revenus?: number; // Individual revenue balance (deprecated - use agency.solde_revenus)
+    // Partner specific (all balances are now managed at agency level)
     volume_partner_mois?: number;
     commissions_partner_mois?: number;
     agents_actifs?: number;
@@ -244,16 +242,4 @@ export interface Notification {
     icon: string;
     userId: string; // Can be a specific userId or 'all' for admins
     target?: NavLink;
-}
-
-// --- SYSTEM & AUDIT ---
-
-export interface AuditLog {
-    id: number;
-    created_at: string; // ISO 8601
-    user_id: string;
-    action: string; // e.g., 'VALIDATE_TRANSACTION'
-    entity_type: string | null; // e.g., 'transaction'
-    entity_id: string | null; // e.g., 'TRN001'
-    details: { [key: string]: any } | null;
 }

@@ -5,7 +5,6 @@ import { formatAmount, formatDate, formatNumber } from '../utils/formatters';
 import { renderAdminTransactionValidationView } from './AdminTransactionValidation';
 import { renderAdminAgentRechargesView } from './AdminAgentRecharges';
 import { renderAdminManagePartnersView } from './AdminManagePartners';
-import { renderAuditLogView } from './shared/AuditLog';
 // FIX: Corrected the import name to match the exported function from AdminCardInventory.ts.
 import { renderAdminCardManagementView } from './AdminCardInventory';
 import { createTable } from '../components/Table';
@@ -260,11 +259,7 @@ export async function renderAdminDashboardView(user: User): Promise<HTMLElement>
                             <i class="fas fa-credit-card text-xl text-slate-500 mb-2"></i>
                             <span class="text-xs font-semibold text-slate-700">Cartes</span>
                         </button>
-                         <button data-nav-id="admin_audit_log" class="flex flex-col items-center justify-center p-3 bg-slate-100 hover:bg-violet-100 rounded-lg transition-colors text-center">
-                            <i class="fas fa-clipboard-list text-xl text-slate-500 mb-2"></i>
-                            <span class="text-xs font-semibold text-slate-700">Audit</span>
-                        </button>
-                        <button data-nav-id="admin_manage_users" class="flex flex-col items-center justify-center p-3 bg-slate-100 hover:bg-violet-100 rounded-lg transition-colors text-center">
+                         <button data-nav-id="admin_manage_users" class="flex flex-col items-center justify-center p-3 bg-slate-100 hover:bg-violet-100 rounded-lg transition-colors text-center">
                             <i class="fas fa-users text-xl text-slate-500 mb-2"></i>
                             <span class="text-xs font-semibold text-slate-700">Utilisateurs</span>
                         </button>
@@ -319,7 +314,6 @@ export async function renderAdminDashboardView(user: User): Promise<HTMLElement>
         'admin_manage_partners': { viewFn: renderAdminManagePartnersView, label: 'Gestion des Partenaires', navId: 'admin_manage_partners' },
         // FIX: Use the correct function name for rendering the card management view.
         'admin_manage_cards': { viewFn: renderAdminCardManagementView, label: 'Gestion des Cartes', navId: 'admin_manage_cards' },
-        'admin_audit_log': { viewFn: renderAuditLogView, label: 'Journal d\'Audit', navId: 'admin_audit_log' },
         'admin_manage_users': { viewFn: (user: User) => import('../views/AdminManageUsers').then(m => m.renderAdminManageUsersView()), label: 'Tous les Utilisateurs', navId: 'admin_manage_users' },
     };
     

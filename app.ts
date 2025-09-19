@@ -1,3 +1,5 @@
+
+
 import { User, UserRole } from './models';
 import { renderLoginPage } from './components/LoginPage';
 import { renderSidebar } from './components/Sidebar';
@@ -16,6 +18,7 @@ import { AuthService } from './services/auth.service';
 import { AdminRejectRechargeModal } from './components/modals/AdminRejectRechargeModal';
 import { PartnerTransferRevenueModal } from './components/modals/PartnerTransferRevenueModal';
 import { ConfirmationModal } from './components/modals/ConfirmationModal';
+import { AdminAdjustBalanceModal } from './components/modals/AdminAdjustBalanceModal';
 
 export class App {
     private rootElement: HTMLElement;
@@ -38,27 +41,11 @@ export class App {
     private adminRejectRechargeModal: AdminRejectRechargeModal | null = null;
     private partnerTransferRevenueModal: PartnerTransferRevenueModal | null = null;
     private confirmationModal: ConfirmationModal | null = null;
+    private adminAdjustBalanceModal: AdminAdjustBalanceModal | null = null;
     private toastContainer: ToastContainer | null = null;
 
     constructor(rootElement: HTMLElement) {
         this.rootElement = rootElement;
-
-        // Bind event handlers
-        this.handleLoginSuccess = this.handleLoginSuccess.bind(this);
-        this.handleLogout = this.handleLogout.bind(this);
-        this.navigateTo = this.navigateTo.bind(this);
-        this.updateActiveNav = this.updateActiveNav.bind(this);
-        this.handleOpenAgentRechargeModal = this.handleOpenAgentRechargeModal.bind(this);
-        this.handleOpenAssignModal = this.handleOpenAssignModal.bind(this);
-        this.handleOpenViewProofModal = this.handleOpenViewProofModal.bind(this);
-        this.handleOpenPartnerEditAgentModal = this.handleOpenPartnerEditAgentModal.bind(this);
-        this.handleOpenAdminEditUserModal = this.handleOpenAdminEditUserModal.bind(this);
-        this.handleOpenAdminEditPartnerModal = this.handleOpenAdminEditPartnerModal.bind(this);
-        this.handleShowToast = this.handleShowToast.bind(this);
-        this.handleUpdateCurrentUser = this.handleUpdateCurrentUser.bind(this);
-        this.handleOpenAdminRejectRechargeModal = this.handleOpenAdminRejectRechargeModal.bind(this);
-        this.handleOpenPartnerTransferRevenueModal = this.handleOpenPartnerTransferRevenueModal.bind(this);
-        this.handleOpenConfirmationModal = this.handleOpenConfirmationModal.bind(this);
     }
 
     public async init() {
@@ -68,7 +55,8 @@ export class App {
 
         // Events dispatched from within the #app container
         this.rootElement.addEventListener('loginSuccess', this.handleLoginSuccess as EventListener);
-        this.rootElement.addEventListener('logout', this.handleLogout);
+        // FIX: Added 'as EventListener' for consistency and type safety.
+        this.rootElement.addEventListener('logout', this.handleLogout as EventListener);
         this.rootElement.addEventListener('navigateTo', this.navigateTo as EventListener);
         this.rootElement.addEventListener('updateActiveNav', this.updateActiveNav as EventListener);
         this.rootElement.addEventListener('updateCurrentUser', this.handleUpdateCurrentUser as EventListener);
@@ -83,6 +71,7 @@ export class App {
         document.body.addEventListener('openAdminRejectRechargeModal', this.handleOpenAdminRejectRechargeModal as EventListener);
         document.body.addEventListener('openPartnerTransferRevenueModal', this.handleOpenPartnerTransferRevenueModal as EventListener);
         document.body.addEventListener('openConfirmationModal', this.handleOpenConfirmationModal as EventListener);
+        document.body.addEventListener('openAdminAdjustBalanceModal', this.handleOpenAdminAdjustBalanceModal as EventListener);
         document.body.addEventListener('showToast', this.handleShowToast as EventListener);
         
         // Check for an active session on startup
@@ -92,6 +81,8 @@ export class App {
         if (user) {
             this.currentUser = user;
             this.renderMainLayout();
+            // FIX: Corrected invalid method name 'pre-fetchData' to 'preFetchData'.
+            this.preFetchData(); // Pre-fetch data to warm up cache
             this.startUserStatusCheck();
         } else {
             this.showLoginPage();
@@ -104,14 +95,33 @@ export class App {
         this.rootElement.appendChild(loginPage);
     }
 
-    private handleLoginSuccess(event: CustomEvent) {
-        this.currentUser = event.detail.user;
+    // FIX: Converted to arrow function to correctly bind `this` and handle CustomEvent details.
+    private handleLoginSuccess = (event: Event) => {
+        const customEvent = event as CustomEvent;
+        this.currentUser = customEvent.detail.user;
         this.renderMainLayout();
+        // FIX: Corrected invalid method name 'pre-fetchData' to 'preFetchData'.
+        this.preFetchData(); // Pre-fetch data to warm up cache
+    }
+
+    // FIX: Corrected invalid method name 'pre-fetchData' to 'preFetchData'.
+    private preFetchData = async () => {
+        // This is a "fire and forget" call to warm up the cache.
+        // We don't await the result here to avoid blocking the UI.
+        // The DataService will cache the results for later use.
+        const dataService = DataService.getInstance();
+        console.log("Pre-fetching data to warm up cache...");
+        dataService.getAllOperationTypes();
+        dataService.getCardTypes();
+        dataService.getUsers();
+        dataService.getPartners();
+        dataService.getCommissionProfiles();
+        dataService.getContracts();
     }
 
     private statusCheckInterval: number | null = null;
 
-    private startUserStatusCheck() {
+    private startUserStatusCheck = () => {
         // Check user status every 30 seconds
         this.statusCheckInterval = window.setInterval(async () => {
             const authService = AuthService.getInstance();
@@ -124,30 +134,39 @@ export class App {
         }, 30000); // 30 seconds
     }
 
-    private stopUserStatusCheck() {
+    private stopUserStatusCheck = () => {
         if (this.statusCheckInterval) {
             clearInterval(this.statusCheckInterval);
             this.statusCheckInterval = null;
         }
     }
 
-    private async handleLogout() {
+    // FIX: Converted to arrow function to correctly bind `this`.
+    private handleLogout = async () => {
         this.stopUserStatusCheck();
         await AuthService.getInstance().logout();
         this.currentUser = null;
         this.mainLayout = null;
+        
+        // Clear saved navigation state on logout
+        localStorage.removeItem('currentNavigation');
+        
         this.showLoginPage();
     }
     
-    private handleUpdateCurrentUser(event: CustomEvent) {
-        if (event.detail.user && this.currentUser && event.detail.user.id === this.currentUser.id) {
-            this.currentUser = event.detail.user;
+    // FIX: Converted to arrow function and added type safety for event.
+    private handleUpdateCurrentUser = (event: Event) => {
+        const customEvent = event as CustomEvent;
+        if (customEvent.detail.user && this.currentUser && customEvent.detail.user.id === this.currentUser.id) {
+            this.currentUser = customEvent.detail.user;
         }
     }
 
-    private updateActiveNav(event: CustomEvent) {
+    // FIX: Converted to arrow function and added type safety for event.
+    private updateActiveNav = (event: Event) => {
         if (!this.mainLayout) return;
-        const { navId } = event.detail;
+        const customEvent = event as CustomEvent;
+        const { navId } = customEvent.detail;
 
         const sidebarLinks = this.mainLayout.sidebar.querySelectorAll('#appNavigation a');
         sidebarLinks.forEach(link => {
@@ -165,10 +184,11 @@ export class App {
         });
     }
 
-    private async navigateTo(event: CustomEvent) {
+    // FIX: Converted to arrow function and added type safety for event.
+    private navigateTo = async (event: Event) => {
         if (!this.mainLayout || !this.currentUser) return;
-
-        const { viewFn, label, action, navId, operationTypeId } = event.detail;
+        const customEvent = event as CustomEvent;
+        const { viewFn, label, action, navId, operationTypeId } = customEvent.detail;
         
         if (action) {
             action();
@@ -176,6 +196,15 @@ export class App {
         }
 
         if (viewFn) {
+            // Save current navigation state to localStorage
+            const navigationState = {
+                navId,
+                label,
+                operationTypeId,
+                userRole: this.currentUser.role
+            };
+            localStorage.setItem('currentNavigation', JSON.stringify(navigationState));
+
             // Update page title
             const pageTitleEl = this.mainLayout.header.querySelector('#pageTitle') as HTMLElement;
             if (pageTitleEl) pageTitleEl.textContent = label;
@@ -201,14 +230,16 @@ export class App {
         }
     }
 
-    private handleShowToast(event: CustomEvent) {
-        const { message, type } = event.detail as { message: string, type: ToastType };
+    // FIX: Converted to arrow function and added type safety for event.
+    private handleShowToast = (event: Event) => {
+        const customEvent = event as CustomEvent;
+        const { message, type } = customEvent.detail as { message: string, type: ToastType };
         if (this.toastContainer) {
             this.toastContainer.showToast(message, type);
         }
     }
 
-    private async initializeModals() {
+    private initializeModals = async () => {
         if (this.agentRequestRechargeModal) return; // Already initialized
 
         this.agentRequestRechargeModal = new AgentRequestRechargeModal();
@@ -219,6 +250,7 @@ export class App {
         this.adminRejectRechargeModal = new AdminRejectRechargeModal();
         this.partnerTransferRevenueModal = new PartnerTransferRevenueModal();
         this.confirmationModal = new ConfirmationModal();
+        this.adminAdjustBalanceModal = new AdminAdjustBalanceModal();
 
         const dataService = DataService.getInstance();
         const allUsers = await dataService.getUsers();
@@ -239,9 +271,11 @@ export class App {
         document.body.addEventListener('partnerUpdated', reloadCurrentView);
         document.body.addEventListener('operationTypeUpdated', reloadCurrentView);
         document.body.addEventListener('rechargeRequestUpdated', reloadCurrentView);
-        document.body.addEventListener('revenueTransferred', (event: CustomEvent) => {
+        document.body.addEventListener('agencyBalanceUpdated', reloadCurrentView);
+        document.body.addEventListener('revenueTransferred', (event: Event) => {
+            const customEvent = event as CustomEvent;
             this.rootElement.dispatchEvent(new CustomEvent('updateCurrentUser', {
-                detail: { user: event.detail.user },
+                detail: { user: customEvent.detail.user },
                 bubbles: true,
                 composed: true
             }));
@@ -249,69 +283,94 @@ export class App {
         });
     }
 
-    private handleOpenAgentRechargeModal() {
+    // FIX: Converted to arrow function to correctly bind `this`.
+    private handleOpenAgentRechargeModal = () => {
         if (this.agentRequestRechargeModal && this.currentUser) {
             this.agentRequestRechargeModal.show(this.currentUser);
         }
     }
     
-    private handleOpenPartnerEditAgentModal(event: CustomEvent) {
-        const { agent, partnerId, agencyId } = event.detail;
+    // FIX: Converted to arrow function and added type safety for event.
+    private handleOpenPartnerEditAgentModal = (event: Event) => {
+        const customEvent = event as CustomEvent;
+        const { agent, partnerId, agencyId } = customEvent.detail;
         if (this.partnerEditAgentModal) {
             this.partnerEditAgentModal.show(agent, partnerId, agencyId);
         }
     }
 
-    private handleOpenAdminEditUserModal(event: CustomEvent) {
-        const { user, roleToCreate } = event.detail;
+    // FIX: Converted to arrow function and added type safety for event.
+    private handleOpenAdminEditUserModal = (event: Event) => {
+        const customEvent = event as CustomEvent;
+        const { user, roleToCreate } = customEvent.detail;
         if (this.adminEditUserModal) {
             this.adminEditUserModal.show(user, roleToCreate);
         }
     }
 
-    private handleOpenAdminEditPartnerModal(event: CustomEvent) {
-        const { partner } = event.detail;
+    // FIX: Converted to arrow function and added type safety for event.
+    private handleOpenAdminEditPartnerModal = (event: Event) => {
+        const customEvent = event as CustomEvent;
+        const { partner } = customEvent.detail;
         if (this.adminEditPartnerModal) {
             this.adminEditPartnerModal.show(partner);
         }
     }
     
-    private handleOpenAdminRejectRechargeModal(event: CustomEvent) {
-        const { requestId } = event.detail;
+    // FIX: Converted to arrow function and added type safety for event.
+    private handleOpenAdminRejectRechargeModal = (event: Event) => {
+        const customEvent = event as CustomEvent;
+        const { requestId } = customEvent.detail;
         if (this.adminRejectRechargeModal) {
             this.adminRejectRechargeModal.show(requestId);
         }
     }
+    
+    private handleOpenAdminAdjustBalanceModal = (event: Event) => {
+        const customEvent = event as CustomEvent;
+        const { agency } = customEvent.detail;
+        if (this.adminAdjustBalanceModal) {
+            this.adminAdjustBalanceModal.show(agency);
+        }
+    }
 
-    private handleOpenPartnerTransferRevenueModal(event: CustomEvent) {
-        const { userId, amount } = event.detail;
+    // FIX: Converted to arrow function and added type safety for event.
+    private handleOpenPartnerTransferRevenueModal = (event: Event) => {
+        const customEvent = event as CustomEvent;
+        const { userId, amount } = customEvent.detail;
         if (this.partnerTransferRevenueModal && this.currentUser) {
             this.partnerTransferRevenueModal.show(userId, amount);
         }
     }
 
-    private handleOpenConfirmationModal(event: CustomEvent) {
-        const { title, message, onConfirm, options } = event.detail;
+    // FIX: Converted to arrow function and added type safety for event.
+    private handleOpenConfirmationModal = (event: Event) => {
+        const customEvent = event as CustomEvent;
+        const { title, message, onConfirm, options } = customEvent.detail;
         if (this.confirmationModal) {
             this.confirmationModal.show(title, message, onConfirm, options);
         }
     }
 
-    private handleOpenAssignModal(event: CustomEvent) {
-        const { taskId } = event.detail;
+    // FIX: Converted to arrow function and added type safety for event.
+    private handleOpenAssignModal = (event: Event) => {
+        const customEvent = event as CustomEvent;
+        const { taskId } = customEvent.detail;
         if (this.assignToSubAdminModal) {
             this.assignToSubAdminModal.show(taskId);
         }
     }
 
-    private handleOpenViewProofModal(event: CustomEvent) {
-        const { imageUrl } = event.detail;
+    // FIX: Converted to arrow function and added type safety for event.
+    private handleOpenViewProofModal = (event: Event) => {
+        const customEvent = event as CustomEvent;
+        const { imageUrl } = customEvent.detail;
         if (this.viewProofModal && imageUrl) {
             this.viewProofModal.show(imageUrl);
         }
     }
 
-    private renderMainLayout() {
+    private renderMainLayout = () => {
         if (!this.currentUser) return;
         this.rootElement.innerHTML = '';
 
@@ -359,10 +418,54 @@ export class App {
             sidebar.classList.toggle('-translate-x-full');
         });
 
-        // Load default view
+        // Restore previous navigation state or load default view
+        this.restoreNavigationState();
+    }
+
+    private restoreNavigationState = () => {
+        if (!this.currentUser) return;
+
+        try {
+            const savedState = localStorage.getItem('currentNavigation');
+            if (savedState) {
+                const navigationState = JSON.parse(savedState);
+                
+                // Only restore if the saved state is for the same user role
+                if (navigationState.userRole === this.currentUser.role) {
+                    // Find the navigation item that matches the saved state
+                    const navItem = this.findNavigationItem(navigationLinks[this.currentUser.role], navigationState.navId);
+                    if (navItem) {
+                        // Restore the navigation with the saved operationTypeId if it exists
+                        const detail = { ...navItem };
+                        if (navigationState.operationTypeId) {
+                            detail.operationTypeId = navigationState.operationTypeId;
+                        }
+                        this.rootElement.dispatchEvent(new CustomEvent('navigateTo', { detail }));
+                        return;
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error restoring navigation state:', error);
+        }
+
+        // Fallback to default view if restoration fails
         const defaultNav = navigationLinks[this.currentUser.role][0];
         if (defaultNav) {
             this.rootElement.dispatchEvent(new CustomEvent('navigateTo', { detail: defaultNav }));
         }
+    }
+
+    private findNavigationItem = (navItems: any[], targetNavId: string): any | null => {
+        for (const item of navItems) {
+            if (item.navId === targetNavId) {
+                return item;
+            }
+            if (item.children) {
+                const found = this.findNavigationItem(item.children, targetNavId);
+                if (found) return found;
+            }
+        }
+        return null;
     }
 }

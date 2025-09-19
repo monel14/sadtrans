@@ -20,13 +20,13 @@ export async function renderPartnerDashboardView(user: User): Promise<HTMLElemen
 
     // Fetch fresh, complete user data to ensure agency balances are included.
     const allUsers = await dataService.getUsers(); // This fetches users with agency data
-    const fullUser = allUsers.find(u => u.id === user.id);
+    const fullUser = allUsers.find(u => u.email === user.email);
 
     console.log('PartnerDashboard Debug:', {
         originalUser: user,
         allUsersCount: allUsers.length,
         fullUser: fullUser,
-        fullUserAgency: (fullUser as any)?.agency
+        fullUserAgency: fullUser?.agency
     });
 
     // If for some reason the logged-in user isn't found or isn't a partner, show an error.
@@ -36,11 +36,11 @@ export async function renderPartnerDashboardView(user: User): Promise<HTMLElemen
         return errorEl;
     }
 
-    const agency = (fullUser as any).agency;
+    const agency = fullUser?.agency;
 
-    // Prioritize agency balance, with fallback to user's own balance fields.
-    const mainBalance = agency?.solde_principal ?? fullUser.solde ?? 0;
-    const revenueBalance = agency?.solde_revenus ?? fullUser.solde_revenus ?? 0;
+    // Use agency balance only (no individual balance fallback)
+    const mainBalance = agency?.solde_principal ?? 0;
+    const revenueBalance = agency?.solde_revenus ?? 0;
 
     const container = document.createElement('div');
 

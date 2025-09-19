@@ -92,12 +92,19 @@ function renderEditForm() {
                 </div>
                 <div>
                     <label class="form-label" for="profilePhone">Téléphone</label>
-                    <input type="tel" id="profilePhone" name="phone" class="form-input" value="${currentUserData.phone || ''}">
+                    <input type="tel" id="profilePhone" name="phone" class="form-input" value="${currentUserData.phone || ''}" autocomplete="tel">
                 </div>
             </div>
-            <div class="border-t pt-4">
-                <label class="form-label" for="profilePassword">Nouveau mot de passe</label>
-                <input type="password" id="profilePassword" name="password" class="form-input" placeholder="Laisser vide pour ne pas changer">
+            <div class="border-t pt-4 space-y-4">
+                <div>
+                    <label class="form-label" for="profilePassword">Nouveau mot de passe</label>
+                    <input type="password" id="profilePassword" name="password" class="form-input" placeholder="Nouveau mot de passe" autocomplete="new-password">
+                </div>
+                <div>
+                    <label class="form-label" for="profilePasswordConfirm">Confirmer le mot de passe</label>
+                    <input type="password" id="profilePasswordConfirm" name="passwordConfirm" class="form-input" placeholder="Confirmer le mot de passe" autocomplete="new-password">
+                </div>
+                <p class="text-xs text-slate-500 mt-1">Laissez les champs de mot de passe vides si vous ne souhaitez pas le changer.</p>
             </div>
             <div class="text-right mt-6 flex justify-end gap-3">
                 <button id="cancel-edit-btn" type="button" class="btn btn-secondary">Annuler</button>
@@ -120,7 +127,17 @@ function renderEditForm() {
         submitButton.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i>Sauvegarde...`;
 
         const formData = new FormData(form);
-        const password = formData.get('password') as string;
+        const newPassword = formData.get('password') as string;
+        const confirmPassword = formData.get('passwordConfirm') as string;
+
+        if (newPassword && newPassword !== confirmPassword) {
+            document.body.dispatchEvent(new CustomEvent('showToast', {
+                detail: { message: "Les mots de passe ne correspondent pas.", type: 'error' }
+            }));
+            submitButton.disabled = false;
+            submitButton.innerHTML = originalBtnHtml;
+            return;
+        }
         
         const updatedData: Partial<User> = {
             id: currentUserData.id,
@@ -128,8 +145,9 @@ function renderEditForm() {
             lastName: formData.get('lastName') as string,
             phone: formData.get('phone') as string,
         };
-        if (password) {
-            updatedData.password = password;
+
+        if (newPassword) {
+            updatedData.password = newPassword;
         }
 
         try {
@@ -145,18 +163,13 @@ function renderEditForm() {
                     composed: true
                 }));
                 
-                document.body.dispatchEvent(new CustomEvent('showToast', {
-                    detail: { message: "Profil mis à jour avec succès !", type: 'success' }
-                }));
                 renderDisplayView();
             } else {
                  throw new Error("API did not return updated user.");
             }
         } catch (error) {
             console.error("Failed to update profile", error);
-            document.body.dispatchEvent(new CustomEvent('showToast', {
-                detail: { message: "Erreur lors de la mise à jour.", type: 'error' }
-            }));
+            // Error toast is now shown by the API service
             submitButton.disabled = false;
             submitButton.innerHTML = originalBtnHtml;
         }

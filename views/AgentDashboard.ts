@@ -1,4 +1,5 @@
 
+
 import { User } from '../models';
 import { DataService } from '../services/data.service';
 import { createCard } from '../components/Card';
@@ -16,7 +17,8 @@ export async function renderAgentDashboardView(user: User): Promise<HTMLElement>
     // Fetch the full user object with agency data to get the correct shared balance
     const fullUserResponse = await api.getUserWithAgency(user.id);
     const agency = fullUserResponse?.agency;
-    const mainBalance = agency?.solde_principal ?? user.solde ?? 0;
+    // FIX: Property 'solde' does not exist on type 'User'. Balances are managed at the agency level.
+    const mainBalance = agency?.solde_principal ?? 0;
 
     const [agentTransactions, opTypes, userMap] = await Promise.all([
         dataService.getTransactions({ agentId: user.id, limit: 3 }),

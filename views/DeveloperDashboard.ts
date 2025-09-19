@@ -4,7 +4,6 @@ import { createCard } from '../components/Card';
 import { formatDate, formatNumber } from '../utils/formatters';
 import { renderDeveloperManageOperationTypesView } from './DeveloperManageOperationTypes';
 import { renderAdminCommissionConfigView } from './AdminCommissionConfig';
-import { renderAuditLogView } from './shared/AuditLog';
 
 // Helper function to create a KPI card
 function createKpiCard(title: string, value: string, icon: string, color: string = 'violet'): HTMLElement {
@@ -33,13 +32,11 @@ export async function renderDeveloperDashboardView(user: User): Promise<HTMLElem
         allPartners,
         allTransactions,
         allOperationTypes,
-        auditLogs
     ] = await Promise.all([
         dataService.getUsers(),
         dataService.getPartners(),
         dataService.getTransactions(),
         dataService.getAllOperationTypes(),
-        dataService.getAuditLogs()
     ]);
     
     const today = new Date().toISOString().split('T')[0];
@@ -51,14 +48,8 @@ export async function renderDeveloperDashboardView(user: User): Promise<HTMLElem
         
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <!-- Main Column -->
-            <div class="lg:col-span-2 space-y-6">
+            <div class="lg:col-span-3 space-y-6">
                 <div id="quick-access-card-container"></div>
-                <div id="recent-activity-card-container"></div>
-            </div>
-            
-            <!-- Side Column -->
-            <div class="lg:col-span-1 space-y-6">
-                <!-- System Status Card Removed -->
             </div>
         </div>
     `;
@@ -84,10 +75,6 @@ export async function renderDeveloperDashboardView(user: User): Promise<HTMLElem
             <i class="fas fa-file-signature text-xl text-slate-500 mb-2"></i>
             <span class="text-xs font-semibold text-slate-700">Commission Profiles</span>
         </button>
-         <button data-nav-id="admin_audit_log" class="flex flex-col items-center justify-center p-3 bg-slate-100 hover:bg-violet-100 rounded-lg transition-colors text-center">
-            <i class="fas fa-clipboard-list text-xl text-slate-500 mb-2"></i>
-            <span class="text-xs font-semibold text-slate-700">Audit Log</span>
-        </button>
         <a href="https://supabase.com/dashboard/project/fmdefcgenhfesdxozvxz" target="_blank" class="flex flex-col items-center justify-center p-3 bg-slate-100 hover:bg-violet-100 rounded-lg transition-colors text-center">
             <i class="fas fa-external-link-alt text-xl text-slate-500 mb-2"></i>
             <span class="text-xs font-semibold text-slate-700">Supabase Project</span>
@@ -95,33 +82,11 @@ export async function renderDeveloperDashboardView(user: User): Promise<HTMLElem
     `;
     const quickAccessCard = createCard('Developer Tools', quickAccessContent, 'fa-tools');
     container.querySelector('#quick-access-card-container')?.appendChild(quickAccessCard);
-
-    // --- Inject Recent Activity Card ---
-    const recentActivityContent = document.createElement('ul');
-    recentActivityContent.className = 'space-y-3';
-    const userMap = await dataService.getUserMap();
-    auditLogs.slice(0, 5).forEach(log => {
-        const user = userMap.get(log.user_id);
-        const li = document.createElement('li');
-        li.className = 'flex items-center text-sm p-2 bg-slate-50 rounded-md';
-        li.innerHTML = `
-            <i class="fas fa-history text-slate-400 w-8 text-center"></i>
-            <div class="flex-grow">
-                <p class="font-medium text-slate-700">${log.action.replace(/_/g, ' ')}</p>
-                <p class="text-xs text-slate-500">By ${user?.name || 'System'} on entity ${log.entity_id || 'N/A'}</p>
-            </div>
-            <p class="text-xs text-slate-400">${formatDate(log.created_at)}</p>
-        `;
-        recentActivityContent.appendChild(li);
-    });
-    const recentActivityCard = createCard('Recent System Activity', recentActivityContent, 'fa-history');
-    container.querySelector('#recent-activity-card-container')?.appendChild(recentActivityCard);
     
     // --- Event Listeners ---
     const navMap: { [key: string]: { viewFn: Function, label: string, navId: string } } = {
         'dev_manage_op_types': { viewFn: renderDeveloperManageOperationTypesView, label: 'Manage Operation Types', navId: 'dev_manage_op_types' },
         'admin_commission_config': { viewFn: renderAdminCommissionConfigView, label: 'Contrats & Commissions', navId: 'admin_commission_config' },
-        'admin_audit_log': { viewFn: renderAuditLogView, label: 'Journal d\'Audit', navId: 'admin_audit_log' },
     };
 
     container.addEventListener('click', e => {

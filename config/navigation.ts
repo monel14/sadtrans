@@ -8,7 +8,6 @@ import { renderAdminDashboardView } from "../views/AdminDashboard";
 import { renderAdminTransactionValidationView } from "../views/AdminTransactionValidation";
 import { renderAdminManagePartnersView } from "../views/AdminManagePartners";
 import { renderAdminManageSubAdminsView } from "../views/AdminManageSubAdmins";
-import { renderAuditLogView } from "../views/shared/AuditLog";
 import { renderSubAdminDashboardView } from "../views/SubAdminDashboard";
 import { renderAdminCardManagementView } from "../views/AdminCardInventory";
 import { renderNewOperationView } from "../views/NewOperation";
@@ -159,7 +158,6 @@ export const navigationLinks: Record<UserRole, NavLink[]> = {
                 { label: 'Gestion des Cartes', navId: 'admin_card_management', icon: 'fa-credit-card', viewFn: renderAdminCardManagementView },
                 { label: 'Contrats & Commissions', navId: 'admin_commission_config', icon: 'fa-file-signature', viewFn: renderAdminCommissionConfigView },
                 { label: 'Modes de Recharge Agent', navId: 'admin_config_recharge_methods', icon: 'fa-cash-register', viewFn: renderAdminManageRechargeMethodsView },
-                { label: 'Journal d\'Audit', navId: 'admin_audit_log', icon: 'fa-clipboard-list', viewFn: renderAuditLogView },
             ]
         }
     ],
@@ -189,6 +187,5 @@ export const navigationLinks: Record<UserRole, NavLink[]> = {
                 { label: 'Card Inventory', navId: 'admin_card_management', icon: 'fa-credit-card', viewFn: renderAdminCardManagementView },
             ]
         },
-        { label: 'Audit Log', navId: 'admin_audit_log', icon: 'fa-clipboard-list', viewFn: renderAuditLogView },
     ],
 };

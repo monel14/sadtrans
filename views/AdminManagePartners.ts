@@ -3,7 +3,9 @@ import { ApiService } from '../services/api.service';
 import { DataService } from '../services/data.service';
 import { createCard } from '../components/Card';
 import { User } from '../models';
-import { formatAmount, formatDate, formatTransactionStatus } from '../utils/formatters';
+import { formatAmount } from '../utils/formatters';
+import { renderAllTransactionsView } from './AllTransactions';
+import { renderAdminCommissionConfigView } from './AdminCommissionConfig';
 
 export async function renderAdminManagePartnersView(): Promise<HTMLElement> {
     const dataService = DataService.getInstance();
@@ -12,17 +14,17 @@ export async function renderAdminManagePartnersView(): Promise<HTMLElement> {
         allPartners,
         allTransactions,
         userMap,
-        opTypeMap,
         commissionProfileMap,
-        activeContractsMap
+        activeContractsMap,
+        agencyMap
     ] = await Promise.all([
         dataService.getUsers(),
         dataService.getPartners(),
         dataService.getTransactions(),
         dataService.getUserMap(),
-        dataService.getOpTypeMap(),
         dataService.getCommissionProfileMap(),
-        dataService.getActiveContractsMap()
+        dataService.getActiveContractsMap(),
+        dataService.getAgencyMapByPartnerId()
     ]);
 
     const container = document.createElement('div');
@@ -41,10 +43,9 @@ export async function renderAdminManagePartnersView(): Promise<HTMLElement> {
 
         allPartners.forEach(partner => {
             const manager = userMap.get(partner.partnerManagerId);
-            // Get the full manager user object which includes the nested agency
-            const fullManager = allUsers.find(u => u.id === partner.partnerManagerId);
-            const agencyBalance = (fullManager as any)?.agency?.solde_principal;
-
+            const agency = agencyMap.get(partner.id);
+            const agencyBalance = agency?.solde_principal;
+            
             const agents = allUsers.filter(u => u.role === 'agent' && u.partnerId === partner.id);
             
             const partnerContract = activeContractsMap.get(partner.id);
@@ -53,35 +54,9 @@ export async function renderAdminManagePartnersView(): Promise<HTMLElement> {
             const agentIds = agents.map(a => a.id);
             const partnerTransactions = allTransactions.filter(t => agentIds.includes(t.agentId));
             const pendingTransactions = partnerTransactions.filter(t => t.statut === 'En attente de validation' || t.statut === 'Assignée');
-            const recentTransactions = partnerTransactions.slice(0, 5);
             
             const partnerCard = document.createElement('div');
             partnerCard.className = 'card flex flex-col';
-
-            let recentTransactionsHtml = '<p class="text-sm text-slate-500 text-center py-2">Aucune transaction récente.</p>';
-            if(recentTransactions.length > 0) {
-                recentTransactionsHtml = `
-                    <ul class="space-y-2">
-                        ${recentTransactions.map(t => {
-                            const opType = opTypeMap.get(t.opTypeId);
-                            const formattedStatus = formatTransactionStatus(t, userMap);
-                            const statusClass = t.statut === 'Validé' ? 'badge-success' : (t.statut === 'En attente de validation' || t.statut === 'Assignée' ? 'badge-warning' : 'badge-danger');
-                            return `
-                                <li class="flex justify-between items-center text-sm p-2 bg-slate-50 rounded-md">
-                                    <div>
-                                        <p class="font-medium text-slate-700">${opType?.name || 'Opération'}</p>
-                                        <p class="text-xs text-slate-400">${formatDate(t.date).split(' ')[0]}</p>
-                                    </div>
-                                    <div class="text-right">
-                                        <p class="font-semibold">${formatAmount(t.montant_principal)}</p>
-                                        <span class="badge ${statusClass} mt-1">${formattedStatus}</span>
-                                    </div>
-                                </li>
-                            `;
-                        }).join('')}
-                    </ul>
-                `;
-            }
 
             partnerCard.innerHTML = `
                 <!-- Visible Header -->
@@ -106,7 +81,12 @@ export async function renderAdminManagePartnersView(): Promise<HTMLElement> {
                 <div class="grid grid-cols-3 gap-4 my-4 text-center border-t border-b py-4">
                     <div>
                         <p class="text-xs text-slate-500">Solde Agence</p>
-                        <p class="text-xl font-bold text-emerald-600">${formatAmount(agencyBalance)}</p>
+                        <div class="flex items-center justify-center gap-2">
+                            <p class="text-xl font-bold text-emerald-600">${formatAmount(agencyBalance)}</p>
+                            <button class="btn btn-xs btn-outline-secondary" data-action="adjust-balance" data-agency-id="${agency?.id || ''}" title="Ajuster le solde" ${!agency ? 'disabled' : ''}>
+                                <i class="fas fa-edit"></i>
+                            </button>
+                        </div>
                     </div>
                     <div>
                         <p class="text-xs text-slate-500">Agents Actifs</p>
@@ -117,20 +97,17 @@ export async function renderAdminManagePartnersView(): Promise<HTMLElement> {
                         <p class="text-xl font-bold text-amber-500">${pendingTransactions.length}</p>
                     </div>
                 </div>
-                 <div class="text-center text-sm text-slate-500 -mt-2 mb-2">
+                 <div class="text-center text-sm text-slate-500 -mt-2 mb-4">
                     Profil de frais: <span class="font-semibold text-slate-700">${commissionProfile?.name || 'N/A'}</span>
                  </div>
 
-                <!-- Collapsible Details Section -->
-                <div id="details-${partner.id}" class="hidden transition-all duration-300 ease-in-out">
-                    <h4 class="font-semibold text-sm mb-2 text-slate-600">Historique Récent des Opérations</h4>
-                    ${recentTransactionsHtml}
-                </div>
-
-                <!-- Footer with Toggle Button -->
-                <div class="mt-auto pt-4 text-center">
-                    <button data-action="toggle-details" data-target="details-${partner.id}" class="btn btn-sm btn-outline-secondary w-full">
-                        <span class="toggle-text">Afficher plus</span> <i class="fas fa-chevron-down toggle-icon text-xs ml-2 transition-transform"></i>
+                <!-- Footer with Action Buttons -->
+                <div class="mt-auto pt-4 border-t flex justify-end gap-2">
+                    <button data-action="view-transactions" data-partner-id="${partner.id}" class="btn btn-sm btn-outline-secondary">
+                        <i class="fas fa-list-ul mr-2"></i>Opérations
+                    </button>
+                    <button data-action="manage-contract" data-partner-id="${partner.id}" class="btn btn-sm btn-outline-secondary">
+                        <i class="fas fa-file-signature mr-2"></i>Contrat
                     </button>
                 </div>
             `;
@@ -178,21 +155,52 @@ export async function renderAdminManagePartnersView(): Promise<HTMLElement> {
             }
             return;
         }
-
-        const toggleBtn = target.closest<HTMLButtonElement>('[data-action="toggle-details"]');
-        if (toggleBtn) {
-            const targetId = toggleBtn.dataset.target;
-            const detailsDiv = wrapperCard.querySelector<HTMLElement>(`#${targetId}`);
-            const textSpan = toggleBtn.querySelector<HTMLElement>('.toggle-text');
-            const icon = toggleBtn.querySelector<HTMLElement>('.toggle-icon');
-
-            if (detailsDiv) {
-                const isHidden = detailsDiv.classList.contains('hidden');
-                detailsDiv.classList.toggle('hidden');
-                
-                if (textSpan) textSpan.textContent = isHidden ? 'Afficher moins' : 'Afficher plus';
-                if (icon) icon.classList.toggle('rotate-180', isHidden);
+        
+        const adjustBalanceBtn = target.closest<HTMLButtonElement>('[data-action="adjust-balance"]');
+        if (adjustBalanceBtn) {
+            const agencyId = adjustBalanceBtn.dataset.agencyId;
+            if (agencyId) {
+                const agency = Array.from(agencyMap.values()).find(a => a.id === agencyId);
+                if (agency) {
+                    document.body.dispatchEvent(new CustomEvent('openAdminAdjustBalanceModal', {
+                        bubbles: true,
+                        composed: true,
+                        detail: { agency }
+                    }));
+                }
             }
+            return;
+        }
+
+        const viewTransactionsBtn = target.closest<HTMLButtonElement>('[data-action="view-transactions"]');
+        if (viewTransactionsBtn) {
+            wrapperCard.dispatchEvent(new CustomEvent('navigateTo', {
+                detail: {
+                    viewFn: renderAllTransactionsView,
+                    label: 'Toutes les Opérations',
+                    navId: 'admin_all_transactions'
+                },
+                bubbles: true,
+                composed: true,
+            }));
+            document.body.dispatchEvent(new CustomEvent('showToast', {
+                detail: { message: "Utilisez le filtre 'Partenaire' pour voir les opérations spécifiques.", type: 'info' }
+            }));
+            return;
+        }
+
+        const manageContractBtn = target.closest<HTMLButtonElement>('[data-action="manage-contract"]');
+        if (manageContractBtn) {
+            wrapperCard.dispatchEvent(new CustomEvent('navigateTo', {
+                detail: {
+                    viewFn: renderAdminCommissionConfigView,
+                    label: 'Contrats & Commissions',
+                    navId: 'admin_commission_config'
+                },
+                bubbles: true,
+                composed: true,
+            }));
+            return;
         }
     });
     

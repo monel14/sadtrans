@@ -31,11 +31,12 @@ export class PartnerEditAgentModal extends BaseModal {
                 </div>
                 <div>
                     <label class="form-label" for="agentPhone">Téléphone</label>
-                    <input type="tel" id="agentPhone" name="phone" class="form-input">
+                    <input type="tel" id="agentPhone" name="phone" class="form-input" autocomplete="tel">
                 </div>
                 <div>
-                    <label class="form-label" for="agentPassword">Mot de passe (laisser vide si inchangé)</label>
-                    <input type="password" id="agentPassword" name="password" class="form-input">
+                    <label class="form-label text-slate-400">Mot de passe</label>
+                    <input type="password" id="agentPassword" name="password" class="form-input bg-slate-100" placeholder=" le nouveau mot de passe" autocomplete="new-password"  >
+                    <p class="text-xs text-slate-500 mt-1">La modification du mot de passe n'est pas disponible via ce formulaire.</p>
                 </div>
                 <div class="border-t pt-4">
                     <label class="form-label">Statut du Compte</label>
@@ -70,7 +71,7 @@ export class PartnerEditAgentModal extends BaseModal {
         this.populateForm();
         super.show();
     }
-    
+
     private updateTitle() {
         const titleEl = this.modalElement.querySelector('h3');
         if (titleEl) {
@@ -84,7 +85,7 @@ export class PartnerEditAgentModal extends BaseModal {
         ($('#agentName', this.form) as HTMLInputElement).value = this.editingAgent?.name || '';
         ($('#agentEmail', this.form) as HTMLInputElement).value = this.editingAgent?.email || '';
         ($('#agentPhone', this.form) as HTMLInputElement).value = this.editingAgent?.phone || '';
-        
+
         const statusToggle = $('#agentStatus', this.form) as HTMLInputElement;
         statusToggle.checked = !this.editingAgent || this.editingAgent.status === 'active';
         this.updateStatusLabel(statusToggle.checked);
@@ -112,7 +113,7 @@ export class PartnerEditAgentModal extends BaseModal {
             const originalButtonHtml = submitButton.innerHTML;
             submitButton.disabled = true;
             submitButton.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i>Enregistrement...`;
-            
+
             try {
                 const formData = new FormData(this.form);
                 const agentData: Partial<User> = {
@@ -127,8 +128,21 @@ export class PartnerEditAgentModal extends BaseModal {
                 };
 
                 const api = ApiService.getInstance();
-                await api.updateAgent(agentData);
-                
+
+                if (this.editingAgent) {
+                    // Modification d'un agent existant - pas de mise à jour de mot de passe
+                    await api.updateAgent(agentData);
+                } else {
+                    // Création d'un nouvel agent - informer que le mot de passe doit être défini par l'administrateur
+                    document.body.dispatchEvent(new CustomEvent('showToast', {
+                        detail: {
+                            message: "Agent créé avec succès. Le mot de passe doit être défini par l'administrateur.",
+                            type: 'info'
+                        }
+                    }));
+                    await api.updateAgent(agentData); // Utiliser updateAgent au lieu de createUser
+                }
+
                 document.body.dispatchEvent(new CustomEvent('agentUpdated', { bubbles: true, composed: true }));
                 this.hide();
 

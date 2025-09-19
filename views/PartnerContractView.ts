@@ -107,11 +107,13 @@ export async function renderPartnerContractView(user: User): Promise<HTMLElement
             const ruleSource = getCommissionDescription(opType, myContract, baseProfile);
             const { partnerShare } = await api.getFeePreview(user.id, opType.id, 10000); // Use a sample amount to get the share percentage
 
-            let shareDescription = `${100 - (baseProfile?.partageSociete || 0)}% des frais`;
+            // FIX: Add type assertion for baseProfile to resolve potential 'unknown' type error.
+            let shareDescription = `${100 - ((baseProfile as CommissionProfile)?.partageSociete || 0)}% des frais`;
             
             const exception = myContract.exceptions.find(ex => (ex.targetType === 'service' && ex.targetId === opType.id) || (ex.targetType === 'category' && ex.targetId === opType.category));
-            if (exception && exception.commissionConfig.partageSociete !== undefined) {
-                 shareDescription = `${100 - exception.commissionConfig.partageSociete}% des frais`;
+            // FIX: Add type assertion for exception to resolve potential 'unknown' type error.
+            if (exception && (exception as any).commissionConfig.partageSociete !== undefined) {
+                 shareDescription = `${100 - (exception as any).commissionConfig.partageSociete}% des frais`;
             } else if (opType.commissionConfig.partageSociete !== undefined) {
                  shareDescription = `${100 - opType.commissionConfig.partageSociete}% des frais`;
             }

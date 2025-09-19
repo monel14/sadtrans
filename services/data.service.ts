@@ -4,7 +4,7 @@
  */
 import {
     User, Partner, OperationType, Transaction, AgentRechargeRequest,
-    RechargePaymentMethod, Card, Order, CardType, CommissionProfile, Contract, AuditLog
+    RechargePaymentMethod, Card, Order, CardType, CommissionProfile, Contract, Agency
 } from '../models';
 import { ApiService } from './api.service';
 
@@ -29,7 +29,9 @@ export class DataService {
     private _cardTypes: CardType[] | null = null;
     private _commissionProfiles: CommissionProfile[] | null = null;
     private _contracts: Contract[] | null = null;
-    private _auditLogs: AuditLog[] | null = null;
+    private _agencies: Agency[] | null = null;
+    // FIX: Add cache property for audit logs.
+    private _auditLogs: any[] | null = null;
 
     // Private cache properties for Maps for efficient lookups
     private _userMap: Map<string, User> | null = null;
@@ -39,6 +41,7 @@ export class DataService {
     private _cardTypeMap: Map<string, CardType> | null = null;
     private _commissionProfileMap: Map<string, CommissionProfile> | null = null;
     private _activeContractsMap: Map<string, Contract> | null = null;
+    private _agencyMapByPartnerId: Map<string, Agency> | null = null;
 
 
     private constructor() {
@@ -64,14 +67,22 @@ export class DataService {
     public invalidateCardTypesCache() { this._cardTypes = null; this._cardTypeMap = null; }
     public invalidateCommissionProfilesCache() { this._commissionProfiles = null; this._commissionProfileMap = null; }
     public invalidateContractsCache() { this._contracts = null; this._activeContractsMap = null; }
-    public invalidateAuditLogsCache() { this._auditLogs = null; }
+    public invalidateAgenciesCache() { this._agencies = null; this._agencyMapByPartnerId = null; }
 
 
     // --- Getter Methods for Arrays ---
 
     public async getUsers(): Promise<User[]> {
         if (!this._users) {
-            this._users = await this.api.getUsers();
+            const users = await this.api.getUsers();
+            const agencies = await this.getAgencies();
+            const agencyMap = new Map(agencies.map(a => [a.id, a]));
+            for (const user of users) {
+                if (user.agencyId) {
+                    user.agency = agencyMap.get(user.agencyId);
+                }
+            }
+            this._users = users;
         }
         return this._users;
     }
@@ -203,7 +214,15 @@ export class DataService {
         return this._contracts;
     }
 
-    public async getAuditLogs(): Promise<AuditLog[]> {
+    public async getAgencies(): Promise<Agency[]> {
+        if (!this._agencies) {
+            this._agencies = await this.api.getAgencies();
+        }
+        return this._agencies;
+    }
+
+    // FIX: Add getAuditLogs method to provide audit log data.
+    public async getAuditLogs(): Promise<any[]> {
         if (!this._auditLogs) {
             this._auditLogs = await this.api.getAuditLogs();
         }
@@ -267,6 +286,18 @@ export class DataService {
             this._activeContractsMap = new Map(contracts.filter(c => c.status === 'active').map(c => [c.partnerId, c]));
         }
         return this._activeContractsMap;
+    }
+    
+    public async getAgencyMapByPartnerId(): Promise<Map<string, Agency>> {
+        if (!this._agencyMapByPartnerId) {
+            const agencies = await this.getAgencies();
+            this._agencyMapByPartnerId = new Map(
+                agencies
+                    .filter(a => a.partnerId)
+                    .map(a => [a.partnerId!, a])
+            );
+        }
+        return this._agencyMapByPartnerId;
     }
     
     // --- Getters for single items (for convenience, still use cache) ---

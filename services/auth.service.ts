@@ -45,6 +45,7 @@ export class AuthService {
             }
 
             // Map snake_case to camelCase to match User interface
+            // FIX: Removed deprecated 'solde' and 'solde_revenus' properties. Balances are managed at the agency level.
             return {
                 id: userProfile.id,
                 name: userProfile.name,
@@ -56,10 +57,8 @@ export class AuthService {
                 status: userProfile.status,
                 partnerId: userProfile.partner_id,
                 agencyId: userProfile.agency_id,
-                solde: userProfile.solde,
                 commissions_mois_estimees: userProfile.commissions_mois_estimees,
                 commissions_dues: userProfile.commissions_dues,
-                solde_revenus: userProfile.solde_revenus,
                 volume_partner_mois: userProfile.volume_partner_mois,
                 commissions_partner_mois: userProfile.commissions_partner_mois,
                 agents_actifs: userProfile.agents_actifs,
@@ -112,6 +111,7 @@ export class AuthService {
             }
             
             // Map snake_case to camelCase to match User interface
+            // FIX: Removed deprecated 'solde' and 'solde_revenus' properties. Balances are managed at the agency level.
             return {
                 id: userProfile.id,
                 name: userProfile.name,
@@ -123,10 +123,8 @@ export class AuthService {
                 status: userProfile.status,
                 partnerId: userProfile.partner_id,
                 agencyId: userProfile.agency_id,
-                solde: userProfile.solde,
                 commissions_mois_estimees: userProfile.commissions_mois_estimees,
                 commissions_dues: userProfile.commissions_dues,
-                solde_revenus: userProfile.solde_revenus,
                 volume_partner_mois: userProfile.volume_partner_mois,
                 commissions_partner_mois: userProfile.commissions_partner_mois,
                 agents_actifs: userProfile.agents_actifs,

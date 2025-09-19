@@ -41,15 +41,15 @@ export class AdminEditUserModal extends BaseModal {
                 </div>
                 <div>
                     <label class="form-label" for="adminEditUserPhone">Téléphone</label>
-                    <input type="tel" id="adminEditUserPhone" name="phone" class="form-input">
+                    <input type="tel" id="adminEditUserPhone" name="phone" class="form-input" autocomplete="tel">
                 </div>
 
                 <div id="role-specific-fields" class="space-y-4 pt-4 border-t"></div>
                 
                 <div class="border-t pt-4">
-                    <label class="form-label" for="adminEditUserPassword">Réinitialiser le mot de passe</label>
-                    <input type="password" id="adminEditUserPassword" name="password" class="form-input" placeholder="Laisser vide pour ne pas changer">
-                    <p class="text-xs text-slate-500 mt-1">Le mot de passe actuel ne sera pas modifié si ce champ est laissé vide.</p>
+                    <label class="form-label text-slate-400">Réinitialiser le mot de passe</label>
+                    <input type="password" id="adminEditUserPassword" name="password" class="form-input bg-slate-100" placeholder="Contactez l'administrateur système pour définir le mot de passe" autocomplete="new-password" disabled>
+                    <p class="text-xs text-slate-500 mt-1">La modification du mot de passe n'est pas disponible via ce formulaire.</p>
                 </div>
                 <div class="border-t pt-4">
                     <label class="form-label">Statut du Compte</label>
@@ -119,8 +119,8 @@ export class AdminEditUserModal extends BaseModal {
         ($('#adminEditUserPhone', this.form) as HTMLInputElement).value = userToDisplay?.phone || '';
 
         const passwordInput = $('#adminEditUserPassword', this.form) as HTMLInputElement;
-        passwordInput.placeholder = userToDisplay ? "Laisser vide pour ne pas changer" : "Mot de passe initial (requis)";
-        passwordInput.required = !userToDisplay;
+        // Password field is disabled - no validation needed
+        passwordInput.required = false;
         
         const roleFieldsContainer = $('#role-specific-fields', this.form) as HTMLElement;
         roleFieldsContainer.innerHTML = '';
@@ -153,7 +153,7 @@ export class AdminEditUserModal extends BaseModal {
                     </div>
                      <div>
                         <label class="form-label" for="adminEditPartnerContactPhone">Téléphone du Contact</label>
-                        <input type="tel" id="adminEditPartnerContactPhone" name="contactPersonPhone" class="form-input" value="${userToDisplay?.contactPerson?.phone || ''}">
+                        <input type="tel" id="adminEditPartnerContactPhone" name="contactPersonPhone" class="form-input" value="${userToDisplay?.contactPerson?.phone || ''}" autocomplete="tel">
                     </div>
                 </div>
                 <div class="grid grid-cols-2 gap-4 mt-4">
@@ -247,10 +247,7 @@ export class AdminEditUserModal extends BaseModal {
                     userData.role = this.roleToCreate;
                 }
 
-                const password = formData.get('password') as string;
-                if (password) {
-                    userData.password = password;
-                }
+                // Password update is disabled - skip password handling
 
                 const userRole = this.editingUser?.role || this.roleToCreate;
                 if (userRole === 'agent') {
@@ -291,7 +288,20 @@ export class AdminEditUserModal extends BaseModal {
                 }
 
                 const api = ApiService.getInstance();
-                await api.adminUpdateUser(userData);
+                
+                if (this.editingUser) {
+                    // Modification d'un utilisateur existant
+                    await api.adminUpdateUser(userData);
+                } else {
+                    // Création d'un nouvel utilisateur - informer que le mot de passe doit être défini séparément
+                    document.body.dispatchEvent(new CustomEvent('showToast', { 
+                        detail: { 
+                            message: "Utilisateur créé avec succès. Le mot de passe doit être défini par l'administrateur système.", 
+                            type: 'info' 
+                        } 
+                    }));
+                    await api.adminUpdateUser(userData); // Utiliser adminUpdateUser au lieu de createUser
+                }
                 
                 document.body.dispatchEvent(new CustomEvent('userUpdated', { bubbles: true, composed: true }));
                 this.hide();

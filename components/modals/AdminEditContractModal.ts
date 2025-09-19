@@ -120,8 +120,14 @@ export class AdminEditContractModal extends BaseModal {
         ($('#contractPartnerId', this.form) as HTMLSelectElement).value = this.editingContract.partnerId;
         ($('#contractBaseProfileId', this.form) as HTMLSelectElement).value = this.editingContract.baseCommissionProfileId;
         ($('#contractStatus', this.form) as HTMLSelectElement).value = this.editingContract.status;
-        ($('#contractStartDate', this.form) as HTMLInputElement).value = this.editingContract.startDate.split('T')[0];
-        if(this.editingContract.endDate) {
+        
+        // Safely handle startDate
+        if (this.editingContract.startDate) {
+            ($('#contractStartDate', this.form) as HTMLInputElement).value = this.editingContract.startDate.split('T')[0];
+        }
+        
+        // Safely handle endDate
+        if (this.editingContract.endDate) {
             ($('#contractEndDate', this.form) as HTMLInputElement).value = this.editingContract.endDate.split('T')[0];
         }
 

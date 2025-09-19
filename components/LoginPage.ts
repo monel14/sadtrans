@@ -18,12 +18,12 @@ export function renderLoginPage(): HTMLElement {
             <form id="loginForm">
                  <div class="mb-6">
                     <label for="email" class="form-label text-slate-300">Adresse Email</label>
-                    <input type="email" id="email" class="form-input bg-slate-700 text-white border-slate-600 placeholder-slate-400 focus:ring-violet-500 focus:border-violet-500" placeholder="votreadresse@email.com" value="${defaultEmailForDemo}" required>
+                    <input type="email" id="email" class="form-input bg-slate-700 text-white border-slate-600 placeholder-slate-400 focus:ring-violet-500 focus:border-violet-500" placeholder="votreadresse@email.com" value="${defaultEmailForDemo}" autocomplete="email" required>
                     <p class="text-xs text-slate-500 mt-2">Emails de démo: admin.adam@example.com, partner.patrice@example.com, agent.alice@example.com, dev@example.com</p>
                 </div>
                 <div class="mb-6">
                     <label for="password" class="form-label text-slate-300">Mot de passe</label>
-                    <input type="password" id="password" class="form-input bg-slate-700 text-white border-slate-600 placeholder-slate-400 focus:ring-violet-500 focus:border-violet-500" placeholder="********" value="${defaultPasswordForDemo}" required>
+                    <input type="password" id="password" class="form-input bg-slate-700 text-white border-slate-600 placeholder-slate-400 focus:ring-violet-500 focus:border-violet-500" placeholder="********" value="${defaultPasswordForDemo}" autocomplete="current-password" required>
                     <p class="text-xs text-slate-500 mt-2">Le mot de passe par défaut est: <strong class="text-violet-300">${defaultPasswordForDemo}</strong>. Assurez-vous que les utilisateurs de démo sont créés dans votre projet Supabase avec ce mot de passe.</p>
                 </div>
                 <button type="submit" class="btn btn-primary w-full text-lg bg-violet-600 hover:bg-violet-700">
