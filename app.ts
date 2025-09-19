@@ -1,5 +1,6 @@
 
 
+
 import { User, UserRole } from './models';
 import { renderLoginPage } from './components/LoginPage';
 import { renderSidebar } from './components/Sidebar';
@@ -86,6 +87,22 @@ export class App {
             this.startUserStatusCheck();
         } else {
             this.showLoginPage();
+        }
+
+        this.registerServiceWorker();
+    }
+
+    private registerServiceWorker() {
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(registration => {
+                        console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                    })
+                    .catch(error => {
+                        console.log('ServiceWorker registration failed: ', error);
+                    });
+            });
         }
     }
 

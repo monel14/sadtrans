@@ -153,23 +153,34 @@ function renderEditForm() {
         try {
             const api = ApiService.getInstance();
             const updatedUser = await api.updateCurrentUserProfile(updatedData);
+
             if (updatedUser) {
-                currentUserData = updatedUser; // Update local state
+                // Success case: API service showed success toast
+                const dataService = DataService.getInstance();
+                dataService.invalidateUsersCache(); // Invalidate cache
+
+                currentUserData = updatedUser;
                 
-                // Dispatch event to update user in App state for consistency across app (e.g., header)
+                // Dispatch event to update user info in other components like the header
                 viewContent.dispatchEvent(new CustomEvent('updateCurrentUser', {
                     detail: { user: updatedUser },
                     bubbles: true,
                     composed: true
                 }));
                 
-                renderDisplayView();
+                renderDisplayView(); // This replaces the form, so no need to restore button
             } else {
-                 throw new Error("API did not return updated user.");
+                // Failure case: API service returned null and should have shown an error toast.
+                // We just need to restore the button to allow another attempt.
+                submitButton.disabled = false;
+                submitButton.innerHTML = originalBtnHtml;
             }
         } catch (error) {
-            console.error("Failed to update profile", error);
-            // Error toast is now shown by the API service
+            // This would catch network errors or other unexpected issues not handled by the API service.
+            console.error("Failed to update profile due to an exception:", error);
+            document.body.dispatchEvent(new CustomEvent('showToast', {
+                detail: { message: "Une erreur réseau est survenue. Veuillez réessayer.", type: 'error' }
+            }));
             submitButton.disabled = false;
             submitButton.innerHTML = originalBtnHtml;
         }

@@ -5,7 +5,7 @@ export function renderLoginPage(): HTMLElement {
     page.id = 'loginPage';
     page.className = 'min-h-screen flex items-center justify-center bg-gray-900 bg-gradient-to-br from-slate-900 via-gray-900 to-slate-900 p-4';
 
-    const defaultEmailForDemo = 'agent@example.com';
+    const defaultEmailForDemo = 'agent2@example.com';
     const defaultPasswordForDemo = 'Password123!';
     
     page.innerHTML = `

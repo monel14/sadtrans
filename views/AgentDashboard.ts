@@ -108,7 +108,11 @@ export async function renderAgentDashboardView(user: User): Promise<HTMLElement>
 
             if (navAction === 'new-op') {
                 container.dispatchEvent(new CustomEvent('navigateTo', {
-                    detail: { viewFn: renderNewOperationView, label: 'Nouvelle Opération', navId: 'agent_services' },
+                    detail: { 
+                        viewFn: (user: User) => renderNewOperationView(user, undefined, { openModal: true }), 
+                        label: 'Nouvelle Opération', 
+                        navId: 'agent_services' 
+                    },
                     bubbles: true, composed: true
                 }));
             } else if (action === 'recharge') {

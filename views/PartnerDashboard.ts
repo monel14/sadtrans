@@ -20,7 +20,7 @@ export async function renderPartnerDashboardView(user: User): Promise<HTMLElemen
 
     // Fetch fresh, complete user data to ensure agency balances are included.
     const allUsers = await dataService.getUsers(); // This fetches users with agency data
-    const fullUser = allUsers.find(u => u.email === user.email);
+    const fullUser = allUsers.find(u => u.id === user.id || u.email === user.email);
 
     console.log('PartnerDashboard Debug:', {
         originalUser: user,

@@ -68,16 +68,20 @@ export class PartnerTransferRevenueModal extends BaseModal {
                         composed: true
                     }));
                     this.hide();
-                } else {
-                    throw new Error("API did not return updated user.");
                 }
+                // If updatedUser is null, the API service already showed an appropriate toast.
+                // The modal remains open, and the button state will be restored in the finally block.
 
             } catch (error) {
-                console.error("Transfer failed", error);
-                document.body.dispatchEvent(new CustomEvent('showToast', { detail: { message: 'Le transfert a échoué. Veuillez réessayer.', type: 'error' } }));
+                // This catch block is for unexpected errors, like network failures.
+                console.error("An unexpected error occurred during transfer:", error);
+                document.body.dispatchEvent(new CustomEvent('showToast', { detail: { message: 'Une erreur inattendue est survenue.', type: 'error' } }));
             } finally {
-                submitButton.disabled = false;
-                submitButton.innerHTML = originalHtml;
+                // Ensure button is restored only if it's still disabled (i.e., modal didn't close on success)
+                if (submitButton.disabled) {
+                    submitButton.disabled = false;
+                    submitButton.innerHTML = originalHtml;
+                }
             }
         });
     }

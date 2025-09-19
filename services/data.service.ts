@@ -54,7 +54,7 @@ export class DataService {
         }
         return DataService.instance;
     }
-    
+
     // --- Invalidation Methods ---
     public invalidateUsersCache() { this._users = null; this._userMap = null; }
     public invalidateTransactionsCache() { this._transactions = null; }
@@ -93,7 +93,7 @@ export class DataService {
         }
         return this._partners;
     }
-    
+
     public async getAllOperationTypes(): Promise<OperationType[]> {
         if (!this._operationTypes) {
             console.log('Debug - Loading operation types from API (cache miss)');
@@ -131,7 +131,7 @@ export class DataService {
         if (!this._transactions) {
             this._transactions = await this.api.getTransactions();
         }
-        
+
         let results = this._transactions;
         if (filters.agentId) {
             results = results.filter(t => t.agentId === filters.agentId);
@@ -145,7 +145,7 @@ export class DataService {
         }
         return results;
     }
-    
+
     public async getAgentRechargeRequests(filters: { status?: string } = {}): Promise<AgentRechargeRequest[]> {
         if (!this._agentRechargeRequests) {
             this._agentRechargeRequests = await this.api.getAgentRechargeRequests();
@@ -154,7 +154,7 @@ export class DataService {
         if (filters.status) {
             results = results.filter(r => r.statut === filters.status);
         }
-        return results.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        return results.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }
 
     public async getRechargePaymentMethods(filters: { status?: 'active' | 'inactive' } = {}): Promise<RechargePaymentMethod[]> {
@@ -176,9 +176,9 @@ export class DataService {
         if (filters.partnerId) {
             results = results.filter(o => o.partnerId === filters.partnerId);
         }
-        return results.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        return results.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }
-    
+
     public async getCards(filters: { partnerId?: string; status?: string } = {}): Promise<Card[]> {
         if (!this._cards) {
             this._cards = await this.api.getCards();
@@ -247,7 +247,7 @@ export class DataService {
         }
         return this._partnerMap;
     }
-    
+
     public async getOpTypeMap(): Promise<Map<string, OperationType>> {
         if (!this._opTypeMap) {
             const opTypes = await this.getAllOperationTypes();
@@ -255,7 +255,7 @@ export class DataService {
         }
         return this._opTypeMap;
     }
-    
+
     public async getMethodMap(): Promise<Map<string, RechargePaymentMethod>> {
         if (!this._methodMap) {
             const methods = await this.getRechargePaymentMethods();
@@ -263,7 +263,7 @@ export class DataService {
         }
         return this._methodMap;
     }
-    
+
     public async getCardTypeMap(): Promise<Map<string, CardType>> {
         if (!this._cardTypeMap) {
             const cardTypes = await this.getCardTypes();
@@ -279,7 +279,7 @@ export class DataService {
         }
         return this._commissionProfileMap;
     }
-    
+
     public async getActiveContractsMap(): Promise<Map<string, Contract>> {
         if (!this._activeContractsMap) {
             const contracts = await this.getContracts();
@@ -287,7 +287,7 @@ export class DataService {
         }
         return this._activeContractsMap;
     }
-    
+
     public async getAgencyMapByPartnerId(): Promise<Map<string, Agency>> {
         if (!this._agencyMapByPartnerId) {
             const agencies = await this.getAgencies();
@@ -299,13 +299,13 @@ export class DataService {
         }
         return this._agencyMapByPartnerId;
     }
-    
+
     // --- Getters for single items (for convenience, still use cache) ---
-     public async getUserById(id: string): Promise<User | undefined> {
+    public async getUserById(id: string): Promise<User | undefined> {
         const userMap = await this.getUserMap();
         return userMap.get(id);
     }
-    
+
     public async getPartnerById(id: string): Promise<Partner | undefined> {
         const partnerMap = await this.getPartnerMap();
         return partnerMap.get(id);

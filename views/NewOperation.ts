@@ -1,3 +1,5 @@
+
+
 // Fix: Import 'OperationTypeField' and 'OperationTypeFieldOption' to resolve type errors.
 import { User, OperationType, CommissionProfile, CommissionTier, CardType, OperationTypeField, OperationTypeFieldOption } from '../models';
 import { ApiService } from '../services/api.service';
@@ -147,7 +149,7 @@ async function renderDynamicFields(opType: OperationType, container: HTMLElement
                 select.addEventListener('change', updateCallback);
                 select.addEventListener('input', updateCallback);
             }
-
+            // Fix: Missing assignment for 'select' element.
             inputElement = select;
         } else {
             const input = document.createElement('input');
@@ -178,7 +180,7 @@ async function renderDynamicFields(opType: OperationType, container: HTMLElement
     container.classList.remove('hidden');
 }
 
-export async function renderNewOperationView(user: User, operationTypeId?: string): Promise<HTMLElement> {
+export async function renderNewOperationView(user: User, operationTypeId?: string, options: { openModal?: boolean } = {}): Promise<HTMLElement> {
     const api = ApiService.getInstance();
     const dataService = DataService.getInstance();
     
@@ -641,7 +643,7 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
             }));
             handleCancelNavigation(container, user);
         } catch (error) {
-            console.error("Transaction creation failed:", error);
+            console.error("Transaction creation failed:", (error as Error).message || error);
             document.body.dispatchEvent(new CustomEvent('showToast', {
                 detail: { message: "La soumission a échoué. Vérifiez votre solde et les informations.", type: 'error' }
             }));
@@ -667,6 +669,9 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
                 }
                 selectOperationType(opToSelect);
             }
+        }
+        if (options.openModal) {
+            setTimeout(() => openOpSelectionModal(), 50);
         }
     };
 

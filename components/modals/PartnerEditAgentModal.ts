@@ -33,11 +33,11 @@ export class PartnerEditAgentModal extends BaseModal {
                     <label class="form-label" for="agentPhone">Téléphone</label>
                     <input type="tel" id="agentPhone" name="phone" class="form-input" autocomplete="tel">
                 </div>
-                <div>
-                    <label class="form-label text-slate-400">Mot de passe</label>
-                    <input type="password" id="agentPassword" name="password" class="form-input bg-slate-100" placeholder=" le nouveau mot de passe" autocomplete="new-password"  >
-                    <p class="text-xs text-slate-500 mt-1">La modification du mot de passe n'est pas disponible via ce formulaire.</p>
+
+                <div id="password-section">
+                    <!-- Password fields will be rendered dynamically -->
                 </div>
+
                 <div class="border-t pt-4">
                     <label class="form-label">Statut du Compte</label>
                     <div class="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
@@ -86,6 +86,33 @@ export class PartnerEditAgentModal extends BaseModal {
         ($('#agentEmail', this.form) as HTMLInputElement).value = this.editingAgent?.email || '';
         ($('#agentPhone', this.form) as HTMLInputElement).value = this.editingAgent?.phone || '';
 
+        const passwordSection = $('#password-section', this.form) as HTMLElement;
+        if (this.editingAgent) {
+            passwordSection.innerHTML = `
+                <div class="border-t pt-4">
+                    <label class="form-label">Réinitialiser le mot de passe</label>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <input type="password" name="password" class="form-input" placeholder="Nouveau mot de passe" autocomplete="new-password">
+                        </div>
+                        <div>
+                            <input type="password" name="passwordConfirm" class="form-input" placeholder="Confirmer le mot de passe" autocomplete="new-password">
+                        </div>
+                    </div>
+                    <p class="text-xs text-slate-500 mt-1">Laissez vide pour ne pas changer le mot de passe.</p>
+                </div>
+            `;
+        } else {
+            passwordSection.innerHTML = `
+                <div class="border-t pt-4">
+                    <label class="form-label text-slate-400">Mot de passe</label>
+                    <input type="password" class="form-input bg-slate-100" placeholder="Sera défini par un admin" disabled>
+                    <p class="text-xs text-slate-500 mt-1">Un mot de passe par défaut sera assigné. L'agent devra le changer à la première connexion.</p>
+                </div>
+            `;
+        }
+
+
         const statusToggle = $('#agentStatus', this.form) as HTMLInputElement;
         statusToggle.checked = !this.editingAgent || this.editingAgent.status === 'active';
         this.updateStatusLabel(statusToggle.checked);
@@ -116,42 +143,59 @@ export class PartnerEditAgentModal extends BaseModal {
 
             try {
                 const formData = new FormData(this.form);
+                const statusToggle = $('#agentStatus', this.form) as HTMLInputElement;
+
+                const newPassword = formData.get('password') as string;
+                const confirmPassword = formData.get('passwordConfirm') as string;
+
+                if (this.editingAgent && newPassword && newPassword !== confirmPassword) {
+                    document.body.dispatchEvent(new CustomEvent('showToast', {
+                        detail: { message: "Les mots de passe ne correspondent pas.", type: 'error' }
+                    }));
+                    submitButton.disabled = false;
+                    submitButton.innerHTML = originalButtonHtml;
+                    return;
+                }
+
                 const agentData: Partial<User> = {
                     id: this.editingAgent?.id,
                     name: formData.get('name') as string,
                     email: formData.get('email') as string,
                     phone: formData.get('phone') as string,
                     status: statusToggle.checked ? 'active' : 'suspended',
-                    role: 'agent', // Required field for new agents
-                    partnerId: this.partnerId,
-                    agencyId: this.agencyId // Set agency for new agents
                 };
-
-                const api = ApiService.getInstance();
-
-                if (this.editingAgent) {
-                    // Modification d'un agent existant - pas de mise à jour de mot de passe
-                    await api.updateAgent(agentData);
-                } else {
-                    // Création d'un nouvel agent - informer que le mot de passe doit être défini par l'administrateur
-                    document.body.dispatchEvent(new CustomEvent('showToast', {
-                        detail: {
-                            message: "Agent créé avec succès. Le mot de passe doit être défini par l'administrateur.",
-                            type: 'info'
-                        }
-                    }));
-                    await api.updateAgent(agentData); // Utiliser updateAgent au lieu de createUser
+                
+                if (!this.editingAgent) {
+                    agentData.role = 'agent';
+                    agentData.partnerId = this.partnerId;
+                    agentData.agencyId = this.agencyId;
+                }
+                
+                if (this.editingAgent && newPassword) {
+                    agentData.password = newPassword;
                 }
 
+                const api = ApiService.getInstance();
+                await api.updateAgent(agentData);
+
+                let toastMessage = this.editingAgent ? "Agent mis à jour avec succès." : "Agent créé avec succès.";
+                if (this.editingAgent && newPassword) {
+                    toastMessage = "Agent mis à jour et mot de passe changé avec succès.";
+                }
+
+                document.body.dispatchEvent(new CustomEvent('showToast', { detail: { message: toastMessage, type: 'success' } }));
                 document.body.dispatchEvent(new CustomEvent('agentUpdated', { bubbles: true, composed: true }));
                 this.hide();
 
             } catch (error) {
+                const errorMessage = (error instanceof Error) ? error.message : "Une erreur s'est produite lors de la sauvegarde.";
                 console.error("Failed to update agent:", error);
-                document.body.dispatchEvent(new CustomEvent('showToast', { detail: { message: "Une erreur s'est produite lors de la sauvegarde.", type: 'error' } }));
+                document.body.dispatchEvent(new CustomEvent('showToast', { detail: { message: errorMessage, type: 'error' } }));
             } finally {
-                submitButton.disabled = false;
-                submitButton.innerHTML = originalButtonHtml;
+                if (submitButton.disabled) {
+                    submitButton.disabled = false;
+                    submitButton.innerHTML = originalButtonHtml;
+                }
             }
         });
     }

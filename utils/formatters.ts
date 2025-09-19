@@ -36,3 +36,28 @@ export function formatTransactionStatus(transaction: Transaction, userMap: Map<s
     }
     return transaction.statut;
 }
+
+export function formatRelativeTime(dateString?: string): string {
+    if (!dateString) return 'un instant';
+    try {
+        const date = new Date(dateString);
+        const now = new Date();
+        const seconds = Math.round((now.getTime() - date.getTime()) / 1000);
+
+        if (seconds < 2) return `à l'instant`;
+        if (seconds < 60) return `il y a ${seconds} secondes`;
+        
+        const minutes = Math.round(seconds / 60);
+        if (minutes < 60) return `il y a ${minutes} minute${minutes > 1 ? 's' : ''}`;
+        
+        const hours = Math.round(minutes / 60);
+        if (hours < 24) return `il y a ${hours} heure${hours > 1 ? 's' : ''}`;
+
+        const days = Math.round(hours / 24);
+        if (days < 7) return `il y a ${days} jour${days > 1 ? 's' : ''}`;
+
+        return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+    } catch (e) {
+        return dateString;
+    }
+}

@@ -187,7 +187,7 @@ export class AgentRequestRechargeModal extends BaseModal {
                 document.body.dispatchEvent(new CustomEvent('showToast', { detail: { message: "Votre demande de recharge a été soumise avec succès !", type: 'success' } }));
                 this.hide();
             } catch (error) {
-                console.error("Failed to create recharge request:", error);
+                console.error("Failed to create recharge request:", (error as Error).message || error);
                 document.body.dispatchEvent(new CustomEvent('showToast', { detail: { message: "Une erreur est survenue lors de la soumission de votre demande.", type: 'error' } }));
             } finally {
                 submitButton.disabled = false;

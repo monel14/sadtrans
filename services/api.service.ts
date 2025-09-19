@@ -4,95 +4,17 @@
  */
 import { 
     User, Partner, OperationType, Transaction, AgentRechargeRequest, 
-    RechargePaymentMethod, Card, Order, CardType, CommissionProfile, Contract, Agency, Notification 
+    RechargePaymentMethod, Card, Order, CardType, CommissionProfile, Contract, Agency, Notification, 
+    // FIX: Import 'CommissionConfig' to resolve type error.
+    CommissionConfig 
 } from '../models';
-
-// --- MOCK DATA ---
-// Data moved from the missing 'mock-data.ts' file to make this service self-contained.
-
-let mockAgencies: Agency[] = [
-    { id: 'agency_rotary', name: 'Agence Rotary', partnerId: 'partner_rotary', solde_principal: 84638, solde_revenus: 12500, status: 'active', createdAt: '2023-01-01T10:00:00Z', updatedAt: '2023-01-01T10:00:00Z' },
-    { id: 'agency_yombo', name: 'Agence Yombo', partnerId: 'partner_yombo', solde_principal: 150000, solde_revenus: 25000, status: 'active', createdAt: '2023-01-02T11:00:00Z', updatedAt: '2023-01-02T11:00:00Z' },
-];
-
-let mockUsers: User[] = [
-    // Admins
-    { id: 'usr_admin', name: 'Adam Admin', firstName: 'Adam', lastName: 'Admin', email: 'admin.adam@example.com', role: 'admin_general', avatarSeed: 'adam', status: 'active' },
-    { id: 'usr_subadmin', name: 'Sam SubAdmin', firstName: 'Sam', lastName: 'SubAdmin', email: 'subadmin.sam@example.com', role: 'sous_admin', avatarSeed: 'sam', status: 'active' },
-    { id: 'usr_dev', name: 'Dev D.', firstName: 'Dev', lastName: 'D.', email: 'dev@example.com', role: 'developer', avatarSeed: 'dev', status: 'active' },
-
-    // Partners
-    { id: 'usr_partner_rotary', name: 'Jean Dupont', firstName: 'Jean', lastName: 'Dupont', email: 'partner.patrice@example.com', role: 'partner', avatarSeed: 'patrice', status: 'active', partnerId: 'partner_rotary', agencyId: 'agency_rotary', agencyName: 'Rotary', contactPerson: { name: 'Jean Dupont', phone: '+221771234567' } },
-    { id: 'usr_partner_yombo', name: 'Awa Gueye', firstName: 'Awa', lastName: 'Gueye', email: 'partner.awa@example.com', role: 'partner', avatarSeed: 'awa', status: 'active', partnerId: 'partner_yombo', agencyId: 'agency_yombo', agencyName: 'Yombo Finance', contactPerson: { name: 'Awa Gueye', phone: '+221777654321' } },
-
-    // Agents
-    { id: 'usr_agent_alice', name: 'Alice Agent', firstName: 'Alice', lastName: 'Agent', email: 'agent.alice@example.com', role: 'agent', avatarSeed: 'alice', status: 'active', partnerId: 'partner_rotary', agencyId: 'agency_rotary', phone: '+221772345678' },
-    { id: 'usr_agent_bob', name: 'Bob Fall', firstName: 'Bob', lastName: 'Fall', email: 'agent.bob@example.com', role: 'agent', avatarSeed: 'bob', status: 'suspended', partnerId: 'partner_rotary', agencyId: 'agency_rotary', phone: '+221773456789' },
-    { id: 'usr_agent_carla', name: 'Carla Ndiaye', firstName: 'Carla', lastName: 'Ndiaye', email: 'agent.carla@example.com', role: 'agent', avatarSeed: 'carla', status: 'active', partnerId: 'partner_yombo', agencyId: 'agency_yombo', phone: '+221774567890' },
-];
-
-let mockPartners: Partner[] = [
-    { id: 'partner_rotary', name: 'Rotary', partnerManagerId: 'usr_partner_rotary', agencyName: 'Rotary Finance', contactPerson: { name: 'Jean Dupont', phone: '+221771234567' }, idCardImageUrl: 'https://placehold.co/600x400/cccccc/969696?text=ID+Card', ifu: '123456789', rccm: 'SN.DKR.2023.A.123', address: '123 Rue de Dakar' },
-    { id: 'partner_yombo', name: 'Yombo', partnerManagerId: 'usr_partner_yombo', agencyName: 'Yombo Finance', contactPerson: { name: 'Awa Gueye', phone: '+221777654321' }, idCardImageUrl: null, ifu: '987654321', rccm: 'SN.DKR.2023.B.456', address: '456 Avenue de Thies' },
-];
-
-let mockCommissionProfiles: CommissionProfile[] = [
-    {
-        id: 'cp_default', name: 'Grille par Défaut', partageSociete: 40,
-        tiers: [
-            { from: 1000, to: 5000, type: 'fixed', value: 300 },
-            { from: 5001, to: 100000, type: 'fixed', value: 500 },
-            { from: 100001, to: 999999999, type: 'percentage', value: 1 },
-        ]
-    },
-];
-
-let mockContracts: Contract[] = [
-    { id: 'ctr_rotary_2023', name: 'Contrat Standard Rotary 2023', partnerId: 'partner_rotary', baseCommissionProfileId: 'cp_default', status: 'active', startDate: '2023-01-01T00:00:00Z', endDate: null, exceptions: [] },
-    { id: 'ctr_yombo_2023', name: 'Contrat Standard Yombo 2023', partnerId: 'partner_yombo', baseCommissionProfileId: 'cp_default', status: 'active', startDate: '2023-01-01T00:00:00Z', endDate: null, exceptions: [] },
-];
-
-let mockOperationTypes: OperationType[] = [
-    { id: 'op_reabo_canal', name: 'Réabonnement Canal+', description: 'Renouveler un abonnement existant.', impactsBalance: true, status: 'active', category: 'Gestion des décodeurs (Canal +)', feeApplication: 'inclusive', fields: [], commissionConfig: { type: 'tiers', partageSociete: 40 } },
-    { id: 'op_abo_decodeur_canal', name: 'Abonnement CANAL+', description: 'Nouvel abonnement sur décodeur.', impactsBalance: true, status: 'active', category: 'Gestion des décodeurs (Canal +)', feeApplication: 'inclusive', fields: [], commissionConfig: { type: 'tiers', partageSociete: 40 } },
-];
-
-let mockTransactions: Transaction[] = [
-    { id: 'TRN001', date: '2025-09-18T10:30:00Z', agentId: 'usr_agent_alice', opTypeId: 'op_reabo_canal', data: { num_decodeur_canal: '123456789', formule: 'Evasion+' }, montant_principal: 8000, frais: 500, montant_total: 8500, statut: 'En attente de validation', preuveUrl: null, commission_societe: 200, commission_partenaire: 300, validateurId: null, motif_rejet: null, assignedTo: null },
-    { id: 'TRN002', date: '2025-09-18T09:00:00Z', agentId: 'usr_agent_alice', opTypeId: 'op_abo_decodeur_canal', data: { num_decodeur_canal: '987654321', formule: 'Tout Canal' }, montant_principal: 7000, frais: 500, montant_total: 7500, statut: 'Validé', preuveUrl: 'https://placehold.co/600x400/a7f3d0/047857?text=Preuve+TRN002', commission_societe: 200, commission_partenaire: 300, validateurId: 'usr_admin', motif_rejet: null, assignedTo: 'usr_admin' },
-];
-
-let mockAgentRechargeRequests: AgentRechargeRequest[] = [
-    { id: 'ARR001', date: '2023-09-17T14:00:00Z', agentId: 'usr_agent_alice', montant: 50000, methodId: 'rpm_wave', statut: 'Approuvée', notes: 'TXN12345' },
-    { id: 'ARR002', date: '2023-09-18T11:00:00Z', agentId: 'usr_agent_bob', montant: 30000, methodId: 'rpm_orange_money', statut: 'En attente', notes: 'OM-98765' },
-];
-
-let mockRechargePaymentMethods: RechargePaymentMethod[] = [
-    { id: 'rpm_wave', name: 'Dépôt Wave', feeType: 'percentage', feeValue: 1, status: 'active' },
-    { id: 'rpm_orange_money', name: 'Dépôt Orange Money', feeType: 'fixed', feeValue: 100, status: 'active' },
-    { id: 'rpm_cash', name: 'Dépôt Espèces Agence', feeType: 'none', feeValue: 0, status: 'active' },
-];
-
-let mockCardTypes: CardType[] = [ { id: 'ct_visa_classic', name: 'VISA Classic', status: 'active' } ];
-let mockCards: Card[] = [];
-let mockOrders: Order[] = [];
-let mockNotifications: Notification[] = [];
-// FIX: Add mock data for audit logs.
-let mockAuditLogs: any[] = [
-    { id: 'log1', user_id: 'usr_admin', action: 'VALIDATE_TRANSACTION', entity_id: 'TRN002', created_at: '2025-09-18T09:00:10Z', details: { validatorId: 'usr_admin' } },
-    { id: 'log2', user_id: 'usr_subadmin', action: 'ASSIGN_TRANSACTION', entity_id: 'TRN001', created_at: '2025-09-18T10:30:05Z', details: { assignedTo: 'usr_subadmin' } },
-    { id: 'log3', user_id: 'usr_admin', action: 'CREATE_USER', entity_id: 'usr_agent_carla', created_at: '2025-09-17T11:00:00Z', details: { role: 'agent' } },
-    { id: 'log4', user_id: 'usr_partner_rotary', action: 'UPDATE_USER', entity_id: 'usr_agent_bob', created_at: '2025-09-16T15:20:00Z', details: { status: 'suspended' } },
-    { id: 'log5', user_id: 'usr_admin', action: 'APPROVE_RECHARGE', entity_id: 'ARR001', created_at: '2023-09-17T14:05:00Z', details: {} },
-    { id: 'log6', user_id: 'usr_dev', action: 'UPDATE_OPERATION_TYPE', entity_id: 'op_reabo_canal', created_at: '2023-09-15T10:00:00Z', details: { changed: ['description'] } },
-    { id: 'log7', user_id: 'usr_agent_alice', action: 'LOGIN_SUCCESS', entity_id: null, created_at: '2025-09-18T10:25:00Z', details: { ip: '127.0.0.1' } },
-].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+import { supabase } from './supabase.service';
+import { DataService } from './data.service';
 
 
 /**
- * A singleton service that simulates a backend API.
- * It provides methods to fetch and manipulate data, returning mock data for demonstration purposes.
- * In a real application, this service would make HTTP requests to a backend server (e.g., using fetch or a library like Axios).
+ * A singleton service that interacts with the Supabase backend.
+ * It provides methods to fetch and manipulate data, replacing the previous mock implementation.
  */
 export class ApiService {
     private static instance: ApiService;
@@ -106,380 +28,647 @@ export class ApiService {
         return ApiService.instance;
     }
 
-    private async simulateDelay<T>(data: T): Promise<T> {
-        return new Promise(resolve => setTimeout(() => resolve(JSON.parse(JSON.stringify(data))), 150));
+    // --- Mappers ---
+    // These helpers convert between the camelCase JS models and snake_case Supabase table columns.
+    
+    private mapSupabaseToUser = (item: any): User => item ? ({
+        id: item.id, name: item.name, firstName: item.first_name, lastName: item.last_name, email: item.email, role: item.role,
+        avatarSeed: item.avatar_seed, status: item.status, partnerId: item.partner_id, agencyId: item.agency_id,
+        commissions_mois_estimees: item.commissions_mois_estimees, commissions_dues: item.commissions_dues,
+        volume_partner_mois: item.volume_partner_mois, commissions_partner_mois: item.commissions_partner_mois,
+        agents_actifs: item.agents_actifs, phone: item.phone, contactPerson: item.contact_person, agencyName: item.agency_name,
+        idCardNumber: item.id_card_number, ifu: item.ifu, rccm: item.rccm, address: item.address,
+        idCardImageUrl: item.id_card_image_url, agency: item.agency ? this.mapSupabaseToAgency(item.agency) : undefined,
+    }) : {} as User;
+
+    private mapUserToSupabase = (user: Partial<User>): any => ({
+        id: user.id, name: user.name || `${user.firstName} ${user.lastName}`, first_name: user.firstName, last_name: user.lastName, email: user.email, role: user.role,
+        avatar_seed: user.avatarSeed, status: user.status, partner_id: user.partnerId, agency_id: user.agencyId, phone: user.phone,
+        agency_name: user.agencyName, contact_person: user.contactPerson, id_card_number: user.idCardNumber, ifu: user.ifu, rccm: user.rccm, address: user.address,
+        id_card_image_url: user.idCardImageUrl
+    });
+    
+    private mapSupabaseToAgency = (item: any): Agency => item ? ({
+        id: item.id, name: item.name, partnerId: item.partner_id, solde_principal: item.solde_principal, solde_revenus: item.solde_revenus,
+        address: item.address, phone: item.phone, status: item.status, createdAt: item.created_at, updatedAt: item.updated_at,
+    }) : {} as Agency;
+
+    // --- AUDIT LOGGING ---
+    private async getCurrentAppUserId(): Promise<string | null> {
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        if (!authUser?.email) return null;
+        const { data, error } = await supabase.from('users').select('id').eq('email', authUser.email).single();
+        return error ? null : data.id;
     }
 
+    private async logAction(action: string, details: { entity_type?: string, entity_id?: string, [key: string]: any }) {
+        const userId = await this.getCurrentAppUserId();
+        const { error } = await supabase.from('audit_logs').insert({
+            user_id: userId, action, entity_type: details.entity_type, entity_id: details.entity_id, details
+        });
+        if (error) console.error("Failed to log action:", error);
+    }
+    
     // --- DATA FETCHING ---
 
     public async getUsers(): Promise<User[]> {
-        return this.simulateDelay(mockUsers);
+        const { data, error } = await supabase.from('users').select('*, agency:agencies(*)');
+        if (error) { console.error('Error fetching users:', error); throw error; }
+        return (data || []).map(this.mapSupabaseToUser);
     }
     
     public async getUserWithAgency(userId: string): Promise<User | null> {
-        const user = mockUsers.find(u => u.id === userId);
-        if (user && user.agencyId) {
-            const agency = mockAgencies.find(a => a.id === user.agencyId);
-            (user as any).agency = agency;
-        }
-        return this.simulateDelay(user || null);
+        const { data, error } = await supabase.from('users').select('*, agency:agencies(*)').eq('id', userId).single();
+        if (error) { console.error(`Error fetching user ${userId}:`, error); return null; }
+        return this.mapSupabaseToUser(data);
     }
 
     public async getPartners(): Promise<Partner[]> {
-        return this.simulateDelay(mockPartners);
+        const { data, error } = await supabase.from('partners').select('*');
+        if (error) { console.error('Error fetching partners:', error); throw error; }
+        return (data || []).map(item => ({...item, partnerManagerId: item.partner_manager_id, contactPerson: item.contact_person, idCardImageUrl: item.id_card_image_url, agencyName: item.agency_name}));
     }
     
     public async getAllOperationTypes(): Promise<OperationType[]> {
-        return this.simulateDelay(mockOperationTypes);
+        const { data, error } = await supabase.from('operation_types').select('*');
+        if (error) { console.error('Error fetching operation types:', error); throw error; }
+        return (data || []).map(item => ({ ...item, impactsBalance: item.impacts_balance, feeApplication: item.fee_application, commissionConfig: item.commission_config }));
     }
     
     public async getTransactions(filters: any = {}): Promise<Transaction[]> {
-        return this.simulateDelay(mockTransactions);
+        let query = supabase.from('transactions').select('*');
+        if(filters.agentId) query = query.eq('agent_id', filters.agentId);
+        const { data, error } = await query;
+        if (error) { console.error('Error fetching transactions:', error); throw error; }
+        return (data || []).map(item => ({
+            ...item, date: item.created_at, agentId: item.agent_id, opTypeId: item.op_type_id,
+            montant_principal: item.montant_principal, montant_total: item.montant_total, preuveUrl: item.preuve_url,
+            commission_societe: item.commission_societe, commission_partenaire: item.commission_partenaire,
+            validateurId: item.validateur_id, motif_rejet: item.motif_rejet, assignedTo: item.assigned_to
+        }));
     }
     
     public async getAgentRechargeRequests(): Promise<AgentRechargeRequest[]> {
-        return this.simulateDelay(mockAgentRechargeRequests);
+        const { data, error } = await supabase.from('agent_recharge_requests').select('*');
+        if (error) { console.error('Error fetching recharge requests:', error); throw error; }
+        return (data || []).map(item => ({...item, date: item.created_at, agentId: item.agent_id, methodId: item.method_id, processedBy: item.processed_by, processedAt: item.processed_at}));
     }
     
     public async getRechargePaymentMethods(filters: any = {}): Promise<RechargePaymentMethod[]> {
-         const allMethods = await this.simulateDelay(mockRechargePaymentMethods);
-        if (filters.status) {
-            return allMethods.filter(m => m.status === filters.status);
-        }
-        return allMethods;
+        let query = supabase.from('recharge_payment_methods').select('*');
+        if(filters.status) query = query.eq('status', filters.status);
+        const { data, error } = await query;
+        if (error) { console.error('Error fetching payment methods:', error); throw error; }
+        return (data || []).map(item => ({...item, feeType: item.fee_type, feeValue: item.fee_value}));
     }
     
     public async getOrders(): Promise<Order[]> {
-        return this.simulateDelay(mockOrders);
+        const { data, error } = await supabase.from('orders').select('*');
+        if (error) { console.error('Error fetching orders:', error); throw error; }
+        return (data || []).map(item => ({...item, partnerId: item.partner_id, deliveredBy: item.delivered_by, totalAmount: item.total_amount, totalCards: item.total_cards}));
     }
     
     public async getCards(): Promise<Card[]> {
-        return this.simulateDelay(mockCards);
+        const { data, error } = await supabase.from('cards').select('*');
+        if (error) { console.error('Error fetching cards:', error); throw error; }
+        return (data || []).map(item => ({...item, cardNumber: item.card_number, fullCardNumber: item.full_card_number, assignedPartnerId: item.assigned_partner_id, activationDate: item.activation_date, clientId: item.client_id, cardTypeId: item.card_type_id}));
     }
     
     public async getCardTypes(): Promise<CardType[]> {
-        return this.simulateDelay(mockCardTypes);
+        const { data, error } = await supabase.from('card_types').select('*');
+        if (error) { console.error('Error fetching card types:', error); throw error; }
+        return data || [];
     }
     
     public async getCommissionProfiles(): Promise<CommissionProfile[]> {
-        return this.simulateDelay(mockCommissionProfiles);
+        const { data, error } = await supabase.from('commission_profiles').select('*');
+        if (error) { console.error('Error fetching commission profiles:', error); throw error; }
+        return (data || []).map(item => ({...item, partageSociete: item.partage_societe}));
     }
     
     public async getContracts(): Promise<Contract[]> {
-        return this.simulateDelay(mockContracts);
+        const { data, error } = await supabase.from('contracts').select('*');
+        if (error) { console.error('Error fetching contracts:', error); throw error; }
+        return (data || []).map(item => ({...item, partnerId: item.partner_id, baseCommissionProfileId: item.base_commission_profile_id, startDate: item.start_date, endDate: item.end_date}));
     }
     
     public async getAgencies(): Promise<Agency[]> {
-        return this.simulateDelay(mockAgencies);
+        const { data, error } = await supabase.from('agencies').select('*');
+        if (error) { console.error('Error fetching agencies:', error); throw error; }
+        return (data || []).map(this.mapSupabaseToAgency);
     }
 
     public async getNotifications(userId: string): Promise<Notification[]> {
-        return this.simulateDelay(mockNotifications.filter(n => n.userId === userId || n.userId === 'all'));
+        const { data, error } = await supabase.from('notifications').select('*').or(`user_id.eq.${userId},user_id.eq.all`);
+        if (error) { console.error('Error fetching notifications:', error); return []; }
+        return (data || []).map((item): Notification => ({
+            id: item.id,
+            text: item.content || 'Notification sans contenu.',
+            time: item.created_at,
+            read: item.read || false,
+            icon: item.icon || 'fa-bell',
+            userId: item.user_id,
+            target: item.target,
+        }));
     }
 
-    // FIX: Add getAuditLogs method to provide audit log data.
     public async getAuditLogs(): Promise<any[]> {
-        return this.simulateDelay(mockAuditLogs);
+        const { data, error } = await supabase.from('audit_logs').select('*').order('created_at', { ascending: false }).limit(100);
+        if (error) { console.error('Error fetching audit logs:', error); return []; }
+        return data || [];
     }
 
     // --- DATA MUTATION ---
 
     public async updateUserStatus(userId: string, status: 'active' | 'suspended'): Promise<boolean> {
-        console.log(`API: Setting status for user ${userId} to ${status}`);
-        const user = mockUsers.find(u => u.id === userId);
-        if (user) {
-            user.status = status;
-        }
-        return this.simulateDelay(true);
+        const { error } = await supabase.from('users').update({ status }).eq('id', userId);
+        if (error) { console.error('Error updating user status:', error); return false; }
+        await this.logAction('UPDATE_USER_STATUS', { entity_id: userId, status });
+        return true;
     }
 
     public async assignTask(taskId: string, type: string, userId: string | null): Promise<boolean> {
-        console.log(`API: Assigning ${type} task ${taskId} to user ${userId}`);
-        const transaction = mockTransactions.find(t => t.id === taskId);
-        if (transaction) {
-            transaction.assignedTo = userId;
-            transaction.statut = userId ? `Assignée` : 'En attente de validation';
-        }
-        return this.simulateDelay(true);
+        const { error } = await supabase.from('transactions').update({ assigned_to: userId, statut: userId ? 'Assignée' : 'En attente de validation' }).eq('id', taskId);
+        if (error) { console.error('Error assigning task:', error); return false; }
+        await this.logAction('ASSIGN_TRANSACTION', { entity_id: taskId, assigned_to: userId });
+        return true;
     }
 
     public async validateTransaction(taskId: string, proofFile: File): Promise<boolean> {
-        console.log(`API: Validating transaction ${taskId} with file ${proofFile.name}`);
-        const transaction = mockTransactions.find(t => t.id === taskId);
-        if (transaction) {
-            transaction.statut = 'Validé';
-            transaction.validateurId = 'usr_admin'; 
-            transaction.preuveUrl = URL.createObjectURL(proofFile);
-        }
-        return this.simulateDelay(true);
+        const filePath = `proofs/${taskId}-${Date.now()}-${proofFile.name}`;
+        const { error: uploadError } = await supabase.storage.from('transaction-proofs').upload(filePath, proofFile);
+        if (uploadError) { console.error('Error uploading proof:', uploadError); return false; }
+        
+        const { data: { publicUrl } } = supabase.storage.from('transaction-proofs').getPublicUrl(filePath);
+        
+        const validateur_id = await this.getCurrentAppUserId();
+        const { error: updateError } = await supabase.from('transactions').update({ statut: 'Validé', preuve_url: publicUrl, validateur_id }).eq('id', taskId);
+        if (updateError) { console.error('Error validating transaction:', updateError); return false; }
+        await this.logAction('VALIDATE_TRANSACTION', { entity_id: taskId });
+        return true;
     }
 
     public async rejectTransaction(taskId: string, reason: string): Promise<boolean> {
-        console.log(`API: Rejecting transaction ${taskId} for reason: ${reason}`);
-        const transaction = mockTransactions.find(t => t.id === taskId);
-        if (transaction) {
-            transaction.statut = 'Rejeté';
-            transaction.validateurId = 'usr_admin';
-            transaction.motif_rejet = reason;
-        }
-        return this.simulateDelay(true);
+        const validateur_id = await this.getCurrentAppUserId();
+        const { error } = await supabase.from('transactions').update({ statut: 'Rejeté', motif_rejet: reason, validateur_id }).eq('id', taskId);
+        if (error) { console.error('Error rejecting transaction:', error); return false; }
+        await this.logAction('REJECT_TRANSACTION', { entity_id: taskId, reason });
+        return true;
     }
 
     public async updateAgentRechargeRequestStatus(requestId: string, status: 'Approuvée' | 'Rejetée', reason?: string): Promise<boolean> {
-        console.log(`API: Updating recharge request ${requestId} to ${status}`);
-        const request = mockAgentRechargeRequests.find(r => r.id === requestId);
-        if (request) {
-            request.statut = status;
-            if (status === 'Rejetée') {
-                request.notes = reason; // Overwrite notes with rejection reason
+        const processorId = await this.getCurrentAppUserId();
+        const { error } = await supabase.from('agent_recharge_requests').update({ statut: status, notes: reason, processed_by: processorId, processed_at: new Date().toISOString() }).eq('id', requestId);
+        if (error) { console.error('Error updating recharge request:', error); return false; }
+
+        if (status === 'Approuvée') {
+            await this.logAction('APPROVE_RECHARGE', { entity_id: requestId });
+            // This should be a database transaction/function, but for now:
+            const { data: req } = await supabase.from('agent_recharge_requests').select('agent_id, montant').eq('id', requestId).single();
+            const { data: agent } = await supabase.from('users').select('agency_id').eq('id', req.agent_id).single();
+            if (agent.agency_id) {
+                const { error: balanceError } = await supabase.rpc('adjust_agency_balance', {
+                    p_agency_id: agent.agency_id,
+                    p_amount: req.montant,
+                    p_adjustment_type: 'credit'
+                });
+                if(balanceError) { console.error("Balance adjustment failed:", balanceError); return false; }
             }
+        } else {
+            await this.logAction('REJECT_RECHARGE', { entity_id: requestId, reason });
         }
-        return this.simulateDelay(true);
+        return true;
     }
     
     public async getCompanyRevenueStats(): Promise<any> {
-        return this.simulateDelay({
-            totalRevenue: 1250340,
-            revenueByPartner: [{ name: 'Partenaire A', total: 650120 }, { name: 'Partenaire B', total: 450210 }, { name: 'Partenaire C', total: 150010 }],
-            revenueByCategory: { 'Cartes VISA': 500000, 'Ecobank Xpress': 400000, 'Canal+': 350340 },
-            revenueTrend: { '2023-08-01': 30000, '2023-08-02': 45000, '2023-08-03': 42000 },
-            latestCommissions: mockTransactions.slice(0, 5)
-        });
+        // This is a simplified client-side aggregation. For performance, this should be a DB function (RPC).
+        const { data: transactions, error } = await supabase.from('transactions').select('commission_societe, agent_id, op_type_id, date').eq('statut', 'Validé');
+        if (error) throw error;
+
+        const dataService = DataService.getInstance();
+        const [userMap, partnerMap, opTypeMap] = await Promise.all([dataService.getUserMap(), dataService.getPartnerMap(), dataService.getOpTypeMap()]);
+        
+        const totalRevenue = transactions.reduce((sum, t) => sum + t.commission_societe, 0);
+        
+        const revenueByPartner = transactions.reduce((acc, t) => {
+            const agent = userMap.get(t.agent_id);
+            if (agent?.partnerId) {
+                const partner = partnerMap.get(agent.partnerId);
+                if (partner) {
+                    acc[partner.name] = (acc[partner.name] || 0) + t.commission_societe;
+                }
+            }
+            return acc;
+        }, {} as Record<string, number>);
+
+        const revenueByCategory = transactions.reduce((acc, t) => {
+            const opType = opTypeMap.get(t.op_type_id);
+            if(opType?.category) {
+                acc[opType.category] = (acc[opType.category] || 0) + t.commission_societe;
+            }
+            return acc;
+        }, {} as Record<string, number>);
+        
+        return {
+            totalRevenue,
+            revenueByPartner: Object.entries(revenueByPartner).map(([name, total]) => ({name, total})).sort((a,b) => Number(b.total) - Number(a.total)),
+            revenueByCategory,
+            revenueTrend: {}, // Complex to calculate on client, returning empty.
+            latestCommissions: [] // This would require another query.
+        };
     }
 
     public async deleteOperationType(opId: string): Promise<boolean> {
-        console.log(`API: Deleting operation type ${opId}`);
-        const index = mockOperationTypes.findIndex(op => op.id === opId);
-        if (index > -1) {
-            mockOperationTypes.splice(index, 1);
-        }
-        return this.simulateDelay(true);
+        const { error } = await supabase.from('operation_types').delete().eq('id', opId);
+        if (error) { console.error('Error deleting operation type:', error); return false; }
+        await this.logAction('DELETE_OPERATION_TYPE', { entity_id: opId });
+        return true;
     }
 
     public async updateOperationType(opType: OperationType): Promise<OperationType> {
-        if (opType.id) {
-            console.log(`API: Updating operation type ${opType.id}`);
-            const index = mockOperationTypes.findIndex(op => op.id === opType.id);
-            if (index > -1) {
-                mockOperationTypes[index] = opType;
-                return this.simulateDelay(opType);
-            }
-        }
-        console.log(`API: Creating new operation type`);
-        opType.id = `op_${Date.now()}`;
-        mockOperationTypes.push(opType);
-        return this.simulateDelay(opType);
+        const supabaseOpType = { ...opType, impacts_balance: opType.impactsBalance, fee_application: opType.feeApplication, commission_config: opType.commissionConfig };
+        const { data, error } = await supabase.from('operation_types').upsert(supabaseOpType).select().single();
+        if (error) { console.error('Error updating operation type:', error); throw error; }
+        await this.logAction('UPDATE_OPERATION_TYPE', { entity_id: data.id });
+        const dataService = DataService.getInstance();
+        dataService.invalidateOperationTypesCache();
+        const opTypeMap = await dataService.getOpTypeMap();
+        return opTypeMap.get(data.id)!;
     }
 
     public async createTransaction(userId: string, opTypeId: string, data: any): Promise<Transaction> {
-        console.log(`API: Creating transaction for user ${userId}`);
-        const newTx: Transaction = {
-            id: `TRN_${Date.now()}`,
-            date: new Date().toISOString(),
-            agentId: userId,
-            opTypeId: opTypeId,
-            data: data,
-            montant_principal: parseFloat(data.montant_principal) || 0,
-            frais: 500, // mock
-            montant_total: (parseFloat(data.montant_principal) || 0) + 500,
-            statut: 'En attente de validation',
-            preuveUrl: null,
-            commission_societe: 100,
-            commission_partenaire: 400,
-            validateurId: null,
-            motif_rejet: null,
-            assignedTo: null
+        // This is a simplified version. A real implementation should use an Edge Function for security and atomicity.
+        const opType = (await DataService.getInstance().getOpTypeMap()).get(opTypeId);
+        if (!opType) throw new Error("Operation Type not found");
+        const amount = parseFloat(data.montant_principal) || 0;
+        const { totalFee, partnerShare } = await this.getFeePreview(userId, opTypeId, amount);
+        const companyShare = totalFee - partnerShare;
+
+        const newTx = {
+            agent_id: userId, op_type_id: opTypeId, data: data,
+            montant_principal: amount, frais: totalFee, montant_total: amount + (opType.feeApplication === 'additive' ? totalFee : 0),
+            statut: 'En attente de validation', commission_societe: companyShare, commission_partenaire: partnerShare
         };
-        mockTransactions.unshift(newTx);
-        return this.simulateDelay(newTx);
+        
+        const { data: createdTx, error } = await supabase.from('transactions').insert(newTx).select().single();
+        if (error) {
+            console.error('Error creating transaction:', (error as Error).message || error);
+            throw error;
+        }
+        
+        DataService.getInstance().invalidateTransactionsCache();
+
+        // Map the returned snake_case object to the camelCase Transaction model
+        return {
+            id: createdTx.id,
+            date: createdTx.created_at,
+            agentId: createdTx.agent_id,
+            opTypeId: createdTx.op_type_id,
+            data: createdTx.data,
+            montant_principal: createdTx.montant_principal,
+            frais: createdTx.frais,
+            montant_total: createdTx.montant_total,
+            statut: createdTx.statut,
+            preuveUrl: createdTx.preuve_url,
+            commission_societe: createdTx.commission_societe,
+            commission_partenaire: createdTx.commission_partenaire,
+            validateurId: createdTx.validateur_id,
+            motif_rejet: createdTx.motif_rejet,
+            assignedTo: createdTx.assigned_to,
+        };
     }
     
     public async createAgentRechargeRequest(agentId: string, montant: number, methodId: string, notes: string): Promise<AgentRechargeRequest> {
-         const newReq: AgentRechargeRequest = {
-            id: `ARR_${Date.now()}`,
-            date: new Date().toISOString(),
-            agentId: agentId,
-            montant: montant,
-            methodId: methodId,
-            statut: 'En attente',
-            notes: notes
+        const { data, error } = await supabase
+            .from('agent_recharge_requests')
+            .insert({ 
+                agent_id: agentId, 
+                montant, 
+                method_id: methodId, 
+                notes,
+                statut: 'En attente'
+            })
+            .select()
+            .single();
+
+        if (error) { 
+            console.error('Error creating recharge request:', (error as Error).message || error); 
+            throw error; 
+        }
+        
+        DataService.getInstance().invalidateAgentRechargeRequestsCache();
+        
+        // Map supabase response (snake_case) to our model (camelCase)
+        const mappedData = {
+            ...data, 
+            date: data.created_at, 
+            agentId: data.agent_id, 
+            methodId: data.method_id, 
+            processedBy: data.processed_by, 
+            processedAt: data.processed_at
         };
-        mockAgentRechargeRequests.unshift(newReq);
-        return this.simulateDelay(newReq);
+        return mappedData as AgentRechargeRequest;
     }
 
     public async updateCurrentUserProfile(data: Partial<User>): Promise<User | null> {
-        const user = mockUsers.find(u => u.id === data.id);
-        if (user) {
-            Object.assign(user, data);
-            if(data.firstName && data.lastName) {
-                user.name = `${data.firstName} ${data.lastName}`;
+        const { password, ...profileData } = data;
+    
+        if (password) {
+            const { error: authError } = await supabase.auth.updateUser({ password });
+            if (authError) {
+                console.error('Error updating password:', authError);
+                document.body.dispatchEvent(new CustomEvent('showToast', {
+                    detail: { message: `Erreur mot de passe: ${authError.message}`, type: 'error' }
+                }));
+                return null;
             }
         }
-        return this.simulateDelay(user || null);
-    }
-
-    public async updateOrderStatus(orderId: string, status: 'livré' | 'en attente'): Promise<boolean> {
-        const order = mockOrders.find(o => o.id === orderId);
-        if(order) order.status = status;
-        return this.simulateDelay(true);
-    }
-
-    public async updateRechargePaymentMethod(method: RechargePaymentMethod): Promise<RechargePaymentMethod> {
-        if(method.id) {
-            const index = mockRechargePaymentMethods.findIndex(m => m.id === method.id);
-            if (index > -1) mockRechargePaymentMethods[index] = method;
-        } else {
-            method.id = `rpm_${Date.now()}`;
-            mockRechargePaymentMethods.push(method);
-        }
-        return this.simulateDelay(method);
-    }
     
-    public async updateCardType(cardType: CardType): Promise<CardType> {
-         if(cardType.id) {
-            const index = mockCardTypes.findIndex(m => m.id === cardType.id);
-            if (index > -1) mockCardTypes[index] = cardType;
-        } else {
-            cardType.id = `ct_${Date.now()}`;
-            mockCardTypes.push(cardType);
+        const supabaseUser = this.mapUserToSupabase(profileData);
+        delete supabaseUser.role;
+        delete supabaseUser.email;
+        
+        const { data: updatedUserData, error: profileError } = await supabase
+            .from('users')
+            .update(supabaseUser)
+            .eq('id', data.id)
+            .select()
+            .single();
+        
+        if (profileError) {
+            console.error('Error updating user profile:', profileError);
+            document.body.dispatchEvent(new CustomEvent('showToast', {
+                detail: { message: `Erreur profil: ${profileError.message}`, type: 'error' }
+            }));
+            return null;
         }
-        return this.simulateDelay(cardType);
-    }
-
-    public async createOrder(orderData: { partnerId: string, items: any[] }): Promise<Order> {
-        const newOrder: Order = {
-            id: `BC_${Date.now()}`,
-            partnerId: orderData.partnerId,
-            date: new Date().toISOString(),
-            status: 'en attente',
-            deliveredBy: 'N/A',
-            items: orderData.items,
-            totalAmount: orderData.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0),
-            totalCards: orderData.items.reduce((sum, item) => sum + item.quantity, 0)
-        }
-        mockOrders.unshift(newOrder);
-        return this.simulateDelay(newOrder);
-    }
-
-    public async updateCommissionProfile(profile: CommissionProfile): Promise<CommissionProfile> {
-        if(profile.id) {
-            const index = mockCommissionProfiles.findIndex(p => p.id === profile.id);
-            if (index > -1) mockCommissionProfiles[index] = profile;
-        } else {
-            profile.id = `cp_${Date.now()}`;
-            mockCommissionProfiles.push(profile);
-        }
-        return this.simulateDelay(profile);
-    }
     
-    public async getFeePreview(userId: string, opTypeId: string, amount: number): Promise<{ totalFee: number; partnerShare: number; companyShare: number }> {
-        return this.simulateDelay({ totalFee: 500, partnerShare: 400, companyShare: 100 });
-    }
-
-    public async updateContract(contract: Contract): Promise<Contract> {
-        if(contract.id) {
-            const index = mockContracts.findIndex(c => c.id === contract.id);
-            if (index > -1) mockContracts[index] = contract;
-        } else {
-            contract.id = `ctr_${Date.now()}`;
-            mockContracts.push(contract);
-        }
-        return this.simulateDelay(contract);
-    }
-
-    public async updatePartnerDetails(partnerData: Partial<Partner>): Promise<Partner> {
-        const partner = mockPartners.find(p => p.id === partnerData.id);
-        if(partner) Object.assign(partner, partnerData);
-        return this.simulateDelay(partner!);
+        await this.logAction('UPDATE_OWN_PROFILE', { entity_id: data.id });
+        document.body.dispatchEvent(new CustomEvent('showToast', {
+            detail: { message: 'Profil mis à jour avec succès.', type: 'success' }
+        }));
+    
+        DataService.getInstance().invalidateUsersCache();
+        
+        return this.mapSupabaseToUser(updatedUserData);
     }
     
     public async transferRevenueToMainBalance(userId: string): Promise<User | null> {
-        const user = mockUsers.find(u => u.id === userId);
-        if(user && user.agencyId) {
-            const agency = mockAgencies.find(a => a.id === user.agencyId);
-            if (agency) {
-                agency.solde_principal += agency.solde_revenus;
-                agency.solde_revenus = 0;
-            }
+        const user = await DataService.getInstance().getUserById(userId);
+        if (!user?.agencyId) {
+            console.error('User or agency not found for revenue transfer.');
+            document.body.dispatchEvent(new CustomEvent('showToast', {
+                detail: { message: 'Agence non trouvée pour ce partenaire.', type: 'error' }
+            }));
+            return null;
         }
-        return this.simulateDelay(user || null);
+        
+        const agencyId = user.agencyId;
+
+        // --- Client-Side Transfer Logic ---
+        // NOTE: This logic should ideally be an atomic transaction in a database function (RPC) or an Edge Function.
+        // It is implemented here on the client-side as a workaround for the missing 'transfer_revenue_to_main' RPC.
+        
+        // 1. Fetch the agency record to get current balances
+        const { data: agency, error: fetchError } = await supabase
+            .from('agencies')
+            .select('solde_principal, solde_revenus')
+            .eq('id', agencyId)
+            .single();
+
+        if (fetchError || !agency) {
+            console.error('Error fetching agency for transfer:', fetchError);
+            document.body.dispatchEvent(new CustomEvent('showToast', {
+                detail: { message: `Impossible de récupérer les informations de l'agence.`, type: 'error' }
+            }));
+            return null;
+        }
+        
+        const amountToTransfer = agency.solde_revenus;
+
+        if (amountToTransfer <= 0) {
+            document.body.dispatchEvent(new CustomEvent('showToast', {
+                detail: { message: 'Aucun revenu à transférer.', type: 'info' }
+            }));
+            return this.getUserWithAgency(userId);
+        }
+
+        // 2. Perform the update
+        const { error: updateError } = await supabase
+            .from('agencies')
+            .update({ 
+                solde_principal: agency.solde_principal + amountToTransfer, 
+                solde_revenus: 0 
+            })
+            .eq('id', agencyId);
+
+        if (updateError) {
+            console.error('Error in client-side balance transfer:', updateError);
+            document.body.dispatchEvent(new CustomEvent('showToast', {
+                detail: { message: `Le transfert a échoué: ${updateError.message}`, type: 'error' }
+            }));
+            return null;
+        }
+        // --- End of Client-Side Logic ---
+        
+        await this.logAction('TRANSFER_REVENUE', { entity_id: user.agencyId, user_id: userId, amount: amountToTransfer });
+    
+        DataService.getInstance().invalidateUsersCache();
+        DataService.getInstance().invalidateAgenciesCache();
+        
+        const updatedUser = await this.getUserWithAgency(userId);
+        
+        if (updatedUser) {
+            document.body.dispatchEvent(new CustomEvent('showToast', {
+                detail: { message: 'Revenus transférés avec succès.', type: 'success' }
+            }));
+            return updatedUser;
+        }
+        
+        return null;
     }
 
-    public async adjustAgencyBalance(agencyId: string, type: 'credit' | 'debit', amount: number, reason: string): Promise<boolean> {
-        const agency = mockAgencies.find(a => a.id === agencyId);
-        if(agency) {
-            if(type === 'credit') agency.solde_principal += amount;
-            else agency.solde_principal -= amount;
+    public async updateOrderStatus(orderId: string, status: 'livré' | 'en attente'): Promise<boolean> {
+        const { error } = await supabase.from('orders').update({ status }).eq('id', orderId);
+        if (error) { console.error('Error updating order status:', error); return false; }
+        await this.logAction('UPDATE_ORDER_STATUS', { entity_id: orderId, status });
+        return true;
+    }
+
+    public async updateRechargePaymentMethod(method: RechargePaymentMethod): Promise<RechargePaymentMethod> {
+        const { data, error } = await supabase.from('recharge_payment_methods').upsert({ ...method, fee_type: method.feeType, fee_value: method.feeValue }).select().single();
+        if (error) throw error;
+        return data as RechargePaymentMethod;
+    }
+    
+    public async updateCardType(cardType: CardType): Promise<CardType> {
+        const { data, error } = await supabase.from('card_types').upsert(cardType).select().single();
+        if (error) throw error;
+        return data as CardType;
+    }
+
+    public async createOrder(orderData: { partnerId: string, items: any[] }): Promise<Order> {
+        const orderToInsert = {
+            partner_id: orderData.partnerId, items: orderData.items,
+            total_amount: orderData.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0),
+            total_cards: orderData.items.reduce((sum, item) => sum + item.quantity, 0),
+            status: 'en attente'
+        };
+        const { data, error } = await supabase.from('orders').insert(orderToInsert).select().single();
+        if (error) throw error;
+        return data as Order;
+    }
+
+    public async updateCommissionProfile(profile: CommissionProfile): Promise<CommissionProfile> {
+        const { data, error } = await supabase.from('commission_profiles').upsert({ ...profile, partage_societe: profile.partageSociete }).select().single();
+        if (error) throw error;
+        return data as CommissionProfile;
+    }
+    
+    public async getFeePreview(userId: string, opTypeId: string, amount: number): Promise<{ totalFee: number; partnerShare: number; companyShare: number }> {
+        const dataService = DataService.getInstance();
+        try {
+            const [user, opType, activeContractsMap, commissionProfileMap] = await Promise.all([
+                dataService.getUserById(userId),
+                dataService.getOpTypeMap().then(m => m.get(opTypeId)),
+                dataService.getActiveContractsMap(),
+                dataService.getCommissionProfileMap()
+            ]);
+    
+            if (!user || !opType) throw new Error("User or Operation Type not found");
+    
+            let totalFee = 0;
+            let companySharePercent = 40;
+    
+            let relevantConfig: CommissionConfig | null = null;
+            let relevantProfile: CommissionProfile | undefined;
+            const contract = user.partnerId ? activeContractsMap.get(user.partnerId) : undefined;
+            
+            if (contract) {
+                const serviceException = contract.exceptions.find(ex => ex.targetType === 'service' && ex.targetId === opType.id);
+                if (serviceException) {
+                    relevantConfig = serviceException.commissionConfig;
+                } else {
+                    const categoryException = contract.exceptions.find(ex => ex.targetType === 'category' && ex.targetId === opType.category);
+                    if (categoryException) {
+                        relevantConfig = categoryException.commissionConfig;
+                    }
+                }
+                if (!relevantConfig && opType.commissionConfig.type !== 'none') {
+                     relevantConfig = opType.commissionConfig;
+                }
+                if (!relevantConfig && contract.baseCommissionProfileId) {
+                    relevantProfile = commissionProfileMap.get(contract.baseCommissionProfileId);
+                }
+            } else if (opType.commissionConfig.type !== 'none') {
+                 relevantConfig = opType.commissionConfig;
+            }
+            
+            if (relevantConfig) {
+                companySharePercent = relevantConfig.partageSociete ?? companySharePercent;
+                switch(relevantConfig.type) {
+                    case 'fixed': totalFee = relevantConfig.amount ?? 0; break;
+                    case 'percentage': totalFee = amount * (relevantConfig.rate ?? 0) / 100; break;
+                    case 'tiers':
+                         const tier = relevantConfig.tiers?.find(t => amount >= t.from && amount <= t.to);
+                         if (tier) totalFee = tier.type === 'fixed' ? tier.value : amount * tier.value / 100;
+                        break;
+                }
+            } else if (relevantProfile) {
+                companySharePercent = relevantProfile.partageSociete;
+                const tier = relevantProfile.tiers.find(t => amount >= t.from && amount <= t.to);
+                if (tier) totalFee = tier.type === 'fixed' ? tier.value : amount * tier.value / 100;
+            }
+    
+            totalFee = Math.round(totalFee);
+            const companyShare = Math.round(totalFee * (companySharePercent / 100));
+            const partnerShare = totalFee - companyShare;
+    
+            return { totalFee, partnerShare, companyShare };
+    
+        } catch (error) {
+            console.error("Error calculating fee preview:", error);
+            return { totalFee: 0, partnerShare: 0, companyShare: 0 };
         }
-        console.log(`API: Adjusting balance for agency ${agencyId} by ${type === 'credit' ? '+' : '-'}${amount}. Reason: ${reason}`);
-        return this.simulateDelay(true);
+    }
+
+    public async updateContract(contract: Contract): Promise<Contract> {
+        const { data, error } = await supabase.from('contracts').upsert({ ...contract, partner_id: contract.partnerId, base_commission_profile_id: contract.baseCommissionProfileId, start_date: contract.startDate, end_date: contract.endDate }).select().single();
+        if (error) throw error;
+        return data as Contract;
+    }
+
+    public async updatePartnerDetails(partnerData: Partial<Partner>): Promise<Partner> {
+        const supabasePartner = { ...partnerData, partner_manager_id: partnerData.partnerManagerId, contact_person: partnerData.contactPerson, id_card_image_url: partnerData.idCardImageUrl, agency_name: partnerData.agencyName };
+        const { data, error } = await supabase.from('partners').update(supabasePartner).eq('id', partnerData.id).select().single();
+        if (error) throw error;
+        return data as Partner;
+    }
+    
+    public async adjustAgencyBalance(agencyId: string, type: 'credit' | 'debit', amount: number, reason: string): Promise<boolean> {
+        const { error } = await supabase.rpc('adjust_agency_balance', { p_agency_id: agencyId, p_amount: amount, p_adjustment_type: type });
+        if (error) { console.error('Error adjusting balance:', error); return false; }
+        await this.logAction('ADJUST_AGENCY_BALANCE', { entity_id: agencyId, type, amount, reason });
+        return true;
     }
     
     public async adminUpdateUser(userData: Partial<User>): Promise<User> {
-         if(userData.id) {
-            const index = mockUsers.findIndex(u => u.id === userData.id);
-            if (index > -1) {
-                mockUsers[index] = { ...mockUsers[index], ...userData };
-                if (userData.firstName && userData.lastName) {
-                    mockUsers[index].name = `${userData.firstName} ${userData.lastName}`;
-                }
-                return this.simulateDelay(mockUsers[index]);
-            }
+        // NOTE: This implementation only handles updating existing users or creating users in the 'users' table.
+        // It does NOT create a corresponding Supabase Auth user, so newly created users cannot log in.
+        // A full implementation requires Admin privileges and `supabase.auth.admin.createUser`.
+        const { password, ...profileData } = userData;
+        
+        // This simulates a secure password reset flow. The actual implementation requires a backend function.
+        if (password && profileData.id) {
+            console.log(`Simulating password reset for user ${profileData.id}. In a real app, this would trigger a secure email flow.`);
+             document.body.dispatchEvent(new CustomEvent('showToast', {
+                detail: { message: `Lien de réinitialisation envoyé à l'utilisateur ${profileData.email}. (Simulation)`, type: 'info' }
+            }));
         }
-        const newUser: User = {
-            id: `usr_${Date.now()}`,
-            name: `${userData.firstName} ${userData.lastName}`,
-            firstName: userData.firstName!,
-            lastName: userData.lastName!,
-            email: userData.email!,
-            role: userData.role!,
-            avatarSeed: userData.email!,
-            status: 'active',
-            ...userData
-        };
-        mockUsers.push(newUser);
-        return this.simulateDelay(newUser);
+        
+        const supabaseUser = this.mapUserToSupabase(profileData);
+        const { data, error } = await supabase.from('users').upsert(supabaseUser).select().single();
+        if (error) { console.error('Error in adminUpdateUser:', error); throw error; }
+        
+        // Log action but don't log the password itself
+        await this.logAction(userData.id ? 'UPDATE_USER' : 'CREATE_USER', { entity_id: data.id, password_changed: !!password });
+        return this.mapSupabaseToUser(data);
+    }
+    
+    public async requestAgentPasswordReset(agent: User) {
+        // This is a simulation as client-side password reset is insecure.
+        // In a real app, this would call a backend function that generates a secure token and sends an email.
+        console.log(`Simulating password reset email for ${agent.email}`);
+        document.body.dispatchEvent(new CustomEvent('showToast', { 
+            detail: { 
+                message: `Un lien de réinitialisation a été envoyé à ${agent.email}. (Simulation)`, 
+                type: 'info' 
+            } 
+        }));
+        return Promise.resolve(true);
     }
 
     public async updateAgent(agentData: Partial<User>): Promise<User> {
-        // This is essentially the same as adminUpdateUser for mock purposes
         return this.adminUpdateUser(agentData);
     }
     
     public async deleteCommissionProfile(profileId: string): Promise<boolean> {
-        console.log(`API: Deleting commission profile ${profileId}`);
-        const index = mockCommissionProfiles.findIndex(p => p.id === profileId);
-        if (index > -1) {
-            mockCommissionProfiles.splice(index, 1);
-        }
-        return this.simulateDelay(true);
+        const { error } = await supabase.from('commission_profiles').delete().eq('id', profileId);
+        return !error;
     }
 
     public async deleteContract(contractId: string): Promise<boolean> {
-        console.log(`API: Deleting contract ${contractId}`);
-        const index = mockContracts.findIndex(c => c.id === contractId);
-        if (index > -1) {
-            mockContracts.splice(index, 1);
-        }
-        return this.simulateDelay(true);
+        const { error } = await supabase.from('contracts').delete().eq('id', contractId);
+        return !error;
     }
 
     public async deleteRechargePaymentMethod(methodId: string): Promise<boolean> {
-        console.log(`API: Deleting recharge payment method ${methodId}`);
-        const index = mockRechargePaymentMethods.findIndex(m => m.id === methodId);
-        if (index > -1) {
-            mockRechargePaymentMethods.splice(index, 1);
-        }
-        return this.simulateDelay(true);
+        const { error } = await supabase.from('recharge_payment_methods').delete().eq('id', methodId);
+        return !error;
     }
 
     public async deleteCardType(cardTypeId: string): Promise<boolean> {
-        console.log(`API: Deleting card type ${cardTypeId}`);
-        const index = mockCardTypes.findIndex(ct => ct.id === cardTypeId);
-        if (index > -1) {
-            mockCardTypes.splice(index, 1);
-        }
-        return this.simulateDelay(true);
+        const { error } = await supabase.from('card_types').delete().eq('id', cardTypeId);
+        return !error;
     }
 }

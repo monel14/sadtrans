@@ -5,6 +5,62 @@ import { createCard } from '../components/Card';
 import { formatAmount, formatDate, formatTransactionStatus } from '../utils/formatters';
 import { $ } from '../utils/dom';
 
+// Helper to get the most relevant transaction details for display
+function getTransactionKeyDetails(transaction: Transaction, opType: OperationType | undefined): string {
+    if (!opType) return `ID: ${transaction.id}`;
+    const data = transaction.data;
+    if (!data) return `ID: ${transaction.id}`;
+
+    let details = '';
+    switch (opType.id) {
+        case 'op_transfert_nat':
+            details = `Bénéficiaire: <strong>${data.nom_beneficiaire || '?'}</strong> (${data.tel_beneficiaire || '?'})`;
+            break;
+        case 'op_paiement_sde':
+        case 'op_paiement_facture':
+            details = `Réf. Facture: <strong>${data.ref_client_sde || data.ref_facture || '?'}</strong>`;
+            break;
+        case 'op_reabo_canal':
+        case 'op_abo_decodeur_canal':
+        case 'op_complement_canal':
+            details = `Décodeur: <strong>${data.num_decodeur_canal || data.id_decodeur || '?'}</strong>`;
+            break;
+        case 'op_activation_carte':
+        case 'op_deactivate_carte':
+            details = `Carte: <strong>${data.numero_carte || '?'}</strong> pour <strong>${data.nom_client || '?'}</strong>`;
+            break;
+        case 'op_recharge_carte_prepayee':
+            details = `Carte: <strong>${data.id_carte || '?'}</strong>`;
+            break;
+        case 'op_depot_ecobank_xpress':
+        case 'op_rapid_transfert_eco':
+            details = `Compte Xpress: <strong>${data.compte_xpress || '?'}</strong>`;
+            break;
+        case 'op_retrait_ecobank_xpress':
+            details = `Code Retrait: <strong>${data.code_retrait || '?'}</strong>`;
+            break;
+        case 'op_envoi_wu':
+        case 'op_envoi_ria':
+        case 'op_envoi_mg':
+            details = `Vers: <strong>${data.nom_beneficiaire || '?'}</strong>, ${data.pays_destination || '?'}`;
+            break;
+        case 'op_retrait_wu':
+            details = `MTCN: <strong>${data.code_mtcn || '?'}</strong>`;
+            break;
+        case 'op_retrait_ria':
+            details = `PIN: <strong>${data.code_pin || '?'}</strong>`;
+            break;
+        case 'op_retrait_mg':
+            details = `Réf: <strong>${data.code_reference || '?'}</strong>`;
+            break;
+        default:
+            details = `ID: ${transaction.id}`;
+            break;
+    }
+    return details;
+}
+
+
 // Helper function to show a details modal
 function showDetailsModal(transaction: Transaction, opType: OperationType, userMap: Map<string, User>, container: HTMLElement) {
     const existingModal = $('#detailsModal', container.ownerDocument);
@@ -120,14 +176,15 @@ export async function renderAgentTransactionHistoryView(user: User): Promise<HTM
         
         agentTransactions.forEach(t => {
             const opType = opTypeMap.get(t.opTypeId);
-            let benefDetails = '';
-            if (opType && t.data) {
-                if (t.data.nom_beneficiaire) benefDetails = `-> ${t.data.nom_beneficiaire}`;
-                else if (t.data.num_decodeur_canal) benefDetails = `Décodeur: ${t.data.num_decodeur_canal}`;
-            }
+            const keyDetails = getTransactionKeyDetails(t, opType);
 
             const formattedStatus = formatTransactionStatus(t, userMap);
             const statusClass = t.statut === 'Validé' ? 'badge-success' : (t.statut.includes('En attente') || t.statut.includes('Assignée') ? 'badge-warning' : 'badge-danger');
+            
+            // Calculate total amount with a fallback for robustness against missing data
+            const totalDebite = (t.montant_total != null && t.montant_total > 0) 
+                ? t.montant_total 
+                : t.montant_principal + (t.frais || 0);
 
             const li = document.createElement('li');
             li.className = 'card !p-0 overflow-hidden';
@@ -138,11 +195,11 @@ export async function renderAgentTransactionHistoryView(user: User): Promise<HTM
                             <span class="badge ${statusClass}">${formattedStatus}</span>
                             <p class="font-semibold text-slate-800">${opType?.name || 'Opération Inconnue'}</p>
                         </div>
-                        <p class="text-sm text-slate-500 mt-1">${t.id} <span class="mx-1 text-slate-300">•</span> ${benefDetails}</p>
+                        <p class="text-sm text-slate-500 mt-1">${keyDetails}</p>
                     </div>
                     <div class="text-left md:text-right w-full md:w-auto">
                         <p class="text-lg font-bold text-slate-900">${formatAmount(t.montant_principal)}</p>
-                        <p class="text-xs text-slate-400">Total débité: ${formatAmount(t.montant_total)}</p>
+                        <p class="text-xs text-slate-400">Total débité: ${formatAmount(totalDebite)}</p>
                     </div>
                     <div class="flex-shrink-0 flex items-center gap-2">
                          ${t.preuveUrl ? `<button class="btn btn-sm btn-secondary" data-action="view-proof" data-proof-url="${t.preuveUrl}"><i class="fas fa-camera mr-1"></i>Preuve</button>` : ''}

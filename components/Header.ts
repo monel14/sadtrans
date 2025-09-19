@@ -1,9 +1,11 @@
 
 
 
+
 import { User } from '../models';
 import { NotificationService } from '../services/notification.service';
 import { $ } from '../utils/dom';
+import { formatRelativeTime } from '../utils/formatters';
 
 export function renderHeader(user: User): HTMLElement {
     const header = document.createElement('header');
@@ -76,7 +78,7 @@ export function renderHeader(user: User): HTMLElement {
                     <i class="fas ${notif.icon} mr-3 mt-1"></i>
                     <div>
                         <p class="${!notif.read ? 'text-slate-800' : 'text-slate-600'}">${notif.text}</p>
-                        <p class="text-xs text-slate-400">${notif.time}</p>
+                        <p class="text-xs text-slate-400">${formatRelativeTime(notif.time)}</p>
                     </div>
                 </div>`;
             item.onclick = (e) => {
