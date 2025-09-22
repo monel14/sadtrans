@@ -1,22 +1,33 @@
 import { createCard } from '../components/Card';
-import { User, Contract, CommissionProfile, OperationType } from '../models';
+import { User, Contract, OperationType } from '../models';
 import { ApiService } from '../services/api.service';
 import { formatDate, formatAmount } from '../utils/formatters';
 
-function getCommissionDescription(opType: OperationType, contract: Contract, profile: CommissionProfile | undefined): string {
-    const serviceException = contract.exceptions.find(ex => ex.targetType === 'service' && ex.targetId === opType.id);
-    if (serviceException) {
-        return `<span class="badge badge-purple" title="Source: ${serviceException.name}">Règle Spécifique</span>`;
+function getCommissionDescription(opType: OperationType, contract: Contract | null): string {
+    if (contract) {
+        const serviceException = contract.exceptions.find(ex => ex.targetType === 'service' && ex.targetId === opType.id);
+        if (serviceException) {
+            return `<span class="badge badge-purple" title="Source: ${serviceException.name}">Règle Spécifique</span>`;
+        }
+
+        if (opType.category) {
+            const categoryException = contract.exceptions.find(ex => ex.targetType === 'category' && ex.targetId === opType.category);
+            if (categoryException) {
+                return `<span class="badge badge-info" title="Source: Catégorie ${categoryException.name}">Règle Catégorie</span>`;
+            }
+        }
+        
+        // S'il y a un contrat, la base est toujours la config par défaut du contrat
+        return `<span class="badge badge-gray" title="Source: Configuration par défaut du contrat">Standard</span>`;
+
     }
 
-    if (opType.category) {
-        const categoryException = contract.exceptions.find(ex => ex.targetType === 'category' && ex.targetId === opType.category);
-        if (categoryException) {
-            return `<span class="badge badge-info" title="Source: Catégorie ${categoryException.name}">Règle Catégorie</span>`;
-        }
+    // S'il n'y a pas de contrat, on se base sur la config du service lui-même
+    if (opType.commissionConfig && opType.commissionConfig.type !== 'none') {
+        return `<span class="badge badge-success" title="Source: Configuration du service">Service</span>`;
     }
     
-    return `<span class="badge badge-gray" title="Source: ${profile?.name || 'N/A'}">Standard</span>`;
+    return `<span class="badge badge-light" title="Aucune règle de commission applicable">Non défini</span>`;
 }
 
 export async function renderPartnerContractView(user: User): Promise<HTMLElement> {
@@ -25,14 +36,11 @@ export async function renderPartnerContractView(user: User): Promise<HTMLElement
     }
 
     const api = ApiService.getInstance();
-    const [contracts, profiles, opTypes] = await Promise.all([
+    const [contracts, opTypes] = await Promise.all([
         api.getContracts(),
-        api.getCommissionProfiles(),
         api.getAllOperationTypes()
     ]);
-
-    const profileMap = new Map(profiles.map(p => [p.id, p]));
-    const myContract = contracts.find(c => c.partnerId === user.partnerId && c.status === 'active');
+    const myContract = contracts.find(c => c.partnerId === user.partnerId && c.status === 'active') || null;
     
     const container = document.createElement('div');
 
@@ -41,7 +49,19 @@ export async function renderPartnerContractView(user: User): Promise<HTMLElement
         return createCard('Mon Contrat', container, 'fa-file-signature');
     }
 
-    const baseProfile = profileMap.get(myContract.baseCommissionProfileId);
+    // Display commission configuration
+    let commissionDisplay = 'Non configuré';
+    if (myContract.defaultCommissionConfig) {
+        const config = myContract.defaultCommissionConfig;
+        if (config.type === 'fixed') {
+            commissionDisplay = `Montant fixe: ${formatAmount(config.amount || 0)}`;
+        } else if (config.type === 'percentage') {
+            commissionDisplay = `Pourcentage: ${config.rate}%`;
+        } else if (config.type === 'tiers') {
+            commissionDisplay = `Par paliers (${config.tiers?.length || 0} paliers)`;
+        }
+        commissionDisplay += ` - Part société: ${config.partageSociete || 100}%`;
+    }
 
     const contractDetailsHtml = `
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -50,8 +70,8 @@ export async function renderPartnerContractView(user: User): Promise<HTMLElement
                 <p class="font-semibold text-slate-800">${myContract.name}</p>
             </div>
             <div>
-                <p class="text-sm text-slate-500">Profil de base</p>
-                <p class="font-semibold text-slate-800">${baseProfile?.name || 'N/A'}</p>
+                <p class="text-sm text-slate-500">Configuration de commission</p>
+                <p class="font-semibold text-slate-800">${commissionDisplay}</p>
             </div>
             <div>
                 <p class="text-sm text-slate-500">Période de validité</p>
@@ -104,11 +124,10 @@ export async function renderPartnerContractView(user: User): Promise<HTMLElement
                 tbody.appendChild(tr);
             }
 
-            const ruleSource = getCommissionDescription(opType, myContract, baseProfile);
+            const ruleSource = getCommissionDescription(opType, myContract);
             const { partnerShare } = await api.getFeePreview(user.id, opType.id, 10000); // Use a sample amount to get the share percentage
 
-            // FIX: Add type assertion for baseProfile to resolve potential 'unknown' type error.
-            let shareDescription = `${100 - ((baseProfile as CommissionProfile)?.partageSociete || 0)}% des frais`;
+            let shareDescription = `${100 - (myContract.defaultCommissionConfig?.partageSociete || 100)}% des frais`;
             
             const exception = myContract.exceptions.find(ex => (ex.targetType === 'service' && ex.targetId === opType.id) || (ex.targetType === 'category' && ex.targetId === opType.category));
             // FIX: Add type assertion for exception to resolve potential 'unknown' type error.

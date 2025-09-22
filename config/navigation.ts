@@ -1,11 +1,6 @@
 import { User, UserRole, NavLink } from "../models";
 import { renderAgentDashboardView } from "../views/AgentDashboard";
-import { renderAgentTransactionHistoryView } from "../views/AgentTransactionHistory";
-import { renderPartnerDashboardView } from "../views/PartnerDashboard";
-import { renderPartnerManageUsersView } from "../views/PartnerManageUsers";
 import { renderPartnerCommissionsView } from "../views/PartnerCommissions";
-import { renderAdminDashboardView } from "../views/AdminDashboard";
-import { renderAdminTransactionValidationView } from "../views/AdminTransactionValidation";
 import { renderAdminManagePartnersView } from "../views/AdminManagePartners";
 import { renderAdminManageSubAdminsView } from "../views/AdminManageSubAdmins";
 import { renderSubAdminDashboardView } from "../views/SubAdminDashboard";
@@ -13,24 +8,35 @@ import { renderAdminCardManagementView } from "../views/AdminCardInventory";
 import { renderNewOperationView } from "../views/NewOperation";
 import { renderTransactionListView } from "../views/TransactionList";
 import { renderPartnerCardStockView } from "../views/PartnerCardStock";
-import { renderAdminAgentRechargesView } from "../views/AdminAgentRecharges";
 import { renderAdminManageRechargeMethodsView } from "../views/AdminManageRechargeMethods";
-import { renderAdminManageUsersView } from "../views/AdminManageUsers";
 import { renderAdminRevenueDashboardView } from "../views/AdminRevenueDashboard";
 import { renderAdminCommissionConfigView } from "../views/AdminCommissionConfig";
-import { renderAllTransactionsView } from "../views/AllTransactions";
 import { renderDeveloperDashboardView } from "../views/DeveloperDashboard";
 import { renderDeveloperManageOperationTypesView } from "../views/DeveloperManageOperationTypes";
+
+// Import views with auto-refresh
+import {
+    renderAdminTransactionValidationViewWithRefresh,
+    renderAdminAgentRechargesViewWithRefresh,
+    renderAllTransactionsViewWithRefresh,
+    renderAgentTransactionHistoryViewWithRefresh,
+    renderPartnerDashboardViewWithRefresh,
+    renderAdminDashboardViewWithRefresh,
+    renderPartnerManageUsersViewWithRefresh,
+    renderAdminManageUsersViewWithRefresh,
+    renderAgentRechargeHistoryViewWithRefresh
+} from "../utils/apply-auto-refresh";
 
 // Import new, refactored views
 import { renderProfileView } from '../views/Profile';
 import { renderOrderListView } from '../views/OrderList';
 import { renderServiceHubView } from '../views/ServiceHub';
 import { renderPartnerContractView } from "../views/PartnerContractView";
-import { renderAgentRechargeHistoryView } from "../views/AgentRechargeHistory";
+
 
 const partnerAndAgentServices: NavLink[] = [
     { label: 'Cartes VISA', navId: 'hub_visa', icon: 'fa-credit-card', viewFn: renderServiceHubView('Gestion des Cartes VISA', 'fa-credit-card', [
+        { title: 'Vendre une carte', description: 'Vendre une nouvelle carte prépayée.', icon: 'fa-shopping-cart', target: { type: 'view', viewFn: renderNewOperationView, label: 'Vente de carte prépayée', operationTypeId: 'op_vente_carte', navId: 'op_op_vente_carte' } },
         { title: 'Lancer une activation', description: 'Activer une nouvelle carte pour un client.', icon: 'fa-check-circle', target: { type: 'view', viewFn: renderNewOperationView, label: 'Activation Carte Prépayée', operationTypeId: 'op_activation_carte', navId: 'op_op_activation_carte' } },
         { title: 'Lancer un rechargement', description: 'Recharger une carte prépayée existante.', icon: 'fa-wallet', target: { type: 'view', viewFn: renderNewOperationView, label: 'Recharge de Carte Prépayée', operationTypeId: 'op_recharge_carte_prepayee', navId: 'op_op_recharge_carte_prepayee' } },
         { title: 'Lancer une désactivation', description: 'Désactiver une carte à la demande.', icon: 'fa-user-slash', target: { type: 'view', viewFn: renderNewOperationView, label: 'Désactivation de Carte', operationTypeId: 'op_deactivate_carte', navId: 'op_op_deactivate_carte' } },
@@ -52,26 +58,28 @@ const partnerAndAgentServices: NavLink[] = [
         { title: 'Liste des retraits', description: 'Historique des retraits.', icon: 'fa-history', target: { type: 'view', viewFn: renderTransactionListView({ title: 'Historique des Retraits Xpress', opTypeIds: ['op_retrait_ecobank_xpress']}), label: 'Liste des Retraits', navId: 'list_eco_withdrawals' } },
     ]) },
     { label: 'Western Union', navId: 'hub_wu', icon: 'fa-globe-americas', viewFn: renderServiceHubView('Western Union', 'fa-globe-americas', [
-        { title: 'Lancer un envoi', description: 'Envoyer de l\'argent via Western Union.', icon: 'fa-paper-plane', target: { type: 'view', viewFn: renderNewOperationView, label: 'Envoi Western Union', operationTypeId: 'op_envoi_wu', navId: 'op_op_envoi_wu' } },
-        { title: 'Lancer un retrait', description: 'Recevoir de l\'argent via Western Union.', icon: 'fa-hand-holding-usd', target: { type: 'view', viewFn: renderNewOperationView, label: 'Retrait Western Union', operationTypeId: 'op_retrait_wu', navId: 'op_op_retrait_wu' } },
-        { title: 'Liste des envois', description: 'Historique des envois Western Union.', icon: 'fa-list-alt', target: { type: 'view', viewFn: renderTransactionListView({ title: 'Historique des Envois Western Union', opTypeIds: ['op_envoi_wu']}), label: 'Liste des Envois WU', navId: 'list_wu_sends' } },
-        { title: 'Liste des retraits', description: 'Historique des retraits Western Union.', icon: 'fa-history', target: { type: 'view', viewFn: renderTransactionListView({ title: 'Historique des Retraits Western Union', opTypeIds: ['op_retrait_wu']}), label: 'Liste des Retraits WU', navId: 'list_wu_receives' } },
+        { title: 'Lancer un envoi', description: 'Envoyer de l\'argent via Western Union.', icon: 'fa-paper-plane', target: { type: 'view', viewFn: renderNewOperationView, label: 'Envoi Western Union', operationTypeId: 'op_western_union_send', navId: 'op_op_western_union_send' } },
+        { title: 'Lancer un retrait', description: 'Recevoir de l\'argent via Western Union.', icon: 'fa-hand-holding-usd', target: { type: 'view', viewFn: renderNewOperationView, label: 'Réception Western Union', operationTypeId: 'op_western_union_receive', navId: 'op_op_western_union_receive' } },
+        { title: 'Liste des envois', description: 'Historique des envois Western Union.', icon: 'fa-list-alt', target: { type: 'view', viewFn: renderTransactionListView({ title: 'Historique des Envois Western Union', opTypeIds: ['op_western_union_send']}), label: 'Liste des Envois WU', navId: 'list_wu_sends' } },
+        { title: 'Liste des retraits', description: 'Historique des retraits Western Union.', icon: 'fa-history', target: { type: 'view', viewFn: renderTransactionListView({ title: 'Historique des Retraits Western Union', opTypeIds: ['op_western_union_receive']}), label: 'Liste des Retraits WU', navId: 'list_wu_receives' } },
     ]) },
     { label: 'Ria', navId: 'hub_ria', icon: 'fa-comments-dollar', viewFn: renderServiceHubView('Ria', 'fa-comments-dollar', [
-        { title: 'Lancer un envoi', description: 'Envoyer de l\'argent via Ria.', icon: 'fa-paper-plane', target: { type: 'view', viewFn: renderNewOperationView, label: 'Envoi Ria', operationTypeId: 'op_envoi_ria', navId: 'op_op_envoi_ria' } },
-        { title: 'Lancer un retrait', description: 'Recevoir de l\'argent via Ria.', icon: 'fa-hand-holding-usd', target: { type: 'view', viewFn: renderNewOperationView, label: 'Retrait Ria', operationTypeId: 'op_retrait_ria', navId: 'op_op_retrait_ria' } },
-        { title: 'Liste des envois', description: 'Historique des envois Ria.', icon: 'fa-list-alt', target: { type: 'view', viewFn: renderTransactionListView({ title: 'Historique des Envois Ria', opTypeIds: ['op_envoi_ria']}), label: 'Liste des Envois Ria', navId: 'list_ria_sends' } },
-        { title: 'Liste des retraits', description: 'Historique des retraits Ria.', icon: 'fa-history', target: { type: 'view', viewFn: renderTransactionListView({ title: 'Historique des Retraits Ria', opTypeIds: ['op_retrait_ria']}), label: 'Liste des Retraits Ria', navId: 'list_ria_receives' } },
+        { title: 'Lancer un envoi', description: 'Envoyer de l\'argent via Ria.', icon: 'fa-paper-plane', target: { type: 'view', viewFn: renderNewOperationView, label: 'Envoi Ria Money Transfer', operationTypeId: 'op_ria_send', navId: 'op_op_ria_send' } },
+        { title: 'Lancer un retrait', description: 'Recevoir de l\'argent via Ria.', icon: 'fa-hand-holding-usd', target: { type: 'view', viewFn: renderNewOperationView, label: 'Réception Ria Money Transfer', operationTypeId: 'op_ria_receive', navId: 'op_op_ria_receive' } },
+        { title: 'Liste des envois', description: 'Historique des envois Ria.', icon: 'fa-list-alt', target: { type: 'view', viewFn: renderTransactionListView({ title: 'Historique des Envois Ria', opTypeIds: ['op_ria_send']}), label: 'Liste des Envois Ria', navId: 'list_ria_sends' } },
+        { title: 'Liste des retraits', description: 'Historique des retraits Ria.', icon: 'fa-history', target: { type: 'view', viewFn: renderTransactionListView({ title: 'Historique des Retraits Ria', opTypeIds: ['op_ria_receive']}), label: 'Liste des Retraits Ria', navId: 'list_ria_receives' } },
     ]) },
     { label: 'MoneyGram', navId: 'hub_mg', icon: 'fa-dollar-sign', viewFn: renderServiceHubView('MoneyGram', 'fa-dollar-sign', [
-        { title: 'Lancer un envoi', description: 'Envoyer de l\'argent via MoneyGram.', icon: 'fa-paper-plane', target: { type: 'view', viewFn: renderNewOperationView, label: 'Envoi MoneyGram', operationTypeId: 'op_envoi_mg', navId: 'op_op_envoi_mg' } },
-        { title: 'Lancer un retrait', description: 'Recevoir de l\'argent via MoneyGram.', icon: 'fa-hand-holding-usd', target: { type: 'view', viewFn: renderNewOperationView, label: 'Retrait MoneyGram', operationTypeId: 'op_retrait_mg', navId: 'op_op_retrait_mg' } },
-        { title: 'Liste des envois', description: 'Historique des envois MoneyGram.', icon: 'fa-list-alt', target: { type: 'view', viewFn: renderTransactionListView({ title: 'Historique des Envois MoneyGram', opTypeIds: ['op_envoi_mg']}), label: 'Liste des Envois MG', navId: 'list_mg_sends' } },
-        { title: 'Liste des retraits', description: 'Historique des retraits MoneyGram.', icon: 'fa-history', target: { type: 'view', viewFn: renderTransactionListView({ title: 'Historique des Retraits MoneyGram', opTypeIds: ['op_retrait_mg']}), label: 'Liste des Retraits MG', navId: 'list_mg_receives' } },
+        { title: 'Lancer un envoi', description: 'Envoyer de l\'argent via MoneyGram.', icon: 'fa-paper-plane', target: { type: 'view', viewFn: renderNewOperationView, label: 'Envoi MoneyGram', operationTypeId: 'op_moneygram_send', navId: 'op_op_moneygram_send' } },
+        { title: 'Lancer un retrait', description: 'Recevoir de l\'argent via MoneyGram.', icon: 'fa-hand-holding-usd', target: { type: 'view', viewFn: renderNewOperationView, label: 'Réception MoneyGram', operationTypeId: 'op_moneygram_receive', navId: 'op_op_moneygram_receive' } },
+        { title: 'Liste des envois', description: 'Historique des envois MoneyGram.', icon: 'fa-list-alt', target: { type: 'view', viewFn: renderTransactionListView({ title: 'Historique des Envois MoneyGram', opTypeIds: ['op_moneygram_send']}), label: 'Liste des Envois MG', navId: 'list_mg_sends' } },
+        { title: 'Liste des retraits', description: 'Historique des retraits MoneyGram.', icon: 'fa-history', target: { type: 'view', viewFn: renderTransactionListView({ title: 'Historique des Retraits MoneyGram', opTypeIds: ['op_moneygram_receive']}), label: 'Liste des Retraits MG', navId: 'list_mg_receives' } },
     ]) },
     { label: 'Paiement de Factures', navId: 'hub_bills', icon: 'fa-file-invoice-dollar', viewFn: renderServiceHubView('Paiement de Factures', 'fa-file-invoice-dollar', [
-        { title: 'Paiement de Facture', description: 'Payer une facture (SDE, Senelec, etc).', icon: 'fa-bolt', target: { type: 'view', viewFn: renderNewOperationView, label: 'Paiement de Facture', operationTypeId: 'op_paiement_facture', navId: 'op_op_paiement_facture' } },
-        { title: 'Liste des factures', description: 'Historique des paiements.', icon: 'fa-history', target: { type: 'view', viewFn: renderTransactionListView({ title: 'Historique des Paiements de Factures', opTypeIds: ['op_paiement_facture', 'op_paiement_sde']}), label: 'Liste des Factures', navId: 'list_bill_payments' } },
+        { title: 'Paiement Facture CIE', description: 'Payer une facture CIE (électricité).', icon: 'fa-bolt', target: { type: 'view', viewFn: renderNewOperationView, label: 'Paiement Facture CIE', operationTypeId: 'op_facture_cie', navId: 'op_op_facture_cie' } },
+        { title: 'Paiement Facture SODECI', description: 'Payer une facture SODECI (eau).', icon: 'fa-tint', target: { type: 'view', viewFn: renderNewOperationView, label: 'Paiement Facture SODECI', operationTypeId: 'op_facture_sodeci', navId: 'op_op_facture_sodeci' } },
+        { title: 'Paiement Facture Télécom', description: 'Payer une facture de télécommunication.', icon: 'fa-phone', target: { type: 'view', viewFn: renderNewOperationView, label: 'Paiement Facture Télécom', operationTypeId: 'op_facture_telecom', navId: 'op_op_facture_telecom' } },
+        { title: 'Liste des factures', description: 'Historique des paiements.', icon: 'fa-history', target: { type: 'view', viewFn: renderTransactionListView({ title: 'Historique des Paiements de Factures', opTypeIds: ['op_facture_cie', 'op_facture_sodeci', 'op_facture_telecom']}), label: 'Liste des Factures', navId: 'list_bill_payments' } },
     ]) },
 ];
 
@@ -90,15 +98,15 @@ export const navigationLinks: Record<UserRole, NavLink[]> = {
             navId: 'agent_activity', 
             icon: 'fa-history',
             children: [
-                { label: 'Historique des Opérations', navId: 'agent_history_ops', icon: 'fa-exchange-alt', viewFn: renderAgentTransactionHistoryView },
-                { label: 'Historique des Recharges', navId: 'agent_history_recharges', icon: 'fa-wallet', viewFn: renderAgentRechargeHistoryView },
+                { label: 'Historique des Opérations', navId: 'agent_history_ops', icon: 'fa-exchange-alt', viewFn: renderAgentTransactionHistoryViewWithRefresh },
+                { label: 'Historique des Recharges', navId: 'agent_history_recharges', icon: 'fa-wallet', viewFn: renderAgentRechargeHistoryViewWithRefresh },
             ]
         },
         { label: 'Demander Recharge', navId: 'agent_request_recharge', icon: 'fa-hand-holding-usd', action: () => document.body.dispatchEvent(new CustomEvent('openAgentRechargeModal')) },
         { label: 'Mon Profil', navId: 'agent_profile', icon: 'fa-user-circle', viewFn: renderProfileView },
     ],
     partner: [
-        { label: 'Dashboard Partenaire', navId: 'partner_dashboard', icon: 'fa-chart-line', viewFn: renderPartnerDashboardView },
+        { label: 'Dashboard Partenaire', navId: 'partner_dashboard', icon: 'fa-chart-line', viewFn: renderPartnerDashboardViewWithRefresh },
         { 
             label: 'Gestion des Services', 
             navId: 'partner_services', 
@@ -110,7 +118,7 @@ export const navigationLinks: Record<UserRole, NavLink[]> = {
             navId: 'partner_agency_management',
             icon: 'fa-briefcase',
             children: [
-                { label: 'Gérer mes Utilisateurs', navId: 'partner_manage_users', icon: 'fa-users-cog', viewFn: renderPartnerManageUsersView },
+                { label: 'Gérer mes Utilisateurs', navId: 'partner_manage_users', icon: 'fa-users-cog', viewFn: renderPartnerManageUsersViewWithRefresh },
                 { label: 'Mon Stock de Cartes', navId: 'partner_card_stock', icon: 'fa-layer-group', viewFn: renderPartnerCardStockView },
                 { label: 'Bons de Commande', navId: 'partner_orders', icon: 'fa-receipt', viewFn: renderOrderListView },
             ]
@@ -122,31 +130,31 @@ export const navigationLinks: Record<UserRole, NavLink[]> = {
             children: [
                 { label: 'Mon Contrat & Commissions', navId: 'partner_contract', icon: 'fa-file-signature', viewFn: renderPartnerContractView },
                 { label: 'Commissions (Ancien)', navId: 'partner_reports', icon: 'fa-coins', viewFn: renderPartnerCommissionsView },
-                { label: 'Toutes les Opérations', navId: 'partner_all_transactions', icon: 'fa-list-ul', viewFn: renderAllTransactionsView },
+                { label: 'Toutes les Opérations', navId: 'partner_all_transactions', icon: 'fa-list-ul', viewFn: renderAllTransactionsViewWithRefresh },
             ]
         },
         { label: 'Mon Profil', navId: 'partner_profile', icon: 'fa-user-circle', viewFn: renderProfileView },
     ],
     admin_general: [
-        { label: 'Dashboard Écosystème', navId: 'admin_dashboard', icon: 'fa-globe-americas', viewFn: renderAdminDashboardView },
+        { label: 'Dashboard Écosystème', navId: 'admin_dashboard', icon: 'fa-globe-americas', viewFn: renderAdminDashboardViewWithRefresh },
         { 
             label: 'Pilotage Financier', 
             navId: 'admin_financials_parent', 
             icon: 'fa-chart-pie',
             children: [
                  { label: 'Dashboard Revenus', navId: 'admin_revenue', icon: 'fa-chart-pie', viewFn: renderAdminRevenueDashboardView },
-                 { label: 'Toutes les Opérations', navId: 'admin_all_transactions', icon: 'fa-list-ul', viewFn: renderAllTransactionsView },
+                 { label: 'Toutes les Opérations', navId: 'admin_all_transactions', icon: 'fa-list-ul', viewFn: renderAllTransactionsViewWithRefresh },
             ]
         },
-        { label: 'Validation Transactions', navId: 'admin_validate_tx', icon: 'fa-check-double', viewFn: (user: User) => renderAdminTransactionValidationView(user, 'unassigned') },
-        { label: 'Recharges Agents', navId: 'admin_agent_recharges', icon: 'fa-wallet', viewFn: renderAdminAgentRechargesView },
+        { label: 'Validation Transactions', navId: 'admin_validate_tx', icon: 'fa-check-double', viewFn: (user: User) => renderAdminTransactionValidationViewWithRefresh(user, 'unassigned') },
+        { label: 'Recharges Agents', navId: 'admin_agent_recharges', icon: 'fa-wallet', viewFn: renderAdminAgentRechargesViewWithRefresh },
         {
             label: 'Gestion des Utilisateurs',
             navId: 'admin_user_management',
             icon: 'fa-users-cog',
             children: [
                 { label: 'Gestion des Partenaires', navId: 'admin_manage_partners', icon: 'fa-building', viewFn: renderAdminManagePartnersView },
-                { label: 'Tous les Utilisateurs', navId: 'admin_manage_users', icon: 'fa-users', viewFn: renderAdminManageUsersView },
+                { label: 'Tous les Utilisateurs', navId: 'admin_manage_users', icon: 'fa-users', viewFn: renderAdminManageUsersViewWithRefresh },
                 { label: 'Gestion Sous-Admins', navId: 'admin_manage_subadmins', icon: 'fa-user-shield', viewFn: renderAdminManageSubAdminsView },
             ]
         },
@@ -163,7 +171,7 @@ export const navigationLinks: Record<UserRole, NavLink[]> = {
     ],
     sous_admin: [
         { label: 'Tableau de Bord', navId: 'subadmin_dashboard', icon: 'fa-tachometer-alt', viewFn: renderSubAdminDashboardView },
-        { label: 'Validation Transactions', navId: 'subadmin_validate_tx', icon: 'fa-check-square', viewFn: (user: User) => renderAdminTransactionValidationView(user, 'unassigned') },
+        { label: 'Validation Transactions', navId: 'subadmin_validate_tx', icon: 'fa-check-square', viewFn: (user: User) => renderAdminTransactionValidationViewWithRefresh(user, 'unassigned') },
     ],
     developer: [
         { label: 'Developer Dashboard', navId: 'dev_dashboard', icon: 'fa-code', viewFn: renderDeveloperDashboardView },
@@ -182,7 +190,7 @@ export const navigationLinks: Record<UserRole, NavLink[]> = {
             navId: 'dev_data_management',
             icon: 'fa-database',
             children: [
-                { label: 'All Users', navId: 'admin_manage_users', icon: 'fa-users', viewFn: renderAdminManageUsersView },
+                { label: 'All Users', navId: 'admin_manage_users', icon: 'fa-users', viewFn: renderAdminManageUsersViewWithRefresh },
                 { label: 'Partners', navId: 'admin_manage_partners', icon: 'fa-building', viewFn: renderAdminManagePartnersView },
                 { label: 'Card Inventory', navId: 'admin_card_management', icon: 'fa-credit-card', viewFn: renderAdminCardManagementView },
             ]

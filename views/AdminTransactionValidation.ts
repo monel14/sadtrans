@@ -388,8 +388,8 @@ export async function renderAdminTransactionValidationView(user: User, defaultFi
                 if (assignedText) assignedText.classList.add('hidden');
                 if (formContainer) {
                     formContainer.innerHTML = `
-                        <h4 class="text-sm font-semibold mb-2 text-slate-700 text-left">Joindre la preuve de l'opération</h4>
-                        <input type="file" class="form-input form-input-sm" accept="image/*" data-action="file-input" required>
+                        <h4 class="text-sm font-semibold mb-2 text-slate-700 text-left">Joindre la preuve de l'opération (optionnel)</h4>
+                        <input type="file" class="form-input form-input-sm" accept="image/*" data-action="file-input">
                         <img src="" alt="Aperçu" class="mt-2 rounded-md max-h-40 hidden w-full object-contain bg-slate-200" data-action="image-preview">
                         <div class="flex gap-2 mt-3 justify-end">
                             <button class="btn btn-xs btn-secondary" data-action="cancel-validation" data-task-id="${taskId}">Annuler</button>
@@ -423,14 +423,11 @@ export async function renderAdminTransactionValidationView(user: User, defaultFi
             case 'validate-confirm':
                 const fileInput = formContainer?.querySelector<HTMLInputElement>('input[type="file"]');
                 const file = fileInput?.files?.[0];
-                if (!file) {
-                    document.body.dispatchEvent(new CustomEvent('showToast', { detail: { message: "Veuillez sélectionner une image comme preuve.", type: 'warning' } }));
-                    return;
-                }
+                
                 actionButton.disabled = true;
                 actionButton.innerHTML = `<i class="fas fa-spinner fa-spin"></i>`;
                 
-                await api.validateTransaction(taskId, file);
+                await api.validateTransaction(taskId, file || null);
                 await reloadView();
                 break;
             case 'reject-confirm':

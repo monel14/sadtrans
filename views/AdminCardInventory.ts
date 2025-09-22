@@ -185,7 +185,7 @@ async function renderOrdersTabContent(container: HTMLElement, api: ApiService, d
                         markDeliveredBtn.disabled = true;
                         markDeliveredBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i>`;
                         try {
-                            await api.updateOrderStatus(orderId, 'livré');
+                            await api.updateOrderStatus(orderId, 'delivered');
                             document.body.dispatchEvent(new CustomEvent('showToast', { detail: { message: 'Commande marquée comme livrée.', type: 'success' } }));
                             document.body.dispatchEvent(new CustomEvent('orderCreated')); // Reusing this event to refresh the view
                         } catch (error) {

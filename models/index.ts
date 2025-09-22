@@ -75,8 +75,8 @@ export interface Contract {
     id: string;
     name: string;
     partnerId: string;
-    baseCommissionProfileId: string;
-    status: 'active' | 'draft' | 'expired';
+    defaultCommissionConfig: CommissionConfig;
+    status: 'active' | 'inactive' | 'expired';
     startDate: string; // ISO 8601
     endDate: string | null; // ISO 8601
     exceptions: ContractException[];
@@ -138,12 +138,7 @@ export interface CommissionTier {
     value: number;
 }
 
-export interface CommissionProfile {
-    id: string;
-    name: string;
-    partageSociete: number;
-    tiers: CommissionTier[];
-}
+// Commission profiles have been removed - commissions are now configured directly in contracts
 
 // --- TRANSACTIONS & REQUESTS ---
 

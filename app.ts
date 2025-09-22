@@ -20,6 +20,7 @@ import { AdminRejectRechargeModal } from './components/modals/AdminRejectRecharg
 import { PartnerTransferRevenueModal } from './components/modals/PartnerTransferRevenueModal';
 import { ConfirmationModal } from './components/modals/ConfirmationModal';
 import { AdminAdjustBalanceModal } from './components/modals/AdminAdjustBalanceModal';
+import { RefreshService } from './services/refresh.service';
 
 export class App {
     private rootElement: HTMLElement;
@@ -50,6 +51,13 @@ export class App {
     }
 
     public async init() {
+        // Initialize refresh service
+        RefreshService.getInstance();
+        
+        // Initialize DataService to ensure all partners have contracts
+        const dataService = DataService.getInstance();
+        await dataService.initialize();
+        
         // Create and append the toast container
         this.toastContainer = new ToastContainer();
         document.body.prepend(this.toastContainer.element);
@@ -132,7 +140,7 @@ export class App {
         dataService.getCardTypes();
         dataService.getUsers();
         dataService.getPartners();
-        dataService.getCommissionProfiles();
+        // Commission profiles preloading removed - commissions are now configured directly in contracts
         dataService.getContracts();
     }
 

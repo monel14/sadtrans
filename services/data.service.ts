@@ -4,7 +4,7 @@
  */
 import {
     User, Partner, OperationType, Transaction, AgentRechargeRequest,
-    RechargePaymentMethod, Card, Order, CardType, CommissionProfile, Contract, Agency
+    RechargePaymentMethod, Card, Order, CardType, Contract, Agency
 } from '../models';
 import { ApiService } from './api.service';
 
@@ -27,7 +27,7 @@ export class DataService {
     private _cards: Card[] | null = null;
     private _orders: Order[] | null = null;
     private _cardTypes: CardType[] | null = null;
-    private _commissionProfiles: CommissionProfile[] | null = null;
+    // Commission profiles have been removed - commissions are now configured directly in contracts
     private _contracts: Contract[] | null = null;
     private _agencies: Agency[] | null = null;
     // FIX: Add cache property for audit logs.
@@ -39,13 +39,30 @@ export class DataService {
     private _opTypeMap: Map<string, OperationType> | null = null;
     private _methodMap: Map<string, RechargePaymentMethod> | null = null;
     private _cardTypeMap: Map<string, CardType> | null = null;
-    private _commissionProfileMap: Map<string, CommissionProfile> | null = null;
+    // Commission profile map has been removed - commissions are now configured directly in contracts
     private _activeContractsMap: Map<string, Contract> | null = null;
     private _agencyMapByPartnerId: Map<string, Agency> | null = null;
 
 
     private constructor() {
         this.api = ApiService.getInstance();
+    }
+
+    /**
+     * Initialize the data service and ensure all partners have contracts
+     */
+    public async initialize(): Promise<void> {
+        try {
+            const result = await this.api.ensureAllPartnersHaveContracts();
+            if (result.created > 0) {
+                console.log(`✅ ${result.created} contrat(s) par défaut créé(s) pour les partenaires`);
+            }
+            if (result.errors > 0) {
+                console.warn(`⚠️ ${result.errors} erreur(s) lors de la création de contrats par défaut`);
+            }
+        } catch (error) {
+            console.error('Failed to initialize DataService:', error);
+        }
     }
 
     public static getInstance(): DataService {
@@ -65,24 +82,30 @@ export class DataService {
     public invalidateOrdersCache() { this._orders = null; }
     public invalidateCardsCache() { this._cards = null; }
     public invalidateCardTypesCache() { this._cardTypes = null; this._cardTypeMap = null; }
-    public invalidateCommissionProfilesCache() { this._commissionProfiles = null; this._commissionProfileMap = null; }
+    // Commission profiles cache invalidation removed - commissions are now configured directly in contracts
     public invalidateContractsCache() { this._contracts = null; this._activeContractsMap = null; }
     public invalidateAgenciesCache() { this._agencies = null; this._agencyMapByPartnerId = null; }
+    public invalidateAuditLogsCache() { this._auditLogs = null; }
 
 
     // --- Getter Methods for Arrays ---
 
     public async getUsers(): Promise<User[]> {
         if (!this._users) {
-            const users = await this.api.getUsers();
-            const agencies = await this.getAgencies();
-            const agencyMap = new Map(agencies.map(a => [a.id, a]));
-            for (const user of users) {
-                if (user.agencyId) {
-                    user.agency = agencyMap.get(user.agencyId);
+            try {
+                const users = await this.api.getUsers();
+                const agencies = await this.getAgencies();
+                const agencyMap = new Map(agencies.map(a => [a.id, a]));
+                for (const user of users) {
+                    if (user.agencyId) {
+                        user.agency = agencyMap.get(user.agencyId);
+                    }
                 }
+                this._users = users;
+            } catch (error) {
+                console.error('Error loading users in DataService:', error);
+                this._users = [];
             }
-            this._users = users;
         }
         return this._users;
     }
@@ -125,11 +148,34 @@ export class DataService {
         this._partners = null;
         this._partnerMap = null;
         this._userMap = null;
+        this._agentRechargeRequests = null;
+        this._rechargePaymentMethods = null;
+        this._methodMap = null;
+        this._cards = null;
+        this._orders = null;
+        this._cardTypes = null;
+        this._cardTypeMap = null;
+        // Commission profiles cache removed - commissions are now configured directly in contracts
+        this._contracts = null;
+        this._activeContractsMap = null;
+        this._agencies = null;
+        this._agencyMapByPartnerId = null;
+        this._auditLogs = null;
+    }
+
+    // Method to clear all caches (useful for data refresh)
+    public clearAllCaches(): void {
+        this.debugClearAllCaches();
     }
 
     public async getTransactions(filters: { agentId?: string; limit?: number; status?: string } = {}): Promise<Transaction[]> {
         if (!this._transactions) {
-            this._transactions = await this.api.getTransactions();
+            try {
+                this._transactions = await this.api.getTransactions();
+            } catch (error) {
+                console.error('Error loading transactions in DataService:', error);
+                this._transactions = [];
+            }
         }
 
         let results = this._transactions;
@@ -200,12 +246,7 @@ export class DataService {
         return this._cardTypes;
     }
 
-    public async getCommissionProfiles(): Promise<CommissionProfile[]> {
-        if (!this._commissionProfiles) {
-            this._commissionProfiles = await this.api.getCommissionProfiles();
-        }
-        return this._commissionProfiles;
-    }
+    // Commission profiles getter removed - commissions are now configured directly in contracts
 
     public async getContracts(): Promise<Contract[]> {
         if (!this._contracts) {
@@ -272,13 +313,7 @@ export class DataService {
         return this._cardTypeMap;
     }
 
-    public async getCommissionProfileMap(): Promise<Map<string, CommissionProfile>> {
-        if (!this._commissionProfileMap) {
-            const profiles = await this.getCommissionProfiles();
-            this._commissionProfileMap = new Map(profiles.map(p => [p.id, p]));
-        }
-        return this._commissionProfileMap;
-    }
+    // Commission profile map getter removed - commissions are now configured directly in contracts
 
     public async getActiveContractsMap(): Promise<Map<string, Contract>> {
         if (!this._activeContractsMap) {
@@ -309,5 +344,9 @@ export class DataService {
     public async getPartnerById(id: string): Promise<Partner | undefined> {
         const partnerMap = await this.getPartnerMap();
         return partnerMap.get(id);
+    }
+
+    public async getActiveContractForPartner(partnerId: string): Promise<Contract | null> {
+        return await this.api.getActiveContractForPartner(partnerId);
     }
 }

@@ -14,6 +14,7 @@ let allOpTypes: OperationType[] = [];
 let userMap: Map<string, User> = new Map();
 let partnerMap: Map<string, Partner> = new Map();
 let opTypeMap: Map<string, OperationType> = new Map();
+let lastLoadTime: number = 0;
 
 // Helper function to show a details modal for a transaction
 function showDetailsModal(transaction: Transaction) {
@@ -266,11 +267,17 @@ function applyFilters(container: HTMLElement) {
     renderTransactionList(container, filteredTransactions);
 }
 
-// Main render function for the view
-export async function renderAllTransactionsView(user: User): Promise<HTMLElement> {
+// Function to reload all data
+async function reloadAllData(): Promise<void> {
     const dataService = DataService.getInstance();
     
-    // Fetch all necessary data once
+    // Force reload by invalidating caches
+    dataService.invalidateTransactionsCache();
+    dataService.invalidateUsersCache();
+    dataService.invalidatePartnersCache();
+    dataService.invalidateOperationTypesCache();
+    
+    // Fetch fresh data
     [allTransactions, allUsers, allPartners, allOpTypes, userMap, partnerMap, opTypeMap] = await Promise.all([
         dataService.getTransactions(),
         dataService.getUsers(),
@@ -280,6 +287,20 @@ export async function renderAllTransactionsView(user: User): Promise<HTMLElement
         dataService.getPartnerMap(),
         dataService.getOpTypeMap(),
     ]);
+}
+
+// Main render function for the view
+export async function renderAllTransactionsView(user: User): Promise<HTMLElement> {
+    const dataService = DataService.getInstance();
+    
+    // Check if we need to reload data (if it's been more than 30 seconds or first load)
+    const now = Date.now();
+    const shouldReload = now - lastLoadTime > 30000 || allTransactions.length === 0;
+    
+    if (shouldReload) {
+        await reloadAllData();
+        lastLoadTime = now;
+    }
 
     // Pre-filter transactions based on user role
     if (user.role === 'partner') {
@@ -343,7 +364,10 @@ export async function renderAllTransactionsView(user: User): Promise<HTMLElement
                 </select>
             </div>
         </form>
-        <div class="flex justify-end mb-4">
+        <div class="flex justify-between items-center mb-4">
+            <button id="refresh-btn" class="btn btn-sm btn-primary">
+                <i class="fas fa-sync-alt mr-2"></i>Actualiser
+            </button>
             <button id="export-csv-btn" class="btn btn-sm btn-secondary">
                 <i class="fas fa-file-csv mr-2"></i>Exporter en CSV
             </button>
@@ -374,12 +398,13 @@ export async function renderAllTransactionsView(user: User): Promise<HTMLElement
         });
     }
     
-    // Event listener for details/proof/export buttons (delegated to card)
-    card.addEventListener('click', (e) => {
+    // Event listener for details/proof/export/refresh buttons (delegated to card)
+    card.addEventListener('click', async (e) => {
         const target = e.target as HTMLElement;
         const proofButton = target.closest<HTMLButtonElement>('[data-action="view-proof"]');
         const detailsButton = target.closest<HTMLButtonElement>('[data-action="view-details"]');
         const exportButton = target.closest<HTMLButtonElement>('#export-csv-btn');
+        const refreshButton = target.closest<HTMLButtonElement>('#refresh-btn');
 
         if (proofButton) {
             const imageUrl = proofButton.dataset.proofUrl;
@@ -397,8 +422,69 @@ export async function renderAllTransactionsView(user: User): Promise<HTMLElement
             }
         } else if (exportButton) {
             exportTransactionsToCSV(filteredTransactions);
+        } else if (refreshButton) {
+            // Show loading state
+            refreshButton.disabled = true;
+            refreshButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Actualisation...';
+            
+            try {
+                // Reload data
+                await reloadAllData();
+                
+                // Re-filter based on user role
+                if (user.role === 'partner') {
+                    const agentIdsForPartner = allUsers.filter(u => u.partnerId === user.partnerId).map(u => u.id);
+                    allTransactions = allTransactions.filter(t => agentIdsForPartner.includes(t.agentId));
+                }
+                
+                // Re-apply current filters
+                applyFilters(card);
+                
+                // Show success message
+                document.body.dispatchEvent(new CustomEvent('showToast', {
+                    detail: { message: 'Historique mis à jour avec succès', type: 'success' }
+                }));
+            } catch (error) {
+                console.error('Error refreshing data:', error);
+                document.body.dispatchEvent(new CustomEvent('showToast', {
+                    detail: { message: 'Erreur lors de la mise à jour', type: 'error' }
+                }));
+            } finally {
+                // Restore button state
+                refreshButton.disabled = false;
+                refreshButton.innerHTML = '<i class="fas fa-sync-alt mr-2"></i>Actualiser';
+            }
         }
     });
+
+    // Listen for global transaction updates
+    const handleTransactionUpdate = async () => {
+        await reloadAllData();
+        
+        // Re-filter based on user role
+        if (user.role === 'partner') {
+            const agentIdsForPartner = allUsers.filter(u => u.partnerId === user.partnerId).map(u => u.id);
+            allTransactions = allTransactions.filter(t => agentIdsForPartner.includes(t.agentId));
+        }
+        
+        // Re-apply current filters
+        applyFilters(card);
+    };
+    
+    // Listen for transaction validation/rejection events
+    document.body.addEventListener('transactionValidated', handleTransactionUpdate);
+    document.body.addEventListener('transactionRejected', handleTransactionUpdate);
+    document.body.addEventListener('transactionCreated', handleTransactionUpdate);
+    
+    // Cleanup listeners when the view is destroyed
+    const cleanup = () => {
+        document.body.removeEventListener('transactionValidated', handleTransactionUpdate);
+        document.body.removeEventListener('transactionRejected', handleTransactionUpdate);
+        document.body.removeEventListener('transactionCreated', handleTransactionUpdate);
+    };
+    
+    // Store cleanup function on the card element for later use
+    (card as any)._cleanup = cleanup;
 
     return card;
 }

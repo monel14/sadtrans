@@ -1,5 +1,5 @@
 import { BaseModal } from "./BaseModal";
-import { Contract, Partner, CommissionProfile, OperationType, ContractException, CommissionConfig, CommissionTier } from "../../models";
+import { Contract, Partner, OperationType, ContractException, CommissionConfig, CommissionTier } from "../../models";
 import { $ } from "../../utils/dom";
 import { ApiService } from "../../services/api.service";
 
@@ -7,14 +7,14 @@ export class AdminEditContractModal extends BaseModal {
     private form: HTMLFormElement;
     private editingContract: Contract | null = null;
     private partners: Partner[];
-    private commissionProfiles: CommissionProfile[];
     private operationTypes: OperationType[];
+    private tierCounter = 0;
     private exceptionCounter = 0;
+    public onSave?: () => void;
 
-    constructor(partners: Partner[], commissionProfiles: CommissionProfile[], operationTypes: OperationType[]) {
-        super('adminEditContractModal', { size: 'xl' });
+    constructor(partners: Partner[], operationTypes: OperationType[]) {
+        super('adminEditContractModal', { size: 'lg' });
         this.partners = partners;
-        this.commissionProfiles = commissionProfiles;
         this.operationTypes = operationTypes;
         
         this.render();
@@ -23,264 +23,574 @@ export class AdminEditContractModal extends BaseModal {
     }
 
     private render() {
-        const title = "Éditer le Contrat Partenaire";
+        const title = "Éditer: Configuration du Contrat";
         
         const partnerOptions = this.partners.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
-        const profileOptions = this.commissionProfiles.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
 
         const body = document.createElement('div');
         body.innerHTML = `
-            <form id="editContractForm" novalidate>
+            <form id="editContractForm" class="space-y-6">
                 <input type="hidden" name="id">
                 
-                <h4 class="text-lg font-semibold text-slate-700 mb-2">Informations Générales</h4>
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4 border rounded-lg bg-slate-50">
+                <!-- Informations de base -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                        <label class="form-label" for="contractName">Nom du contrat</label>
-                        <input type="text" id="contractName" name="name" class="form-input" required>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Nom du contrat</label>
+                        <input type="text" name="name" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required>
                     </div>
                     <div>
-                        <label class="form-label" for="contractPartnerId">Partenaire</label>
-                        <select id="contractPartnerId" name="partnerId" class="form-select" required>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Partenaire</label>
+                        <select name="partnerId" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required>
                             <option value="">-- Sélectionner --</option>
                             ${partnerOptions}
                         </select>
                     </div>
+                </div>
+
+                <!-- Configuration principale -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                        <label class="form-label" for="contractBaseProfileId">Profil de commission de base</label>
-                        <select id="contractBaseProfileId" name="baseCommissionProfileId" class="form-select" required>
-                            <option value="">-- Sélectionner --</option>
-                            ${profileOptions}
-                        </select>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Part de la Société (%)</label>
+                        <input type="number" name="partageSociete" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" min="0" max="100" value="60" required>
                     </div>
                     <div>
-                        <label class="form-label" for="contractStartDate">Date de début</label>
-                        <input type="date" id="contractStartDate" name="startDate" class="form-input" required>
-                    </div>
-                    <div>
-                        <label class="form-label" for="contractEndDate">Date de fin (optionnel)</label>
-                        <input type="date" id="contractEndDate" name="endDate" class="form-input">
-                    </div>
-                    <div>
-                        <label class="form-label" for="contractStatus">Statut</label>
-                        <select id="contractStatus" name="status" class="form-select" required>
-                            <option value="draft">Brouillon</option>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Statut</label>
+                        <select name="status" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required>
                             <option value="active">Actif</option>
+                            <option value="inactive">Inactif</option>
                             <option value="expired">Expiré</option>
                         </select>
                     </div>
                 </div>
 
-                <h4 class="font-semibold text-slate-700 mt-6 mb-2">Avenants & Exceptions</h4>
-                <div id="exceptions-container" class="space-y-3">
-                    <!-- Dynamic exception rows -->
+                <!-- Paliers de Frais de Service (Read-only) -->
+                <div>
+                    <h3 class="text-lg font-medium text-gray-700 mb-4">Commission par Défaut (Non modifiable)</h3>
+                    <div id="tiersContainer" class="space-y-3 p-4 bg-gray-100 rounded-md border">
+                        <!-- Les paliers par défaut seront affichés ici -->
+                    </div>
+                    <p class="text-sm text-gray-500 mt-2">La commission par défaut est basée sur un modèle standard et ne peut pas être modifiée ici. Seules les exceptions peuvent être ajoutées.</p>
                 </div>
-                <button type="button" id="add-exception-btn" class="btn btn-sm btn-outline-secondary mt-3"><i class="fas fa-plus mr-2"></i>Ajouter une exception</button>
+
+                <!-- Exceptions -->
+                <div>
+                    <h3 class="text-lg font-medium text-gray-700 mb-4">Exceptions</h3>
+                    <p class="text-sm text-gray-600 mb-4">Configurez des commissions spécifiques pour certains services ou catégories.</p>
+                    <div id="exceptionsContainer" class="space-y-4">
+                        <!-- Les exceptions seront ajoutées ici -->
+                    </div>
+                    <button type="button" id="addExceptionBtn" class="mt-3 inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                        </svg>
+                        Ajouter une exception
+                    </button>
+                </div>
             </form>
         `;
 
         const footer = document.createElement('div');
-        footer.className = 'flex justify-end space-x-2 mt-6 pt-4 border-t';
+        footer.className = 'flex justify-end space-x-3 pt-4 border-t';
         footer.innerHTML = `
-            <button type="button" class="btn btn-secondary" data-modal-close>Annuler</button>
-            <button type="submit" form="editContractForm" class="btn btn-primary"><i class="fas fa-save mr-2"></i>Enregistrer le Contrat</button>
+            <button type="button" class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500" data-dismiss="modal">
+                Annuler
+            </button>
+            <button type="submit" form="editContractForm" class="px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500">
+                <svg class="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                </svg>
+                Enregistrer
+            </button>
         `;
 
         this.setContent(title, body, footer);
     }
-    
-    public show(contract?: Contract) {
-        this.editingContract = contract || null;
-        this.updateTitle();
-        this.populateForm();
-        super.show();
-    }
-    
-    private updateTitle() {
-        const titleEl = this.modalElement.querySelector('h3');
-        if (titleEl) {
-            titleEl.textContent = this.editingContract ? `Éditer: ${this.editingContract.name}` : "Créer un Nouveau Contrat Partenaire";
-        }
-    }
-    
-    private populateForm() {
-        this.form.reset();
-        const exceptionsContainer = $('#exceptions-container', this.form) as HTMLElement;
-        exceptionsContainer.innerHTML = '';
-        this.exceptionCounter = 0;
 
-        if (!this.editingContract) {
-            // Set defaults for a new contract
-            ($('#contractStatus', this.form) as HTMLSelectElement).value = 'draft';
-            return;
-        }
+    private attachListeners() {
 
-        (this.form.querySelector('input[name="id"]') as HTMLInputElement).value = this.editingContract.id;
-        ($('#contractName', this.form) as HTMLInputElement).value = this.editingContract.name;
-        ($('#contractPartnerId', this.form) as HTMLSelectElement).value = this.editingContract.partnerId;
-        ($('#contractBaseProfileId', this.form) as HTMLSelectElement).value = this.editingContract.baseCommissionProfileId;
-        ($('#contractStatus', this.form) as HTMLSelectElement).value = this.editingContract.status;
+        // Add exception button
+        const addExceptionBtn = $('#addExceptionBtn', this.modalElement) as HTMLButtonElement;
+        addExceptionBtn.addEventListener('click', () => {
+            this.addException();
+        });
+
+        // Form submission
+        this.form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await this.handleSubmit();
+        });
+
+        // Add some default tiers for new contracts
+        this.addDefaultTiers();
+    }
+
+    private addDefaultTiers() {
+        // Ajouter les paliers par défaut comme dans l'image
+        this.addTier(1000, 5000, 'fixed', 300);
+        this.addTier(5001, 100000, 'fixed', 500);
+        this.addTier(100001, 999999999, 'percentage', 1);
+    }
+
+    private addTier(fromValue?: number, toValue?: number, typeValue?: string, valueAmount?: number) {
+        const tiersContainer = $('#tiersContainer', this.modalElement) as HTMLElement;
+        const tierIndex = this.tierCounter++;
+    
+        const tierDiv = document.createElement('div');
+        tierDiv.className = 'grid grid-cols-4 gap-3 items-center p-3 bg-white rounded-lg border';
+        tierDiv.innerHTML = `
+            <div class="text-sm">De: <span class="font-semibold">${fromValue || 'N/A'}</span></div>
+            <div class="text-sm">À: <span class="font-semibold">${toValue || 'N/A'}</span></div>
+            <div class="text-sm">Type: <span class="font-semibold">${typeValue === 'fixed' ? 'Fixe' : 'Pourcentage'}</span></div>
+            <div class="text-sm">Valeur: <span class="font-semibold">${valueAmount || 'N/A'}</span></div>
+        `;
+    
+        tiersContainer.appendChild(tierDiv);
+    }
+
+    private addException(exceptionData?: ContractException) {
+        const exceptionsContainer = $('#exceptionsContainer', this.modalElement) as HTMLElement;
+        const exceptionIndex = this.exceptionCounter++;
         
-        // Safely handle startDate
-        if (this.editingContract.startDate) {
-            ($('#contractStartDate', this.form) as HTMLInputElement).value = this.editingContract.startDate.split('T')[0];
-        }
+        // Préparer les options pour les catégories et services
+        const categoryOptions = [...new Set(this.operationTypes.map(ot => ot.category))]
+            .filter(cat => cat) // Remove empty categories
+            .map(cat => `<option value="${cat}">${cat}</option>`).join('');
+        const serviceOptions = this.operationTypes
+            .map(ot => `<option value="${ot.id}">${ot.name}</option>`).join('');
         
-        // Safely handle endDate
-        if (this.editingContract.endDate) {
-            ($('#contractEndDate', this.form) as HTMLInputElement).value = this.editingContract.endDate.split('T')[0];
-        }
-
-        this.editingContract.exceptions.forEach(ex => this.addExceptionRow(ex));
-    }
-    
-    private addExceptionRow(exception?: ContractException) {
-        this.exceptionCounter++;
-        const exId = this.exceptionCounter;
-        const exRow = document.createElement('div');
-        exRow.className = 'exception-row border p-3 rounded-lg bg-white';
-        exRow.dataset.exId = String(exId);
-
-        exRow.innerHTML = `
-            <div class="grid grid-cols-12 gap-x-4 gap-y-2">
-                <!-- Row 1: Type and Target Selection -->
-                <div class="col-span-12 md:col-span-3">
-                    <label class="form-label form-label-sm">Type d'exception</label>
-                    <select name="exType_${exId}" class="form-select form-select-sm" required>
-                        <option value="service" ${exception?.targetType === 'service' ? 'selected' : ''}>Service Spécifique</option>
-                        <option value="category" ${exception?.targetType === 'category' ? 'selected' : ''}>Catégorie de Services</option>
+        const exceptionDiv = document.createElement('div');
+        exceptionDiv.className = 'p-4 border border-gray-200 rounded-lg bg-gray-50';
+        exceptionDiv.innerHTML = `
+            <div class="flex justify-between items-center mb-4">
+                <h4 class="font-medium text-gray-700">Exception ${exceptionIndex + 1}</h4>
+                <button type="button" 
+                        class="p-1 text-red-600 hover:text-red-800 focus:outline-none"
+                        onclick="this.parentElement.parentElement.remove()">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                    </svg>
+                </button>
+            </div>
+            
+            <!-- Informations de base de l'exception -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Nom de l'exception</label>
+                    <input type="text" 
+                           name="exception_${exceptionIndex}_name" 
+                           class="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500" 
+                           placeholder="Ex: Services Canal+"
+                           value="${exceptionData?.name || ''}"
+                           required>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Type de cible</label>
+                    <select name="exception_${exceptionIndex}_targetType" 
+                            class="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 exception-target-type" 
+                            required>
+                        <option value="">-- Sélectionner --</option>
+                        <option value="category" ${exceptionData?.targetType === 'category' ? 'selected' : ''}>Catégorie complète</option>
+                        <option value="service" ${exceptionData?.targetType === 'service' ? 'selected' : ''}>Service spécifique</option>
                     </select>
                 </div>
-                <div class="col-span-12 md:col-span-8">
-                    <label class="form-label form-label-sm">Service / Catégorie Cible</label>
-                    <select name="exTargetId_${exId}" class="form-select form-select-sm" required></select>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Cible</label>
+                    <select name="exception_${exceptionIndex}_targetId" 
+                            class="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 exception-target-id" 
+                            required>
+                        <option value="">-- Sélectionner d'abord le type --</option>
+                    </select>
                 </div>
-                <div class="col-span-12 md:col-span-1 flex items-end">
-                    <button type="button" class="btn btn-sm btn-danger w-full" data-action="remove-exception"><i class="fas fa-trash-alt"></i></button>
-                </div>
-
-                <!-- Row 2: Commission Config -->
-                <div class="col-span-12"><hr class="my-2"></div>
-                <div class="col-span-12 md:col-span-3">
-                    <label class="form-label form-label-sm">Part Société (%)</label>
-                    <input type="number" min="0" max="100" name="exPartage_${exId}" class="form-input form-input-sm" value="${exception?.commissionConfig.partageSociete || 50}">
-                </div>
-                <div class="col-span-12 md:col-span-9">
-                    <p class="form-label form-label-sm mb-1">Frais Spécifiques (laisser vide pour ne pas surcharger)</p>
-                    <div class="grid grid-cols-3 gap-2">
-                        <input type="number" step="0.01" name="exTierFrom_${exId}" class="form-input form-input-sm" placeholder="De (XOF)">
-                        <input type="number" step="0.01" name="exTierTo_${exId}" class="form-input form-input-sm" placeholder="À (XOF)">
-                        <input type="number" step="0.01" name="exTierValue_${exId}" class="form-input form-input-sm" placeholder="Frais Fixe (XOF)">
+            </div>
+            
+            <!-- Configuration de commission pour cette exception -->
+            <div class="border-t pt-4">
+                <h5 class="font-medium text-gray-600 mb-3">Configuration de commission</h5>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Type</label>
+                        <select name="exception_${exceptionIndex}_commissionType" 
+                                class="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 exception-commission-type">
+                            <option value="fixed" ${exceptionData?.commissionConfig.type === 'fixed' ? 'selected' : ''}>Montant fixe</option>
+                            <option value="percentage" ${exceptionData?.commissionConfig.type === 'percentage' ? 'selected' : ''}>Pourcentage</option>
+                            <option value="tiers" ${exceptionData?.commissionConfig.type === 'tiers' ? 'selected' : ''}>Par paliers</option>
+                        </select>
                     </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Part société (%)</label>
+                        <input type="number" 
+                               name="exception_${exceptionIndex}_partageSociete" 
+                               class="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500" 
+                               min="0" 
+                               max="100" 
+                               value="${exceptionData?.commissionConfig.partageSociete || 50}"
+                               required>
+                    </div>
+                </div>
+                
+                <!-- Détails de commission selon le type -->
+                <div class="exception-commission-details" data-exception-index="${exceptionIndex}">
+                    <!-- Les détails seront rendus ici selon le type -->
                 </div>
             </div>
         `;
-
-        const typeSelect = exRow.querySelector(`select[name="exType_${exId}"]`) as HTMLSelectElement;
-        const targetSelect = exRow.querySelector(`select[name="exTargetId_${exId}"]`) as HTMLSelectElement;
-
-        const updateTargetOptions = () => {
-            targetSelect.innerHTML = '';
-            const type = typeSelect.value;
-            if (type === 'service') {
-                this.operationTypes
-                    .filter(o => o.status === 'active')
-                    .sort((a,b) => a.name.localeCompare(b.name))
-                    .forEach(o => targetSelect.add(new Option(o.name, o.id)));
-            } else if (type === 'category') {
-                const categories = [...new Set(this.operationTypes.map(o => o.category).filter(Boolean))] as string[];
-                categories.sort().forEach(c => targetSelect.add(new Option(c, c)));
-            }
-             if (exception) {
-                targetSelect.value = exception.targetId;
-            }
-        };
-
-        typeSelect.addEventListener('change', updateTargetOptions);
-        updateTargetOptions();
-
-        $('#exceptions-container', this.form)?.appendChild(exRow);
-    }
-    
-    private attachListeners() {
-        $('#add-exception-btn', this.form)?.addEventListener('click', () => this.addExceptionRow());
-
-        $('#exceptions-container', this.form)?.addEventListener('click', e => {
-            const target = e.target as HTMLElement;
-            const removeBtn = target.closest<HTMLButtonElement>('[data-action="remove-exception"]');
-            if (removeBtn) {
-                removeBtn.closest('.exception-row')?.remove();
-            }
-        });
-
-        this.form.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            if (!this.form.checkValidity()) {
-                this.form.reportValidity();
-                return;
+        
+        exceptionsContainer.appendChild(exceptionDiv);
+        
+        // Add listeners for dynamic behavior
+        const targetTypeSelect = exceptionDiv.querySelector('.exception-target-type') as HTMLSelectElement;
+        const targetIdSelect = exceptionDiv.querySelector('.exception-target-id') as HTMLSelectElement;
+        const commissionTypeSelect = exceptionDiv.querySelector('.exception-commission-type') as HTMLSelectElement;
+        
+        targetTypeSelect.addEventListener('change', () => {
+            if (targetTypeSelect.value === 'category') {
+                targetIdSelect.innerHTML = '<option value="">-- Sélectionner une catégorie --</option>' + categoryOptions;
+            } else if (targetTypeSelect.value === 'service') {
+                targetIdSelect.innerHTML = '<option value="">-- Sélectionner un service --</option>' + serviceOptions;
+            } else {
+                targetIdSelect.innerHTML = '<option value="">-- Sélectionner d\'abord le type --</option>';
             }
             
-            const exceptions: ContractException[] = [];
-            this.form.querySelectorAll('.exception-row').forEach(row => {
-                 const exId = (row as HTMLElement).dataset.exId;
-                 const targetType = (row.querySelector(`select[name="exType_${exId}"]`) as HTMLSelectElement).value as 'service' | 'category';
-                 const targetSelect = (row.querySelector(`select[name="exTargetId_${exId}"]`) as HTMLSelectElement);
-                 const targetId = targetSelect.value;
-                 const name = targetSelect.options[targetSelect.selectedIndex].text;
-
-                 const from = (row.querySelector(`input[name="exTierFrom_${exId}"]`) as HTMLInputElement).value;
-                 const to = (row.querySelector(`input[name="exTierTo_${exId}"]`) as HTMLInputElement).value;
-                 const val = (row.querySelector(`input[name="exTierValue_${exId}"]`) as HTMLInputElement).value;
-                
-                 let commissionConfig: CommissionConfig = {
-                     type: 'tiers',
-                     partageSociete: parseInt((row.querySelector(`input[name="exPartage_${exId}"]`) as HTMLInputElement).value, 10),
-                     tiers: []
-                 };
-
-                 // For simplicity, this example only handles one tier override per exception
-                 if(from && val) {
-                     commissionConfig.tiers?.push({
-                         from: parseFloat(from),
-                         to: to ? parseFloat(to) : Infinity,
-                         type: 'fixed',
-                         value: parseFloat(val)
-                     });
-                 }
-
-                exceptions.push({ targetType, targetId, name, commissionConfig });
-            });
-
-            const formData = new FormData(this.form);
-            const contractData: Contract = {
-                id: formData.get('id') as string,
-                name: formData.get('name') as string,
-                partnerId: formData.get('partnerId') as string,
-                baseCommissionProfileId: formData.get('baseCommissionProfileId') as string,
-                status: formData.get('status') as 'active' | 'draft' | 'expired',
-                startDate: new Date(formData.get('startDate') as string).toISOString(),
-                endDate: formData.get('endDate') ? new Date(formData.get('endDate') as string).toISOString() : null,
-                exceptions: exceptions,
-            };
-
-            const submitButton = this.modalElement.querySelector('button[type="submit"]') as HTMLButtonElement;
-            const originalHtml = submitButton.innerHTML;
-            submitButton.disabled = true;
-            submitButton.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i>Enregistrement...`;
-
-            try {
-                const api = ApiService.getInstance();
-                await api.updateContract(contractData);
-                document.body.dispatchEvent(new CustomEvent('contractsUpdated'));
-                document.body.dispatchEvent(new CustomEvent('showToast', { detail: { message: "Contrat enregistré avec succès !", type: 'success' } }));
-                this.hide();
-            } catch (error) {
-                 console.error("Failed to save contract", error);
-                document.body.dispatchEvent(new CustomEvent('showToast', { detail: { message: "Une erreur s'est produite.", type: 'error' } }));
-            } finally {
-                 submitButton.disabled = false;
-                 submitButton.innerHTML = originalHtml;
+            // Set the value if we're editing
+            if (exceptionData) {
+                setTimeout(() => {
+                    targetIdSelect.value = exceptionData.targetId;
+                }, 10);
             }
         });
+        
+        // Add listener for commission type change
+        commissionTypeSelect.addEventListener('change', () => {
+            this.renderExceptionCommissionDetails(exceptionIndex, exceptionData);
+        });
+        
+        // Trigger initial population if editing
+        if (exceptionData) {
+            targetTypeSelect.dispatchEvent(new Event('change'));
+        }
+        
+        // Render initial commission details
+        this.renderExceptionCommissionDetails(exceptionIndex, exceptionData);
+    }
+
+    private getExceptionValue(exceptionData?: ContractException): string {
+        if (!exceptionData) return '';
+        
+        const config = exceptionData.commissionConfig;
+        if (config.type === 'fixed') {
+            return config.amount?.toString() || '';
+        } else if (config.type === 'percentage') {
+            return config.rate?.toString() || '';
+        }
+        return '';
+    }
+
+    private renderExceptionCommissionDetails(exceptionIndex: number, exceptionData?: ContractException) {
+        const detailsContainer = this.modalElement.querySelector(`[data-exception-index="${exceptionIndex}"]`) as HTMLElement;
+        const commissionTypeSelect = this.modalElement.querySelector(`[name="exception_${exceptionIndex}_commissionType"]`) as HTMLSelectElement;
+        
+        if (!detailsContainer || !commissionTypeSelect) return;
+        
+        const commissionType = commissionTypeSelect.value;
+        
+        if (commissionType === 'fixed') {
+            detailsContainer.innerHTML = `
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Montant fixe (FCFA)</label>
+                    <input type="number" 
+                           name="exception_${exceptionIndex}_value" 
+                           class="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500" 
+                           min="0" 
+                           step="1" 
+                           placeholder="Ex: 500"
+                           value="${exceptionData?.commissionConfig.type === 'fixed' ? exceptionData.commissionConfig.amount || '' : ''}"
+                           required>
+                </div>
+            `;
+        } else if (commissionType === 'percentage') {
+            detailsContainer.innerHTML = `
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Taux (%)</label>
+                    <input type="number" 
+                           name="exception_${exceptionIndex}_value" 
+                           class="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500" 
+                           min="0" 
+                           max="100" 
+                           step="0.01" 
+                           placeholder="Ex: 4"
+                           value="${exceptionData?.commissionConfig.type === 'percentage' ? exceptionData.commissionConfig.rate || '' : ''}"
+                           required>
+                </div>
+            `;
+        } else if (commissionType === 'tiers') {
+            detailsContainer.innerHTML = `
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Paliers de commission</label>
+                    <div class="exception-tiers-container" data-exception="${exceptionIndex}">
+                        <!-- Les paliers seront ajoutés ici -->
+                    </div>
+                    <button type="button" 
+                            class="mt-2 inline-flex items-center px-3 py-1 border border-gray-300 rounded text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 add-exception-tier" 
+                            data-exception="${exceptionIndex}">
+                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                        </svg>
+                        Ajouter un palier
+                    </button>
+                </div>
+            `;
+            
+            // Add tier button listener
+            const addTierBtn = detailsContainer.querySelector('.add-exception-tier') as HTMLButtonElement;
+            addTierBtn.addEventListener('click', () => {
+                this.addExceptionTier(exceptionIndex);
+            });
+            
+            // Add existing tiers if editing
+            if (exceptionData?.commissionConfig.type === 'tiers' && exceptionData.commissionConfig.tiers) {
+                exceptionData.commissionConfig.tiers.forEach((tier) => {
+                    this.addExceptionTier(exceptionIndex, tier);
+                });
+            }
+        }
+    }
+
+    private addExceptionTier(exceptionIndex: number, tierData?: CommissionTier) {
+        const tiersContainer = this.modalElement.querySelector(`[data-exception="${exceptionIndex}"]`) as HTMLElement;
+        if (!tiersContainer) return;
+        
+        const tierIndex = tiersContainer.children.length;
+        
+        const tierDiv = document.createElement('div');
+        tierDiv.className = 'grid grid-cols-5 gap-2 items-center p-2 bg-white border rounded mb-2';
+        tierDiv.innerHTML = `
+            <div>
+                <input type="number" 
+                       name="exception_${exceptionIndex}_tier_${tierIndex}_from" 
+                       class="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500" 
+                       placeholder="1000"
+                       min="0" 
+                       step="1"
+                       value="${tierData?.from || ''}"
+                       required>
+            </div>
+            <div>
+                <input type="number" 
+                       name="exception_${exceptionIndex}_tier_${tierIndex}_to" 
+                       class="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500" 
+                       placeholder="5000"
+                       min="0" 
+                       step="1"
+                       value="${tierData?.to || ''}"
+                       required>
+            </div>
+            <div>
+                <select name="exception_${exceptionIndex}_tier_${tierIndex}_type" 
+                        class="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500">
+                    <option value="fixed" ${tierData?.type === 'fixed' ? 'selected' : ''}>Fixe</option>
+                    <option value="percentage" ${tierData?.type === 'percentage' ? 'selected' : ''}>%</option>
+                </select>
+            </div>
+            <div>
+                <input type="number" 
+                       name="exception_${exceptionIndex}_tier_${tierIndex}_value" 
+                       class="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500" 
+                       placeholder="300"
+                       min="0" 
+                       step="0.01"
+                       value="${tierData?.value || ''}"
+                       required>
+            </div>
+            <div class="flex justify-center">
+                <button type="button" 
+                        class="p-1 text-red-600 hover:text-red-800 focus:outline-none"
+                        onclick="this.parentElement.parentElement.remove()">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                    </svg>
+                </button>
+            </div>
+        `;
+        
+        tiersContainer.appendChild(tierDiv);
+    }
+
+    private async handleSubmit() {
+        const formData = new FormData(this.form);
+        const api = ApiService.getInstance();
+        
+        try {
+            // Build contract object
+            const contract: Contract = {
+                id: formData.get('id') as string || `contract_${Date.now()}`,
+                name: formData.get('name') as string,
+                partnerId: formData.get('partnerId') as string,
+                status: formData.get('status') as 'active' | 'inactive' | 'expired',
+                startDate: new Date().toISOString(),
+                endDate: null,
+                defaultCommissionConfig: this.buildCommissionConfig(formData),
+                exceptions: this.buildExceptions(formData)
+            };
+            
+            // Avertir l'utilisateur si on active un contrat
+            if (contract.status === 'active' && (!this.editingContract || this.editingContract.status !== 'active')) {
+                const confirmed = confirm(
+                    `Attention : Activer ce contrat désactivera automatiquement tous les autres contrats de ce partenaire.\n\nContinuer ?`
+                );
+                if (!confirmed) {
+                    return;
+                }
+            }
+            
+            await api.updateContract(contract);
+            this.hide();
+            
+            if (this.onSave) {
+                this.onSave();
+            }
+        } catch (error) {
+            console.error('Error saving contract:', error);
+            alert('Erreur lors de la sauvegarde du contrat.');
+        }
+    }
+
+    private buildCommissionConfig(formData: FormData): CommissionConfig {
+        const partageSociete = parseInt(formData.get('partageSociete') as string) || 60;
+        const tiers = this.buildTiers(formData);
+        
+        return {
+            type: 'tiers',
+            partageSociete,
+            tiers
+        };
+    }
+
+    private buildTiers(formData: FormData): CommissionTier[] {
+        // Renvoie les paliers par défaut car ils ne sont plus modifiables
+        return [
+            { from: 1000, to: 5000, type: 'fixed', value: 300 },
+            { from: 5001, to: 100000, type: 'fixed', value: 500 },
+            { from: 100001, to: 999999999, type: 'percentage', value: 1 }
+        ];
+    }
+
+    private buildExceptions(formData: FormData): ContractException[] {
+        const exceptions: ContractException[] = [];
+        
+        for (let i = 0; i < this.exceptionCounter; i++) {
+            const name = formData.get(`exception_${i}_name`) as string;
+            const targetType = formData.get(`exception_${i}_targetType`) as 'service' | 'category';
+            const targetId = formData.get(`exception_${i}_targetId`) as string;
+            const commissionType = formData.get(`exception_${i}_commissionType`) as 'fixed' | 'percentage' | 'tiers';
+            const partageSociete = parseInt(formData.get(`exception_${i}_partageSociete`) as string);
+            
+            if (name && targetType && targetId && commissionType) {
+                const commissionConfig: CommissionConfig = {
+                    type: commissionType,
+                    partageSociete: partageSociete || 50
+                };
+                
+                if (commissionType === 'fixed') {
+                    const value = parseFloat(formData.get(`exception_${i}_value`) as string);
+                    if (!isNaN(value)) {
+                        commissionConfig.amount = value;
+                    }
+                } else if (commissionType === 'percentage') {
+                    const value = parseFloat(formData.get(`exception_${i}_value`) as string);
+                    if (!isNaN(value)) {
+                        commissionConfig.rate = value;
+                    }
+                } else if (commissionType === 'tiers') {
+                    commissionConfig.tiers = this.buildExceptionTiers(formData, i);
+                }
+                
+                // Only add if we have valid configuration
+                if ((commissionType === 'fixed' && commissionConfig.amount !== undefined) ||
+                    (commissionType === 'percentage' && commissionConfig.rate !== undefined) ||
+                    (commissionType === 'tiers' && commissionConfig.tiers && commissionConfig.tiers.length > 0)) {
+                    
+                    exceptions.push({
+                        name,
+                        targetType,
+                        targetId,
+                        commissionConfig
+                    });
+                }
+            }
+        }
+        
+        return exceptions;
+    }
+
+    private buildExceptionTiers(formData: FormData, exceptionIndex: number): CommissionTier[] {
+        const tiers: CommissionTier[] = [];
+        const tiersContainer = this.modalElement.querySelector(`[data-exception="${exceptionIndex}"]`) as HTMLElement;
+        
+        if (tiersContainer) {
+            for (let i = 0; i < tiersContainer.children.length; i++) {
+                const from = parseFloat(formData.get(`exception_${exceptionIndex}_tier_${i}_from`) as string);
+                const to = parseFloat(formData.get(`exception_${exceptionIndex}_tier_${i}_to`) as string);
+                const type = formData.get(`exception_${exceptionIndex}_tier_${i}_type`) as 'fixed' | 'percentage';
+                const value = parseFloat(formData.get(`exception_${exceptionIndex}_tier_${i}_value`) as string);
+                
+                if (!isNaN(from) && !isNaN(to) && !isNaN(value)) {
+                    tiers.push({ from, to, type, value });
+                }
+            }
+        }
+        
+        return tiers;
+    }
+
+    public async show(contract?: Contract) {
+        this.editingContract = contract || null;
+        this.tierCounter = 0;
+        this.exceptionCounter = 0;
+        
+        // Clear existing tiers and exceptions
+        const tiersContainer = $('#tiersContainer', this.modalElement) as HTMLElement;
+        const exceptionsContainer = $('#exceptionsContainer', this.modalElement) as HTMLElement;
+        tiersContainer.innerHTML = '';
+        exceptionsContainer.innerHTML = '';
+        
+        if (contract) {
+            // Populate form with contract data
+            (this.form.elements.namedItem('id') as HTMLInputElement).value = contract.id;
+            (this.form.elements.namedItem('name') as HTMLInputElement).value = contract.name;
+            (this.form.elements.namedItem('partnerId') as HTMLSelectElement).value = contract.partnerId;
+            (this.form.elements.namedItem('status') as HTMLSelectElement).value = contract.status;
+            
+            // Populate commission config
+            if (contract.defaultCommissionConfig) {
+                const config = contract.defaultCommissionConfig;
+                (this.form.elements.namedItem('partageSociete') as HTMLInputElement).value = (config.partageSociete || 60).toString();
+                
+                // Populate tiers
+                if (config.tiers && config.tiers.length > 0) {
+                    config.tiers.forEach((tier) => {
+                        this.addTier(tier.from, tier.to, tier.type, tier.value);
+                    });
+                } else {
+                    this.addDefaultTiers();
+                }
+            } else {
+                this.addDefaultTiers();
+            }
+            
+            // Populate exceptions
+            if (contract.exceptions && contract.exceptions.length > 0) {
+                contract.exceptions.forEach((exception) => {
+                    this.addException(exception);
+                });
+            }
+        } else {
+            // Reset form for new contract
+            this.form.reset();
+            (this.form.elements.namedItem('status') as HTMLSelectElement).value = 'active';
+            (this.form.elements.namedItem('partageSociete') as HTMLInputElement).value = '60';
+            this.addDefaultTiers();
+        }
+        
+        super.show();
     }
 }

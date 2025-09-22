@@ -105,9 +105,16 @@ export class PartnerEditAgentModal extends BaseModal {
         } else {
             passwordSection.innerHTML = `
                 <div class="border-t pt-4">
-                    <label class="form-label text-slate-400">Mot de passe</label>
-                    <input type="password" class="form-input bg-slate-100" placeholder="Sera défini par un admin" disabled>
-                    <p class="text-xs text-slate-500 mt-1">Un mot de passe par défaut sera assigné. L'agent devra le changer à la première connexion.</p>
+                    <label class="form-label">Mot de passe</label>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <input type="password" name="password" class="form-input" placeholder="Mot de passe" autocomplete="new-password" required>
+                        </div>
+                        <div>
+                            <input type="password" name="passwordConfirm" class="form-input" placeholder="Confirmer le mot de passe" autocomplete="new-password" required>
+                        </div>
+                    </div>
+                    <p class="text-xs text-slate-500 mt-1">Veuillez définir un mot de passe pour le nouvel agent.</p>
                 </div>
             `;
         }
@@ -148,9 +155,20 @@ export class PartnerEditAgentModal extends BaseModal {
                 const newPassword = formData.get('password') as string;
                 const confirmPassword = formData.get('passwordConfirm') as string;
 
-                if (this.editingAgent && newPassword && newPassword !== confirmPassword) {
+                // Vérifier que les mots de passe correspondent (pour la création et la modification)
+                if (newPassword && newPassword !== confirmPassword) {
                     document.body.dispatchEvent(new CustomEvent('showToast', {
                         detail: { message: "Les mots de passe ne correspondent pas.", type: 'error' }
+                    }));
+                    submitButton.disabled = false;
+                    submitButton.innerHTML = originalButtonHtml;
+                    return;
+                }
+
+                // Pour la création d'un nouvel agent, les mots de passe sont requis
+                if (!this.editingAgent && (!newPassword || !confirmPassword)) {
+                    document.body.dispatchEvent(new CustomEvent('showToast', {
+                        detail: { message: "Veuillez saisir et confirmer un mot de passe.", type: 'error' }
                     }));
                     submitButton.disabled = false;
                     submitButton.innerHTML = originalButtonHtml;
@@ -175,12 +193,20 @@ export class PartnerEditAgentModal extends BaseModal {
                     agentData.password = newPassword;
                 }
 
+                // Pour un nouvel agent, inclure le mot de passe
+                if (!this.editingAgent && newPassword) {
+                    agentData.password = newPassword;
+                }
+
                 const api = ApiService.getInstance();
                 await api.updateAgent(agentData);
 
                 let toastMessage = this.editingAgent ? "Agent mis à jour avec succès." : "Agent créé avec succès.";
-                if (this.editingAgent && newPassword) {
+                if ((this.editingAgent && newPassword) || (!this.editingAgent && newPassword)) {
                     toastMessage = "Agent mis à jour et mot de passe changé avec succès.";
+                }
+                if (!this.editingAgent && newPassword) {
+                    toastMessage = "Agent créé avec succès et mot de passe défini.";
                 }
 
                 document.body.dispatchEvent(new CustomEvent('showToast', { detail: { message: toastMessage, type: 'success' } }));

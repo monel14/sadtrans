@@ -14,7 +14,7 @@ export async function renderAdminManagePartnersView(): Promise<HTMLElement> {
         allPartners,
         allTransactions,
         userMap,
-        commissionProfileMap,
+        // Commission profile map removed - commissions are now configured directly in contracts
         activeContractsMap,
         agencyMap
     ] = await Promise.all([
@@ -22,7 +22,7 @@ export async function renderAdminManagePartnersView(): Promise<HTMLElement> {
         dataService.getPartners(),
         dataService.getTransactions(),
         dataService.getUserMap(),
-        dataService.getCommissionProfileMap(),
+        // Commission profile map loading removed - commissions are now configured directly in contracts
         dataService.getActiveContractsMap(),
         dataService.getAgencyMapByPartnerId()
     ]);
@@ -49,7 +49,8 @@ export async function renderAdminManagePartnersView(): Promise<HTMLElement> {
             const agents = allUsers.filter(u => u.role === 'agent' && u.partnerId === partner.id);
             
             const partnerContract = activeContractsMap.get(partner.id);
-            const commissionProfile = partnerContract ? commissionProfileMap.get(partnerContract.baseCommissionProfileId) : undefined;
+            // Commission profile lookup removed - using contract's default commission config instead
+            const commissionConfig = partnerContract?.defaultCommissionConfig;
             
             const agentIds = agents.map(a => a.id);
             const partnerTransactions = allTransactions.filter(t => agentIds.includes(t.agentId));
@@ -98,7 +99,7 @@ export async function renderAdminManagePartnersView(): Promise<HTMLElement> {
                     </div>
                 </div>
                  <div class="text-center text-sm text-slate-500 -mt-2 mb-4">
-                    Profil de frais: <span class="font-semibold text-slate-700">${commissionProfile?.name || 'N/A'}</span>
+                    Commission: <span class="font-semibold text-slate-700">${commissionConfig ? `${commissionConfig.type} (${commissionConfig.partageSociete || 100}% société)` : 'N/A'}</span>
                  </div>
 
                 <!-- Footer with Action Buttons -->

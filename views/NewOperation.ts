@@ -1,7 +1,7 @@
 
 
 // Fix: Import 'OperationTypeField' and 'OperationTypeFieldOption' to resolve type errors.
-import { User, OperationType, CommissionProfile, CommissionTier, CardType, OperationTypeField, OperationTypeFieldOption } from '../models';
+import { User, OperationType, CommissionTier, CardType, OperationTypeField, OperationTypeFieldOption } from '../models';
 import { ApiService } from '../services/api.service';
 import { DataService } from '../services/data.service';
 import { createCard } from '../components/Card';
@@ -89,6 +89,13 @@ function getPriceFromFieldOptions(field: OperationTypeField, value: string): num
 
 async function renderDynamicFields(opType: OperationType, container: HTMLElement, cardTypes: CardType[], updateCallback?: () => void) {
     container.innerHTML = '';
+    
+    if (!opType.fields || opType.fields.length === 0) {
+        container.innerHTML = '<p class="text-slate-500 text-center py-4">Aucun champ défini pour cette opération.</p>';
+        container.classList.remove('hidden');
+        return;
+    }
+    
     opType.fields.forEach(field => {
         if (field.obsolete) return;
 
@@ -341,14 +348,13 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
             `;
         }
 
-        if (partnerShare > 0) {
-            summaryHtml += `
-                 <div class="flex justify-between items-center text-sm mt-2 pt-2 border-t border-violet-200">
-                    <span class="font-semibold text-emerald-700">Votre commission estimée :</span>
-                    <span class="font-bold text-emerald-700">${formatAmount(partnerShare)}</span>
-                </div>
-            `;
-        }
+        // On affiche toujours la commission, même si elle est nulle.
+        summaryHtml += `
+             <div class="flex justify-between items-center text-sm mt-2 pt-2 border-t border-violet-200">
+                <span class="font-semibold text-emerald-700">Votre commission estimée :</span>
+                <span class="font-bold text-emerald-700">${formatAmount(partnerShare)}</span>
+            </div>
+        `;
 
         summaryDetails.innerHTML = summaryHtml;
 

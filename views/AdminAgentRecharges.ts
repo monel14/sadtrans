@@ -5,6 +5,7 @@ import { DataService } from '../services/data.service';
 import { createCard } from '../components/Card';
 import { formatAmount, formatDate } from '../utils/formatters';
 import { $ } from '../utils/dom';
+import { createRefreshableView, addRefreshButton, invalidateCaches } from '../utils/refreshable-view';
 
 function renderRequestItem(
     req: AgentRechargeRequest,
@@ -101,26 +102,39 @@ function renderRequestItem(
 }
 
 
-export async function renderAdminAgentRechargesView(): Promise<HTMLElement> {
-    const api = ApiService.getInstance();
-    const dataService = DataService.getInstance();
-    const cardContent = document.createElement('div');
+// Variables globales pour les données
+let allRecharges: AgentRechargeRequest[] = [];
+let userMap: Map<string, User> = new Map();
+let partnerMap: Map<string, Partner> = new Map();
+let methodMap: Map<string, RechargePaymentMethod> = new Map();
+let allUsers: User[] = [];
+let cardContent: HTMLElement;
+let currentTab: 'pending' | 'history' = 'pending';
 
-    const [allRecharges, userMap, partnerMap, methodMap, allUsers] = await Promise.all([
+async function loadData(): Promise<void> {
+    const dataService = DataService.getInstance();
+    
+    [allRecharges, userMap, partnerMap, methodMap, allUsers] = await Promise.all([
         dataService.getAgentRechargeRequests(),
         dataService.getUserMap(),
         dataService.getPartnerMap(),
         dataService.getMethodMap(),
-        dataService.getUsers(), // Fetch all users to get agency data
+        dataService.getUsers(),
     ]);
+}
 
+function renderContent(): void {
+    if (!cardContent) return;
+    
     const pendingRecharges = allRecharges.filter(r => r.statut === 'En attente');
     const historyRecharges = allRecharges.filter(r => r.statut !== 'En attente').slice(0, 20);
 
     cardContent.innerHTML = `
-        <div class="tabs">
-            <button data-tab="pending" class="active">En attente (${pendingRecharges.length})</button>
-            <button data-tab="history">Historique récent (${historyRecharges.length})</button>
+        <div class="flex justify-between items-center mb-4">
+            <div class="tabs">
+                <button data-tab="pending" class="${currentTab === 'pending' ? 'active' : ''}">En attente (${pendingRecharges.length})</button>
+                <button data-tab="history" class="${currentTab === 'history' ? 'active' : ''}">Historique récent (${historyRecharges.length})</button>
+            </div>
         </div>
         <div id="recharge-list-container" class="tab-content mt-4">
             <!-- List will be rendered here -->
@@ -128,25 +142,87 @@ export async function renderAdminAgentRechargesView(): Promise<HTMLElement> {
     `;
 
     const listContainer = $('#recharge-list-container', cardContent) as HTMLElement;
+    renderList(currentTab, listContainer);
+}
 
-    function renderList(tab: 'pending' | 'history') {
-        const itemsToRender = tab === 'pending' ? pendingRecharges : historyRecharges;
+function renderList(tab: 'pending' | 'history', listContainer: HTMLElement): void {
+    const pendingRecharges = allRecharges.filter(r => r.statut === 'En attente');
+    const historyRecharges = allRecharges.filter(r => r.statut !== 'En attente').slice(0, 20);
+    const itemsToRender = tab === 'pending' ? pendingRecharges : historyRecharges;
 
-        listContainer.innerHTML = '';
-        if (itemsToRender.length === 0) {
-            listContainer.innerHTML = `<p class="text-center text-slate-500 p-8">Aucune demande dans cette catégorie.</p>`;
-            return;
-        }
-
-        const list = document.createElement('ul');
-        list.className = 'space-y-4';
-        itemsToRender.forEach(req => {
-            list.appendChild(renderRequestItem(req, { userMap, partnerMap, methodMap, allRecharges, allUsers }));
-        });
-        listContainer.appendChild(list);
+    listContainer.innerHTML = '';
+    if (itemsToRender.length === 0) {
+        listContainer.innerHTML = `<p class="text-center text-slate-500 p-8">Aucune demande dans cette catégorie.</p>`;
+        return;
     }
 
+    const list = document.createElement('ul');
+    list.className = 'space-y-4';
+    itemsToRender.forEach(req => {
+        list.appendChild(renderRequestItem(req, { userMap, partnerMap, methodMap, allRecharges, allUsers }));
+    });
+    listContainer.appendChild(list);
+}
+
+export async function renderAdminAgentRechargesView(): Promise<HTMLElement> {
+    const api = ApiService.getInstance();
+    
+    // Initialiser le contenu
+    cardContent = document.createElement('div');
+    
+    // Charger les données initiales
+    await loadData();
+    
+    // Créer la vue rafraîchissable
+    const refreshableView = createRefreshableView({
+        viewId: 'admin-agent-recharges',
+        refreshData: async () => {
+            invalidateCaches(['recharges', 'users']);
+            await loadData();
+        },
+        renderContent: () => {
+            renderContent();
+            return Promise.resolve();
+        },
+        dataTypes: ['recharges', 'users']
+    });
+    
+    // Rendu initial
+    renderContent();
+
     const card = createCard('Demandes de Recharge des Agents', cardContent, 'fa-wallet');
+    
+    // Ajouter le bouton de rafraîchissement
+    const cardHeader = card.querySelector('.card-header');
+    if (cardHeader) {
+        const refreshButton = addRefreshButton(card, async () => {
+            await refreshableView.refresh();
+        });
+        cardHeader.appendChild(refreshButton);
+    }
+    
+    // Gestion des onglets
+    card.addEventListener('click', (e) => {
+        const target = e.target as HTMLElement;
+        const tabButton = target.closest<HTMLButtonElement>('[data-tab]');
+        
+        if (tabButton) {
+            const tab = tabButton.dataset.tab as 'pending' | 'history';
+            currentTab = tab;
+            
+            // Mettre à jour les onglets actifs
+            card.querySelectorAll('[data-tab]').forEach(btn => btn.classList.remove('active'));
+            tabButton.classList.add('active');
+            
+            // Re-rendre la liste
+            const listContainer = $('#recharge-list-container', card) as HTMLElement;
+            if (listContainer) {
+                renderList(tab, listContainer);
+            }
+        }
+    });
+
+
 
     card.addEventListener('click', async (e) => {
         const target = e.target as HTMLElement;
@@ -155,7 +231,10 @@ export async function renderAdminAgentRechargesView(): Promise<HTMLElement> {
         if (tabButton) {
             card.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
             tabButton.classList.add('active');
-            renderList(tabButton.dataset.tab as 'pending' | 'history');
+            const listContainer = $('#recharge-list-container', card) as HTMLElement;
+            if (listContainer) {
+                renderList(tabButton.dataset.tab as 'pending' | 'history', listContainer);
+            }
             return;
         }
 
@@ -189,6 +268,9 @@ export async function renderAdminAgentRechargesView(): Promise<HTMLElement> {
         }
     });
 
-    renderList('pending');
+    const initialListContainer = $('#recharge-list-container', card) as HTMLElement;
+    if (initialListContainer) {
+        renderList('pending', initialListContainer);
+    }
     return card;
 }
