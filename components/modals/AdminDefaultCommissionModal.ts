@@ -20,9 +20,7 @@ export class AdminDefaultCommissionModal extends BaseModal {
     private onSave?: () => void;
 
     constructor() {
-        console.log('AdminDefaultCommissionModal constructor called');
         super('admin-default-commission-modal', { size: 'lg' });
-        console.log('Modal created with ID:', this.modalId);
         this.api = ApiService.getInstance();
     }
 
@@ -31,101 +29,140 @@ export class AdminDefaultCommissionModal extends BaseModal {
     }
 
     public async show(config?: CommissionConfig): Promise<void> {
-        const title = config ? 'Modifier la Configuration par Défaut' : 'Configuration par Défaut';
-        
-        const body = document.createElement('div');
-        body.innerHTML = `
-            <form id="defaultCommissionForm" class="space-y-6">
-                <div>
-                    <label class="form-label" for="commissionType">Type de Commission</label>
-                    <select id="commissionType" name="type" class="form-input" required>
-                        <option value="fixed" ${config?.type === 'fixed' ? 'selected' : ''}>Montant Fixe</option>
-                        <option value="percentage" ${config?.type === 'percentage' ? 'selected' : ''}>Pourcentage</option>
-                        <option value="tiers" ${config?.type === 'tiers' ? 'selected' : ''}>Par Paliers</option>
-                    </select>
-                </div>
-
-                <div id="fixedConfig" class="space-y-4" style="display: ${config?.type === 'fixed' ? 'block' : 'none'}">
-                    <div>
-                        <label class="form-label" for="fixedAmount">Montant Fixe (FCFA)</label>
-                        <input type="number" id="fixedAmount" name="amount" class="form-input" 
-                               value="${config?.amount || ''}" min="0" step="1">
-                    </div>
-                </div>
-
-                <div id="percentageConfig" class="space-y-4" style="display: ${config?.type === 'percentage' ? 'block' : 'none'}">
-                    <div>
-                        <label class="form-label" for="percentageRate">Taux de Commission (%)</label>
-                        <input type="number" id="percentageRate" name="rate" class="form-input" 
-                               value="${config?.rate || ''}" min="0" max="100" step="0.1">
-                    </div>
-                </div>
-
-                <div id="tiersConfig" class="space-y-4" style="display: ${config?.type === 'tiers' ? 'block' : 'none'}">
-                    <div class="flex justify-between items-center">
-                        <label class="form-label">Configuration par Paliers</label>
-                        <button type="button" id="addTierBtn" class="btn btn-sm btn-primary">
-                            <i class="fas fa-plus mr-1"></i>Ajouter Palier
-                        </button>
-                    </div>
-                    <div id="tiersList" class="space-y-3">
-                        ${this.renderTiersList(config?.tiers || [])}
-                    </div>
-                </div>
-
-                <div>
-                    <label class="form-label" for="partageSociete">Part Société (%)</label>
-                    <input type="number" id="partageSociete" name="partageSociete" class="form-input" 
-                           value="${config?.partageSociete || 50}" min="0" max="100" step="1" required>
-                    <p class="text-xs text-gray-500 mt-1">Pourcentage de la commission qui revient à la société</p>
-                </div>
-            </form>
-        `;
-
-        const footer = document.createElement('div');
-        footer.innerHTML = `
-            <button type="button" class="btn btn-secondary" data-action="cancel">Annuler</button>
-            <button type="button" class="btn btn-primary" data-action="save">
-                <i class="fas fa-save mr-2"></i>Sauvegarder
-            </button>
-        `;
+        const title = 'Configuration Globale des Commissions';
+        const body = this._createFormBody(config);
+        const footer = this._createFooter();
 
         this.setContent(title, body, footer);
         super.show();
         this.attachEventListeners();
+        this.initializeTooltips();
+    }
+
+    private _createFormBody(config?: CommissionConfig): HTMLElement {
+        const form = document.createElement('form');
+        form.id = 'defaultCommissionForm';
+        form.className = 'space-y-6';
+
+        form.innerHTML = `
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle mr-2"></i>
+                Cette configuration s'applique par défaut à tous les nouveaux contrats.
+            </div>
+
+            <div>
+                <label class="form-label" for="commissionType">
+                    Type de Commission
+                    <i class="fas fa-question-circle text-gray-400 ml-1" data-tooltip="Choisissez le mode de calcul de la commission."></i>
+                </label>
+                <select id="commissionType" name="type" class="form-select w-full" required>
+                    <option value="fixed" ${config?.type === 'fixed' ? 'selected' : ''}>Montant Fixe</option>
+                    <option value="percentage" ${config?.type === 'percentage' ? 'selected' : ''}>Pourcentage</option>
+                    <option value="tiers" ${config?.type === 'tiers' ? 'selected' : ''}>Par Paliers</option>
+                </select>
+            </div>
+
+            <div id="fixedConfig" class="p-4 border rounded-md" style="display: ${config?.type === 'fixed' ? 'block' : 'none'}">
+                <h3 class="font-semibold mb-2">Configuration du Montant Fixe</h3>
+                <div>
+                    <label class="form-label" for="fixedAmount">Montant de la commission (FCFA)</label>
+                    <input type="number" id="fixedAmount" name="amount" class="form-input w-full" 
+                           value="${config?.amount || ''}" min="0" step="1">
+                </div>
+            </div>
+
+            <div id="percentageConfig" class="p-4 border rounded-md" style="display: ${config?.type === 'percentage' ? 'block' : 'none'}">
+                <h3 class="font-semibold mb-2">Configuration du Pourcentage</h3>
+                <div>
+                    <label class="form-label" for="percentageRate">Taux de commission (%)</label>
+                    <input type="number" id="percentageRate" name="rate" class="form-input w-full" 
+                           value="${config?.rate || ''}" min="0" max="100" step="0.1">
+                </div>
+            </div>
+
+            <div id="tiersConfig" class="p-4 border rounded-md" style="display: ${config?.type === 'tiers' ? 'block' : 'none'}">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="font-semibold">Configuration par Paliers</h3>
+                    <button type="button" id="addTierBtn" class="btn btn-sm btn-primary">
+                        <i class="fas fa-plus mr-1"></i>Ajouter un palier
+                    </button>
+                </div>
+                <div id="tiersList" class="space-y-3">
+                    ${this.renderTiersList(config?.tiers || [])}
+                </div>
+            </div>
+
+            <div class="p-4 border rounded-md bg-gray-50">
+                <label class="form-label" for="partageSociete">
+                    Part de la Société (%)
+                    <i class="fas fa-question-circle text-gray-400 ml-1" data-tooltip="Le pourcentage de la commission totale qui revient à la société. Le reste va au partenaire."></i>
+                </label>
+                <input type="number" id="partageSociete" name="partageSociete" class="form-input w-full" 
+                       value="${config?.partageSociete || 50}" min="0" max="100" step="1" required>
+            </div>
+        `;
+        return form;
+    }
+
+    private _createFooter(): HTMLElement {
+        const footer = document.createElement('div');
+        footer.className = 'flex justify-end space-x-4';
+        footer.innerHTML = `
+            <button type="button" class="btn btn-secondary" data-action="cancel">Annuler</button>
+            <button type="button" class="btn btn-primary" data-action="save">
+                <i class="fas fa-save mr-2"></i>Enregistrer les modifications
+            </button>
+        `;
+        return footer;
     }
 
     private renderTiersList(tiers: Array<{from: number, to: number, type: 'fixed' | 'percentage', value: number}>): string {
         if (tiers.length === 0) {
-            return '<p class="text-gray-500 text-sm">Aucun palier configuré</p>';
+            return `
+                <div class="text-center text-gray-500 p-4 border-dashed border-2 rounded-md">
+                    <i class="fas fa-layer-group fa-2x mb-2"></i>
+                    <p>Aucun palier configuré.</p>
+                    <p class="text-sm">Cliquez sur "Ajouter un palier" pour commencer.</p>
+                </div>
+            `;
         }
 
-        return tiers.map((tier, index) => `
-            <div class="grid grid-cols-5 gap-3 items-center p-3 bg-gray-50 rounded-lg border">
-                <div>
-                    <input type="number" name="tier_${index}_from" class="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500" placeholder="1000" min="0" step="1" value="${tier.from}" required>
+        const header = `
+            <div class="grid grid-cols-12 gap-3 items-center font-semibold text-sm text-gray-600 px-3">
+                <div class="col-span-3">De (FCFA)</div>
+                <div class="col-span-3">À (FCFA)</div>
+                <div class="col-span-3">Type</div>
+                <div class="col-span-2">Valeur</div>
+                <div class="col-span-1"></div>
+            </div>
+        `;
+
+        const tierRows = tiers.map((tier, index) => `
+            <div class="grid grid-cols-12 gap-3 items-center p-3 bg-gray-50 rounded-lg border">
+                <div class="col-span-3">
+                    <input type="number" name="tier_${index}_from" class="form-input w-full" placeholder="Ex: 1000" min="0" step="1" value="${tier.from}" required>
                 </div>
-                <div>
-                    <input type="number" name="tier_${index}_to" class="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500" placeholder="5000" min="0" step="1" value="${tier.to || ''}" required>
+                <div class="col-span-3">
+                    <input type="number" name="tier_${index}_to" class="form-input w-full" placeholder="Ex: 5000" min="0" step="1" value="${tier.to || ''}" required>
                 </div>
-                <div>
-                    <select name="tier_${index}_type" class="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500">
-                        <option value="fixed" ${tier.type === 'fixed' ? 'selected' : ''}>Fixe (XOF)</option>
+                <div class="col-span-3">
+                    <select name="tier_${index}_type" class="form-select w-full">
+                        <option value="fixed" ${tier.type === 'fixed' ? 'selected' : ''}>Fixe (FCFA)</option>
                         <option value="percentage" ${tier.type === 'percentage' ? 'selected' : ''}>Pourcentage (%)</option>
                     </select>
                 </div>
-                <div>
-                    <input type="number" name="tier_${index}_value" class="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500" placeholder="300" min="0" step="0.01" value="${tier.value}" required>
+                <div class="col-span-2">
+                    <input type="number" name="tier_${index}_value" class="form-input w-full" placeholder="Ex: 300" min="0" step="0.01" value="${tier.value}" required>
                 </div>
-                <div class="flex justify-center">
-                    <button type="button" class="p-2 text-white bg-red-500 rounded hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 remove-tier" data-index="${index}">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                        </svg>
+                <div class="col-span-1 flex justify-center">
+                    <button type="button" class="btn btn-danger btn-sm remove-tier" data-index="${index}" data-tooltip="Supprimer ce palier">
+                        <i class="fas fa-trash-alt"></i>
                     </button>
                 </div>
             </div>
         `).join('');
+
+        return header + '<div class="space-y-3 mt-2">' + tierRows + '</div>';
     }
 
     private attachEventListeners(): void {
@@ -134,65 +171,34 @@ export class AdminDefaultCommissionModal extends BaseModal {
         const addTierBtn = $('#addTierBtn', form) as HTMLButtonElement;
         const tiersList = $('#tiersList', form) as HTMLElement;
 
-        console.log('Attaching event listeners for commission form');
+        typeSelect.addEventListener('change', () => this.toggleConfigSections(typeSelect.value));
+        addTierBtn.addEventListener('click', () => this.addTier(tiersList));
 
-        // Gestion du changement de type de commission
-        typeSelect.addEventListener('change', () => {
-            console.log('Commission type changed to:', typeSelect.value);
-            this.toggleConfigSections(typeSelect.value);
-        });
-
-        // Gestion de l'ajout de palier
-        addTierBtn.addEventListener('click', () => {
-            console.log('Add tier button clicked');
-            this.addTier(tiersList);
-        });
-
-        // Gestion de la suppression de palier
         tiersList.addEventListener('click', (e) => {
             const target = e.target as HTMLElement;
             const removeBtn = target.closest('.remove-tier') as HTMLButtonElement;
             if (removeBtn) {
                 const index = parseInt(removeBtn.dataset.index!);
-                console.log('Remove tier button clicked for index:', index);
                 this.removeTier(tiersList, index);
             }
         });
 
-        // Gestion des boutons du footer - CORRIGE POUR EVITER LES EXECUTIONS MULTIPLES
-        // Supprimer les anciens écouteurs d'événements s'ils existent
-        const existingSaveBtn = this.modalElement.querySelector('[data-action="save"]') as HTMLButtonElement;
-        const existingCancelBtn = this.modalElement.querySelector('[data-action="cancel"]') as HTMLButtonElement;
-        
-        if (existingSaveBtn) {
-            // Désactiver le bouton pendant le traitement pour éviter les clics multiples
-            existingSaveBtn.addEventListener('click', async (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                
-                // Désactiver le bouton pendant le traitement
-                existingSaveBtn.disabled = true;
-                existingSaveBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Sauvegarde...';
-                
-                try {
-                    console.log('Save button clicked');
-                    await this.saveConfig(form);
-                } finally {
-                    // Réactiver le bouton après le traitement
-                    existingSaveBtn.disabled = false;
-                    existingSaveBtn.innerHTML = '<i class="fas fa-save mr-2"></i>Sauvegarder';
-                }
-            });
-        }
-        
-        if (existingCancelBtn) {
-            existingCancelBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                console.log('Cancel button clicked');
-                this.hide();
-            });
-        }
+        const saveBtn = this.modalElement.querySelector('[data-action="save"]') as HTMLButtonElement;
+        saveBtn.addEventListener('click', async (e) => {
+            e.preventDefault();
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Sauvegarde...';
+            
+            try {
+                await this.saveConfig(form);
+            } finally {
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = '<i class="fas fa-save mr-2"></i>Enregistrer les modifications';
+            }
+        });
+
+        const cancelBtn = this.modalElement.querySelector('[data-action="cancel"]') as HTMLButtonElement;
+        cancelBtn.addEventListener('click', () => this.hide());
     }
 
     private toggleConfigSections(type: string): void {
@@ -200,75 +206,76 @@ export class AdminDefaultCommissionModal extends BaseModal {
         const percentageConfig = $('#percentageConfig', this.modalElement) as HTMLElement;
         const tiersConfig = $('#tiersConfig', this.modalElement) as HTMLElement;
 
-        // Masquer toutes les sections
         fixedConfig.style.display = 'none';
         percentageConfig.style.display = 'none';
         tiersConfig.style.display = 'none';
 
-        // Afficher la section appropriée
-        switch (type) {
-            case 'fixed':
-                fixedConfig.style.display = 'block';
-                break;
-            case 'percentage':
-                percentageConfig.style.display = 'block';
-                break;
-            case 'tiers':
-                tiersConfig.style.display = 'block';
-                break;
-        }
+        if (type === 'fixed') fixedConfig.style.display = 'block';
+        if (type === 'percentage') percentageConfig.style.display = 'block';
+        if (type === 'tiers') tiersConfig.style.display = 'block';
     }
 
     private addTier(tiersList: HTMLElement): void {
-        const currentTiers = tiersList.querySelectorAll('.grid.grid-cols-5').length;
-        const tierHtml = `
-            <div class="grid grid-cols-5 gap-3 items-center p-3 bg-gray-50 rounded-lg border">
-                <div>
-                    <input type="number" name="tier_${currentTiers}_from" class="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500" placeholder="1000" min="0" step="1" value="0" required>
-                </div>
-                <div>
-                    <input type="number" name="tier_${currentTiers}_to" class="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500" placeholder="5000" min="0" step="1" value="" required>
-                </div>
-                <div>
-                    <select name="tier_${currentTiers}_type" class="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500">
-                        <option value="fixed" selected>Fixe (XOF)</option>
-                        <option value="percentage">Pourcentage (%)</option>
-                    </select>
-                </div>
-                <div>
-                    <input type="number" name="tier_${currentTiers}_value" class="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500" placeholder="300" min="0" step="0.01" value="0" required>
-                </div>
-                <div class="flex justify-center">
-                    <button type="button" class="p-2 text-white bg-red-500 rounded hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 remove-tier" data-index="${currentTiers}">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                        </svg>
-                    </button>
-                </div>
+        const currentTiers = tiersList.querySelectorAll('.space-y-3 .grid.grid-cols-12').length;
+        const newTier = document.createElement('div');
+        newTier.className = 'grid grid-cols-12 gap-3 items-center p-3 bg-gray-50 rounded-lg border';
+        newTier.innerHTML = `
+            <div class="col-span-3">
+                <input type="number" name="tier_${currentTiers}_from" class="form-input w-full" placeholder="Ex: 1000" min="0" step="1" value="0" required>
+            </div>
+            <div class="col-span-3">
+                <input type="number" name="tier_${currentTiers}_to" class="form-input w-full" placeholder="Ex: 5000" min="0" step="1" value="" required>
+            </div>
+            <div class="col-span-3">
+                <select name="tier_${currentTiers}_type" class="form-select w-full">
+                    <option value="fixed" selected>Fixe (FCFA)</option>
+                    <option value="percentage">Pourcentage (%)</option>
+                </select>
+            </div>
+            <div class="col-span-2">
+                <input type="number" name="tier_${currentTiers}_value" class="form-input w-full" placeholder="Ex: 300" min="0" step="0.01" value="0" required>
+            </div>
+            <div class="col-span-1 flex justify-center">
+                <button type="button" class="btn btn-danger btn-sm remove-tier" data-index="${currentTiers}" data-tooltip="Supprimer ce palier">
+                    <i class="fas fa-trash-alt"></i>
+                </button>
             </div>
         `;
-        tiersList.insertAdjacentHTML('beforeend', tierHtml);
+        
+        const tierContainer = tiersList.querySelector('.space-y-3');
+        if (tierContainer) {
+            tierContainer.appendChild(newTier);
+        } else {
+            tiersList.innerHTML = ''; // Clear placeholder
+            const header = `
+                <div class="grid grid-cols-12 gap-3 items-center font-semibold text-sm text-gray-600 px-3">
+                    <div class="col-span-3">De (FCFA)</div>
+                    <div class="col-span-3">À (FCFA)</div>
+                    <div class="col-span-3">Type</div>
+                    <div class="col-span-2">Valeur</div>
+                    <div class="col-span-1"></div>
+                </div>
+            `;
+            tiersList.innerHTML = header + '<div class="space-y-3 mt-2"></div>';
+            tiersList.querySelector('.space-y-3')!.appendChild(newTier);
+        }
+        this.reindexTiers(tiersList);
     }
 
     private removeTier(tiersList: HTMLElement, index: number): void {
-        const tierItem = tiersList.querySelector(`[data-index="${index}"]`)?.closest('.grid.grid-cols-5') as HTMLElement;
+        const tierItem = tiersList.querySelector(`[data-index="${index}"]`)?.closest('.grid.grid-cols-12');
         if (tierItem) {
             tierItem.remove();
-            // Réindexer les paliers restants
             this.reindexTiers(tiersList);
         }
     }
 
     private reindexTiers(tiersList: HTMLElement): void {
-        const tierItems = tiersList.querySelectorAll('.grid.grid-cols-5');
+        const tierItems = tiersList.querySelectorAll('.space-y-3 .grid.grid-cols-12');
         tierItems.forEach((item, index) => {
-            // Mettre à jour le data-index du bouton de suppression
             const removeBtn = item.querySelector('.remove-tier') as HTMLButtonElement;
-            if (removeBtn) {
-                removeBtn.dataset.index = index.toString();
-            }
+            if (removeBtn) removeBtn.dataset.index = index.toString();
 
-            // Mettre à jour les attributs 'name' de tous les champs du palier
             const fromInput = item.querySelector('[name$="_from"]') as HTMLInputElement;
             if (fromInput) fromInput.name = `tier_${index}_from`;
 
@@ -281,65 +288,48 @@ export class AdminDefaultCommissionModal extends BaseModal {
             const valueInput = item.querySelector('[name$="_value"]') as HTMLInputElement;
             if (valueInput) valueInput.name = `tier_${index}_value`;
         });
+
+        if (tierItems.length === 0) {
+            tiersList.innerHTML = this.renderTiersList([]);
+        }
     }
 
     private async saveConfig(form: HTMLFormElement): Promise<void> {
-        console.log('Save config initiated');
-        
-        const confirmed = confirm(
-            'Attention : La modification de la configuration de commission par défaut entraînera la mise à jour de TOUS les contrats existants pour utiliser ces nouvelles valeurs.\n\nCette action est irréversible. Continuer ?'
-        );
-
-        if (!confirmed) {
-            console.log('User cancelled the save operation');
-            return;
-        }
-
         try {
-            console.log('Preparing to save commission configuration');
+            console.log('Form innerHTML:', form.innerHTML);
             const formData = new FormData(form);
             const type = formData.get('type') as string;
             
-            let config: CommissionConfig = {
+            const config: CommissionConfig = {
                 type: type as 'fixed' | 'percentage' | 'tiers',
                 partageSociete: Number(formData.get('partageSociete'))
             };
 
-            console.log('Commission type selected:', type);
-            
+            console.log('Saving config:', config);
+
             switch (type) {
                 case 'fixed':
                     config.amount = Number(formData.get('amount'));
-                    console.log('Fixed amount set to:', config.amount);
                     break;
                 case 'percentage':
                     config.rate = Number(formData.get('rate'));
-                    console.log('Percentage rate set to:', config.rate);
                     break;
                 case 'tiers':
                     config.tiers = this.extractTiersFromForm(form);
-                    console.log('Tiers configuration extracted:', config.tiers);
                     break;
             }
 
-            console.log('Sending configuration to API:', config);
-            
-            // Sauvegarder via la nouvelle fonction Edge
             const result = await this.api.updateAllContractsDefaultCommission(config);
-            console.log('API response received:', result);
 
-            // Afficher un message de succès
             document.body.dispatchEvent(new CustomEvent('showToast', {
-                detail: { message: result.message || 'Configuration par défaut mise à jour pour tous les contrats.', type: 'success' }
+                detail: { message: result.message || 'Configuration par défaut mise à jour.', type: 'success' }
             }));
 
             this.hide();
             if (this.onSave) {
-                console.log('Calling onSave callback');
                 this.onSave();
             }
         } catch (error) {
-            console.error('Erreur lors de la sauvegarde de la config par défaut:', error);
             document.body.dispatchEvent(new CustomEvent('showToast', {
                 detail: { message: `Erreur: ${(error as Error).message}`, type: 'error' }
             }));
@@ -349,32 +339,65 @@ export class AdminDefaultCommissionModal extends BaseModal {
     private extractTiersFromForm(form: HTMLFormElement): Array<{from: number, to: number, type: 'fixed' | 'percentage', value: number}> {
         console.log('Extracting tiers from form');
         const tiers: Array<{from: number, to: number, type: 'fixed' | 'percentage', value: number}> = [];
-        const tierItems = form.querySelectorAll('.grid.grid-cols-5');
         
-        console.log('Number of tier items found:', tierItems.length);
+        // Trouver tous les éléments de palier en cherchant par nom de champ
+        const tierItems = form.querySelectorAll('[name$="_from"]');
+        console.log('Found tier items with _from fields:', tierItems.length);
         
-        tierItems.forEach((item, index) => {
-            const fromInput = item.querySelector(`[name="tier_${index}_from"]`) as HTMLInputElement;
-            const toInput = item.querySelector(`[name="tier_${index}_to"]`) as HTMLInputElement;
-            const typeSelect = item.querySelector(`[name="tier_${index}_type"]`) as HTMLSelectElement;
-            const valueInput = item.querySelector(`[name="tier_${index}_value"]`) as HTMLInputElement;
-
-            if (fromInput && typeSelect && valueInput) {
-                const tierData = {
-                    from: Number(fromInput.value),
-                    to: toInput.value ? Number(toInput.value) : 999999999,
-                    type: typeSelect.value as 'fixed' | 'percentage',
-                    value: Number(valueInput.value)
-                };
+        tierItems.forEach((fromInput: Element) => {
+            const fromInputElement = fromInput as HTMLInputElement;
+            const name = fromInputElement.name;
+            // Extraire l'index du nom du champ (ex: tier_1_from -> index 1)
+            const match = name.match(/tier_(\d+)_from/);
+            if (match) {
+                const index = match[1];
+                console.log(`Processing tier item with index ${index}`);
                 
-                console.log(`Tier ${index} data:`, tierData);
-                tiers.push(tierData);
-            } else {
-                console.warn(`Missing elements for tier ${index}`);
+                // Trouver les autres champs du même palier
+                const toInput = form.querySelector(`[name="tier_${index}_to"]`) as HTMLInputElement;
+                const typeSelect = form.querySelector(`[name="tier_${index}_type"]`) as HTMLSelectElement;
+                const valueInput = form.querySelector(`[name="tier_${index}_value"]`) as HTMLInputElement;
+                
+                if (fromInputElement && toInput && typeSelect && valueInput) {
+                    const tierData = {
+                        from: Number(fromInputElement.value) || 0,
+                        to: toInput.value ? Number(toInput.value) : 999999999,
+                        type: typeSelect.value as 'fixed' | 'percentage',
+                        value: Number(valueInput.value) || 0
+                    };
+                    
+                    console.log(`Tier ${index} data:`, tierData);
+                    tiers.push(tierData);
+                } else {
+                    console.warn(`Missing elements for tier ${index}`);
+                }
             }
         });
 
         console.log('Extracted tiers:', tiers);
         return tiers;
+    }
+
+    private initializeTooltips(): void {
+        // Basic tooltip implementation
+        this.modalElement.querySelectorAll('[data-tooltip]').forEach(el => {
+            const tooltipText = el.getAttribute('data-tooltip');
+            const tooltip = document.createElement('div');
+            tooltip.className = 'tooltip';
+            tooltip.textContent = tooltipText;
+            document.body.appendChild(tooltip);
+
+            el.addEventListener('mouseenter', () => {
+                const rect = el.getBoundingClientRect();
+                tooltip.style.left = `${rect.left + rect.width / 2}px`;
+                tooltip.style.top = `${rect.top - 10}px`;
+                tooltip.style.transform = 'translateX(-50%) translateY(-100%)';
+                tooltip.classList.add('visible');
+            });
+
+            el.addEventListener('mouseleave', () => {
+                tooltip.classList.remove('visible');
+            });
+        });
     }
 }

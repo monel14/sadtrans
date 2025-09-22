@@ -748,20 +748,27 @@ export class ApiService {
     public async updateAllContractsDefaultCommission(newConfig: CommissionConfig): Promise<{ message: string }> {
         console.log('updateAllContractsDefaultCommission called with config:', newConfig);
         
+        // Call the Edge Function to update the default commission template and all contracts
         const { data, error } = await supabase.functions.invoke('update-all-contracts-commission', {
-            body: newConfig
+            body: { defaultCommissionConfig: newConfig }
         });
 
         if (error) {
-            console.error('Error updating all contracts default commission:', error);
+            console.error('Error calling update-all-contracts-commission Edge function:', error);
             throw error;
         }
 
-        console.log('Successfully updated all contracts default commission, response data:', data);
+        if (data.error) {
+            console.error('Error in update-all-contracts-commission Edge function:', data.error);
+            throw new Error(data.error);
+        }
+
+        console.log('Successfully updated default commission template and all contracts, response data:', data);
         
         await this.logAction('UPDATE_ALL_CONTRACTS_DEFAULT_COMMISSION', { details: 'Updated default commission for all contracts' });
         DataService.getInstance().invalidateContractsCache();
-        return data;
+        
+        return { message: data.message || "Configuration par défaut mise à jour avec succès." };
     }
 
     public async createContractWithTemplate(name: string, partnerId: string, templateId: string = 'default'): Promise<string | null> {

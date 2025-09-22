@@ -79,10 +79,6 @@ export class AdminDefaultCommissionsView {
                 <div id="commissions-tab" class="tab-content active">
                     <div class="section-header mb-4">
                         <h3 class="text-lg font-medium text-gray-800">Commissions par Type d'Opération</h3>
-                        <button data-action="add-commission" class="btn btn-primary">
-                            <i class="fas fa-plus mr-2"></i>
-                            Ajouter Commission
-                        </button>
                     </div>
                     
                     <div class="commissions-grid">
@@ -583,9 +579,6 @@ export class AdminDefaultCommissionsView {
             const action = button.dataset.action;
 
             switch (action) {
-                case 'add-commission':
-                    await this.showCommissionModal();
-                    break;
                 case 'edit-commission':
                     const commissionId = button.dataset.commissionId;
                     await this.showCommissionModal(commissionId);
