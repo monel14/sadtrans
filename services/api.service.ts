@@ -748,7 +748,7 @@ export class ApiService {
     public async updateAllContractsDefaultCommission(newConfig: CommissionConfig): Promise<{ message: string }> {
         console.log('updateAllContractsDefaultCommission called with config:', newConfig);
         
-        const { data, error } = await supabase.functions.invoke('update-default-commission-on-all-contracts', {
+        const { data, error } = await supabase.functions.invoke('update-all-contracts-commission', {
             body: newConfig
         });
 

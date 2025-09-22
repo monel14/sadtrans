@@ -159,21 +159,40 @@ export class AdminDefaultCommissionModal extends BaseModal {
             }
         });
 
-        // Gestion des boutons du footer
-        this.modalElement.addEventListener('click', async (e) => {
-            const target = e.target as HTMLElement;
-            const button = target.closest('[data-action]') as HTMLButtonElement;
-            if (!button) return;
-
-            const action = button.dataset.action;
-            console.log('Modal action button clicked:', action);
-            
-            if (action === 'save') {
-                await this.saveConfig(form);
-            } else if (action === 'cancel') {
+        // Gestion des boutons du footer - CORRIGE POUR EVITER LES EXECUTIONS MULTIPLES
+        // Supprimer les anciens écouteurs d'événements s'ils existent
+        const existingSaveBtn = this.modalElement.querySelector('[data-action="save"]') as HTMLButtonElement;
+        const existingCancelBtn = this.modalElement.querySelector('[data-action="cancel"]') as HTMLButtonElement;
+        
+        if (existingSaveBtn) {
+            // Désactiver le bouton pendant le traitement pour éviter les clics multiples
+            existingSaveBtn.addEventListener('click', async (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                // Désactiver le bouton pendant le traitement
+                existingSaveBtn.disabled = true;
+                existingSaveBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Sauvegarde...';
+                
+                try {
+                    console.log('Save button clicked');
+                    await this.saveConfig(form);
+                } finally {
+                    // Réactiver le bouton après le traitement
+                    existingSaveBtn.disabled = false;
+                    existingSaveBtn.innerHTML = '<i class="fas fa-save mr-2"></i>Sauvegarder';
+                }
+            });
+        }
+        
+        if (existingCancelBtn) {
+            existingCancelBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('Cancel button clicked');
                 this.hide();
-            }
-        });
+            });
+        }
     }
 
     private toggleConfigSections(type: string): void {
