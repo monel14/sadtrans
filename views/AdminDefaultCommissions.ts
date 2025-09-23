@@ -5,6 +5,7 @@ import { ApiService } from '../services/api.service';
 import { $ } from '../utils/dom';
 import { formatAmount } from '../utils/formatters';
 import { AdminDefaultCommissionModal } from '../components/modals/AdminDefaultCommissionModal';
+import { AdminDefaultExceptionModal } from '../components/modals/AdminDefaultExceptionModal';
 
 interface DefaultCommissionConfig {
     id?: string;
@@ -37,9 +38,11 @@ export class AdminDefaultCommissionsView {
     private defaultExceptions: DefaultException[] = [];
     private operationTypes: OperationType[] = [];
     private defaultCommissionModal: AdminDefaultCommissionModal;
+    private defaultExceptionModal: AdminDefaultExceptionModal;
 
     constructor() {
         this.defaultCommissionModal = new AdminDefaultCommissionModal();
+        this.defaultExceptionModal = new AdminDefaultExceptionModal();
     }
 
     async render(): Promise<HTMLElement> {
@@ -587,8 +590,52 @@ export class AdminDefaultCommissionsView {
     }
 
     private async showExceptionModal(exceptionId?: string): Promise<void> {
-        console.log('showExceptionModal called with exceptionId:', exceptionId);
-        alert('Modal d\'exception temporairement désactivé - utilisez le modal de commission pour tester');
+        try {
+            console.log('showExceptionModal called with exceptionId:', exceptionId);
+
+            // Trouver l'exception existante si un id est fourni
+            let config: any = undefined;
+            if (exceptionId) {
+                let exception = this.defaultExceptions.find(e => e.id === exceptionId);
+
+                // Si non trouvé par égalité stricte, tenter de trouver par suffixe (sécurité)
+                if (!exception) {
+                    exception = this.defaultExceptions.find(e => e.id && exceptionId && e.id.endsWith(exceptionId));
+                }
+
+                if (exception) {
+                    // Essayer d'extraire targetType/targetId depuis la condition ou tomber sur opTypeId
+                    let targetType: 'category' | 'operation_type' | undefined;
+                    let targetId: string | undefined;
+                    const cond = exception.condition || '';
+                    const match = cond.match(/^(operation_type|category)\s*:\s*(.+)$/);
+                    if (match) {
+                        targetType = match[1] as any;
+                        targetId = match[2];
+                    } else {
+                        // fallback: si opTypeId est présent, on le considère comme targetId
+                        targetType = 'operation_type';
+                        targetId = exception.opTypeId;
+                    }
+
+                    config = {
+                        id: exception.id,
+                        opTypeId: exception.opTypeId,
+                        targetType: targetType,
+                        targetId: targetId,
+                        description: exception.description,
+                        condition: exception.condition,
+                        commissionOverride: exception.commissionOverride
+                    };
+                }
+            }
+
+            this.defaultExceptionModal.setOnSave(() => this.refreshData());
+            await this.defaultExceptionModal.show(config);
+        } catch (err) {
+            console.error('Erreur lors de l\'ouverture du modal d\'exception :', err);
+            document.body.dispatchEvent(new CustomEvent('showToast', { detail: { message: 'Impossible d\'ouvrir le modal d\'exception', type: 'error' } }));
+        }
     }
 
     private async deleteCommission(commissionId: string): Promise<void> {
