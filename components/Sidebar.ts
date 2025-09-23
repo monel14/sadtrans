@@ -48,6 +48,36 @@ function createNavLink(link: NavLink, parentDispatchElement: HTMLElement): HTMLE
     }
 }
 
+// Fonction pour mettre à jour la sidebar avec les liens de navigation
+function updateSidebar(sidebar: HTMLElement, user: User): void {
+    const nav = sidebar.querySelector('#appNavigation');
+    if (nav) {
+        // Effacer le contenu actuel
+        nav.innerHTML = '';
+        
+        // Ajouter les liens de navigation
+        const links = navigationLinks[user.role];
+        if (links) {
+            links.forEach(link => {
+                nav.appendChild(createNavLink(link, sidebar));
+            });
+        }
+    }
+}
+
+// Fonction pour vérifier si les services sont chargés
+function areServicesLoaded(user: User): boolean {
+    const servicesLink = navigationLinks[user.role].find(link => 
+        link.navId === 'agent_services' || link.navId === 'partner_services'
+    );
+    
+    // Vérifier si les services ont des enfants et qu'ils ne sont pas les services statiques
+    return servicesLink !== undefined && 
+           servicesLink.children !== undefined && 
+           servicesLink.children.length > 0 && 
+           servicesLink.children !== (window as any).partnerAndAgentServicesStatic;
+}
+
 export function renderSidebar(user: User): HTMLElement {
     const sidebar = document.createElement('aside');
     sidebar.id = 'sidebar';
@@ -64,6 +94,7 @@ export function renderSidebar(user: User): HTMLElement {
     nav.id = 'appNavigation';
     nav.className = 'flex-grow overflow-y-auto space-y-1 pr-2';
 
+    // Initialiser avec les liens statiques
     const links = navigationLinks[user.role];
     if (links) {
         links.forEach(link => {
@@ -86,6 +117,26 @@ export function renderSidebar(user: User): HTMLElement {
     sidebar.innerHTML = logo;
     sidebar.appendChild(nav);
     sidebar.appendChild(footer);
+
+    // Mettre à jour la sidebar après un court délai pour permettre le chargement asynchrone
+    // Amélioration : vérifier périodiquement si les services sont chargés
+    let updateAttempts = 0;
+    const maxAttempts = 10; // Maximum 10 tentatives (5 secondes)
+    
+    const tryUpdateSidebar = () => {
+        updateAttempts++;
+        
+        // Si les services sont chargés ou si nous avons atteint le maximum de tentatives, mettre à jour
+        if (areServicesLoaded(user) || updateAttempts >= maxAttempts) {
+            updateSidebar(sidebar, user);
+            return;
+        }
+        
+        // Continuer à vérifier périodiquement
+        setTimeout(tryUpdateSidebar, 500);
+    };
+    
+    setTimeout(tryUpdateSidebar, 500);
 
     return sidebar;
 }

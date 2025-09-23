@@ -13,6 +13,7 @@ import { renderAdminRevenueDashboardView } from "../views/AdminRevenueDashboard"
 import { renderAdminCommissionConfigView } from "../views/AdminCommissionConfig";
 import { renderDeveloperDashboardView } from "../views/DeveloperDashboard";
 import { renderDeveloperManageOperationTypesView } from "../views/DeveloperManageOperationTypes";
+import { renderServiceHubView } from '../views/ServiceHub';
 
 // Import views with auto-refresh
 import {
@@ -30,11 +31,114 @@ import {
 // Import new, refactored views
 import { renderProfileView } from '../views/Profile';
 import { renderOrderListView } from '../views/OrderList';
-import { renderServiceHubView } from '../views/ServiceHub';
 import { renderPartnerContractView } from "../views/PartnerContractView";
+import { DataService } from "../services/data.service";
 
+// Helper function to get category icons
+const categoryIcons: { [key: string]: string } = {
+    'Cartes VISA': 'fa-credit-card',
+    'Gestion des décodeurs (Canal +)': 'fa-satellite-dish',
+    'Ecobank Xpress': 'fa-university',
+    'Western Union': 'fa-globe-americas',
+    'Ria': 'fa-comments-dollar',
+    'MoneyGram': 'fa-dollar-sign',
+    'Paiement de Factures': 'fa-file-invoice-dollar',
+    'Dépôts': 'fa-money-bill-wave',
+    'Autres Services': 'fa-cogs',
+};
 
-const partnerAndAgentServices: NavLink[] = [
+// Fonction pour charger dynamiquement les services par catégorie
+async function loadDynamicServices(): Promise<NavLink[]> {
+    try {
+        const dataService = DataService.getInstance();
+        const operationTypes = await dataService.getAllOperationTypes();
+        console.log('Debug - Operation types loaded:', operationTypes);
+        
+        // Filtrer les types d'opérations actives seulement
+        const activeOpTypes = operationTypes.filter(ot => ot.status === 'active');
+        console.log('Debug - Active operation types:', activeOpTypes);
+        
+        // Regrouper les types d'opérations par catégorie
+        const groupedOps = activeOpTypes.reduce((acc, op) => {
+            const category = op.category || 'Autres Services';
+            if (!acc[category]) {
+                acc[category] = [];
+            }
+            acc[category].push(op);
+            return acc;
+        }, {} as Record<string, typeof activeOpTypes>);
+        
+        console.log('Debug - Grouped operations:', groupedOps);
+        
+        // Créer les liens de navigation pour chaque catégorie
+        const serviceLinks: NavLink[] = [];
+        
+        Object.keys(groupedOps).sort().forEach(category => {
+            const ops = groupedOps[category];
+            const icon = categoryIcons[category] || 'fa-concierge-bell';
+            
+            // Créer les sous-liens pour chaque opération de la catégorie
+            const operationLinks: NavLink[] = ops.map((op, index) => ({
+                label: op.name,
+                navId: `op_${op.id}`,
+                icon: 'fa-cog', // Icône générique pour les opérations
+                target: { 
+                    type: 'view', 
+                    viewFn: renderNewOperationView, 
+                    label: op.name, 
+                    operationTypeId: op.id, 
+                    navId: `op_${op.id}` 
+                }
+            }));
+            
+            // Convertir les liens NavLink en HubLink pour renderServiceHubView
+            const hubLinks = ops.map((op, index) => ({
+                title: op.name,
+                description: op.description || '',
+                icon: 'fa-cog',
+                target: { 
+                    type: 'view' as const, 
+                    viewFn: renderNewOperationView, 
+                    label: op.name, 
+                    operationTypeId: op.id, 
+                    navId: `op_${op.id}` 
+                }
+            }));
+            
+            // Ajouter le lien de catégorie avec ses opérations enfants
+            serviceLinks.push({
+                label: category,
+                navId: `hub_${category.toLowerCase().replace(/\s+/g, '_')}`,
+                icon: icon,
+                viewFn: renderServiceHubView(category, icon, hubLinks)
+            });
+        });
+        
+        console.log('Debug - Service links created:', serviceLinks);
+        console.log('Debug - Number of categories:', Object.keys(groupedOps).length);
+        console.log('Debug - Categories:', Object.keys(groupedOps));
+        
+        // Log détaillé des services créés
+        serviceLinks.forEach((link, index) => {
+            console.log(`Debug - Service ${index + 1}:`, {
+                label: link.label,
+                navId: link.navId,
+                icon: link.icon,
+                hasViewFn: !!link.viewFn,
+                childrenCount: link.children ? link.children.length : 0
+            });
+        });
+        
+        return serviceLinks;
+    } catch (error) {
+        console.error('Erreur lors du chargement des services dynamiques:', error);
+        // Retourner les services statiques en cas d'erreur
+        return partnerAndAgentServicesStatic;
+    }
+}
+
+// Services statiques (comme solution de secours)
+const partnerAndAgentServicesStatic: NavLink[] = [
     { label: 'Cartes VISA', navId: 'hub_visa', icon: 'fa-credit-card', viewFn: renderServiceHubView('Gestion des Cartes VISA', 'fa-credit-card', [
         { title: 'Vendre une carte', description: 'Vendre une nouvelle carte prépayée.', icon: 'fa-shopping-cart', target: { type: 'view', viewFn: renderNewOperationView, label: 'Vente de carte prépayée', operationTypeId: 'op_vente_carte', navId: 'op_op_vente_carte' } },
         { title: 'Lancer une activation', description: 'Activer une nouvelle carte pour un client.', icon: 'fa-check-circle', target: { type: 'view', viewFn: renderNewOperationView, label: 'Activation Carte Prépayée', operationTypeId: 'op_activation_carte', navId: 'op_op_activation_carte' } },
@@ -83,6 +187,39 @@ const partnerAndAgentServices: NavLink[] = [
     ]) },
 ];
 
+// Rendre les services statiques accessibles globalement pour la vérification
+(window as any).partnerAndAgentServicesStatic = partnerAndAgentServicesStatic;
+
+// Charger les services dynamiquement au démarrage
+let partnerAndAgentServices: NavLink[] = partnerAndAgentServicesStatic; // Initialiser avec les services statiques par défaut
+
+// Fonction pour mettre à jour les services de navigation
+function updateNavigationServices(services: NavLink[]) {
+    partnerAndAgentServices = services;
+    
+    // Log pour déboguer
+    console.log('Debug - Navigation services updated:', services);
+    
+    // Mettre à jour les liens de navigation pour tous les rôles
+    Object.keys(navigationLinks).forEach(role => {
+        const roleLinks = navigationLinks[role as UserRole];
+        const servicesIndex = roleLinks.findIndex(link => link.navId === 'agent_services' || link.navId === 'partner_services');
+        if (servicesIndex !== -1) {
+            roleLinks[servicesIndex].children = services;
+            console.log(`Debug - Updated services for role ${role}`);
+        }
+    });
+    
+    // Déclencher un événement pour informer que les services ont été mis à jour
+    document.dispatchEvent(new CustomEvent('servicesLoaded'));
+}
+
+loadDynamicServices().then(services => {
+    updateNavigationServices(services);
+}).catch(error => {
+    console.error('Erreur lors du chargement initial des services:', error);
+    updateNavigationServices(partnerAndAgentServicesStatic);
+});
 
 export const navigationLinks: Record<UserRole, NavLink[]> = {
     agent: [
@@ -108,7 +245,7 @@ export const navigationLinks: Record<UserRole, NavLink[]> = {
     partner: [
         { label: 'Dashboard Partenaire', navId: 'partner_dashboard', icon: 'fa-chart-line', viewFn: renderPartnerDashboardViewWithRefresh },
         { 
-            label: 'Gestion des Services', 
+            label: 'Services', 
             navId: 'partner_services', 
             icon: 'fa-concierge-bell',
             children: partnerAndAgentServices,

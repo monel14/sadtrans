@@ -1,6 +1,3 @@
-
-
-
 import { User, UserRole } from './models';
 import { renderLoginPage } from './components/LoginPage';
 import { renderSidebar } from './components/Sidebar';
@@ -82,6 +79,8 @@ export class App {
         document.body.addEventListener('openConfirmationModal', this.handleOpenConfirmationModal as EventListener);
         document.body.addEventListener('openAdminAdjustBalanceModal', this.handleOpenAdminAdjustBalanceModal as EventListener);
         document.body.addEventListener('showToast', this.handleShowToast as EventListener);
+        // Ajout du gestionnaire pour l'événement servicesLoaded
+        document.body.addEventListener('servicesLoaded', this.handleServicesLoaded as EventListener);
         
         // Check for an active session on startup
         const authService = AuthService.getInstance();
@@ -184,6 +183,23 @@ export class App {
         const customEvent = event as CustomEvent;
         if (customEvent.detail.user && this.currentUser && customEvent.detail.user.id === this.currentUser.id) {
             this.currentUser = customEvent.detail.user;
+        }
+    }
+
+    // Gestionnaire pour l'événement servicesLoaded
+    private handleServicesLoaded = () => {
+        // Rafraîchir l'affichage de la navigation si l'interface est déjà rendue
+        if (this.mainLayout && this.currentUser) {
+            // Mettre à jour la barre latérale avec les nouveaux services
+            const newSidebar = renderSidebar(this.currentUser);
+            this.mainLayout.appContainer.replaceChild(newSidebar, this.mainLayout.sidebar);
+            this.mainLayout.sidebar = newSidebar;
+            
+            // Réattacher les gestionnaires d'événements
+            const menuToggle = this.mainLayout.header.querySelector('#menuToggle');
+            menuToggle?.addEventListener('click', () => {
+                this.mainLayout!.sidebar.classList.toggle('-translate-x-full');
+            });
         }
     }
 
