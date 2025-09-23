@@ -55,10 +55,10 @@ export class AdminEditUserModal extends BaseModal {
                     <label class="form-label">Statut du Compte</label>
                     <div class="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
                         <span id="statusLabel" class="font-medium text-slate-700">Actif</span>
-                        <label class="relative inline-flex items-center cursor-pointer">
-                            <input type="checkbox" id="userStatus" name="status" value="active" class="sr-only peer">
-                            <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-focus:ring-4 peer-focus:ring-blue-300 peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
-                        </label>
+                        <select id="userStatus" name="status" class="form-select w-36">
+                            <option value="active">Actif</option>
+                            <option value="suspended">Suspendu</option>
+                        </select>
                     </div>
                 </div>
             </form>
@@ -186,9 +186,10 @@ export class AdminEditUserModal extends BaseModal {
              }
         }
 
-        const statusToggle = $('#userStatus', this.form) as HTMLInputElement;
-        statusToggle.checked = !userToDisplay || userToDisplay.status === 'active';
-        this.updateStatusLabel(statusToggle.checked);
+    const statusSelect = $('#userStatus', this.form) as HTMLSelectElement;
+    const initialStatus = userToDisplay ? (userToDisplay.status || 'suspended') : 'active';
+    statusSelect.value = initialStatus;
+    this.updateStatusLabel(initialStatus === 'active');
     }
 
     private updateStatusLabel(isActive: boolean) {
@@ -200,9 +201,9 @@ export class AdminEditUserModal extends BaseModal {
     }
 
     private attachListeners() {
-        const statusToggle = $('#userStatus', this.form) as HTMLInputElement;
-        statusToggle?.addEventListener('change', () => {
-            this.updateStatusLabel(statusToggle.checked);
+        const statusSelect = $('#userStatus', this.form) as HTMLSelectElement;
+        statusSelect?.addEventListener('change', () => {
+            this.updateStatusLabel(statusSelect.value === 'active');
         });
 
         // Use event delegation for the file input which might not exist on initial render
@@ -232,7 +233,7 @@ export class AdminEditUserModal extends BaseModal {
             
             try {
                 const formData = new FormData(this.form);
-                const statusToggleInput = $('#userStatus', this.form) as HTMLInputElement;
+                const statusSelectInput = $('#userStatus', this.form) as HTMLSelectElement;
 
                 const userData: Partial<User> = {
                     id: this.editingUser?.id,
@@ -240,7 +241,7 @@ export class AdminEditUserModal extends BaseModal {
                     lastName: formData.get('lastName') as string,
                     email: formData.get('email') as string,
                     phone: formData.get('phone') as string,
-                    status: statusToggleInput.checked ? 'active' : 'suspended'
+                    status: statusSelectInput.value === 'active' ? 'active' : 'suspended'
                 };
 
                 if (!this.editingUser && this.roleToCreate) {

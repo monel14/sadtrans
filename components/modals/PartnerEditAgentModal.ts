@@ -42,10 +42,10 @@ export class PartnerEditAgentModal extends BaseModal {
                     <label class="form-label">Statut du Compte</label>
                     <div class="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
                         <span id="statusLabel" class="font-medium text-slate-700">Actif</span>
-                        <label class="relative inline-flex items-center cursor-pointer">
-                            <input type="checkbox" id="agentStatus" name="status" value="active" class="sr-only peer">
-                            <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-focus:ring-4 peer-focus:ring-blue-300 peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
-                        </label>
+                        <select id="agentStatus" name="status" class="form-select w-36">
+                            <option value="active">Actif</option>
+                            <option value="suspended">Suspendu</option>
+                        </select>
                     </div>
                 </div>
             </form>
@@ -120,9 +120,10 @@ export class PartnerEditAgentModal extends BaseModal {
         }
 
 
-        const statusToggle = $('#agentStatus', this.form) as HTMLInputElement;
-        statusToggle.checked = !this.editingAgent || this.editingAgent.status === 'active';
-        this.updateStatusLabel(statusToggle.checked);
+    const statusSelect = $('#agentStatus', this.form) as HTMLSelectElement;
+    const initialStatus = this.editingAgent ? (this.editingAgent.status || 'suspended') : 'active';
+    statusSelect.value = initialStatus;
+    this.updateStatusLabel(initialStatus === 'active');
     }
 
     private updateStatusLabel(isActive: boolean) {
@@ -134,9 +135,9 @@ export class PartnerEditAgentModal extends BaseModal {
     }
 
     private attachListeners() {
-        const statusToggle = $('#agentStatus', this.form) as HTMLInputElement;
-        statusToggle?.addEventListener('change', () => {
-            this.updateStatusLabel(statusToggle.checked);
+        const statusSelect = $('#agentStatus', this.form) as HTMLSelectElement;
+        statusSelect?.addEventListener('change', () => {
+            this.updateStatusLabel(statusSelect.value === 'active');
         });
 
         this.form.addEventListener('submit', async (e) => {
@@ -150,7 +151,7 @@ export class PartnerEditAgentModal extends BaseModal {
 
             try {
                 const formData = new FormData(this.form);
-                const statusToggle = $('#agentStatus', this.form) as HTMLInputElement;
+                const statusSelect = $('#agentStatus', this.form) as HTMLSelectElement;
 
                 const newPassword = formData.get('password') as string;
                 const confirmPassword = formData.get('passwordConfirm') as string;
@@ -180,7 +181,7 @@ export class PartnerEditAgentModal extends BaseModal {
                     name: formData.get('name') as string,
                     email: formData.get('email') as string,
                     phone: formData.get('phone') as string,
-                    status: statusToggle.checked ? 'active' : 'suspended',
+                    status: statusSelect.value === 'active' ? 'active' : 'suspended',
                 };
                 
                 if (!this.editingAgent) {
