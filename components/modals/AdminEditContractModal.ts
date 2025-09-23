@@ -10,6 +10,8 @@ export class AdminEditContractModal extends BaseModal {
     private dataService: DataService;
     private partners: Partner[] = [];
     private operationTypes: OperationType[] = [];
+    private defaultExceptions: any[] = [];
+    private defaultCommissionConfig: any = null;
     public onSave?: () => void;
     private editingContract: Contract | null = null;
     private tierCounter = 0;
@@ -135,14 +137,67 @@ export class AdminEditContractModal extends BaseModal {
         });
 
         // Add some default tiers for new contracts
-        this.addDefaultTiers();
+        this.loadDefaultCommissionConfig();
+        
+        // Charger les exceptions par défaut au démarrage du modal
+        this.loadDefaultExceptionsAtStartup();
+    }
+
+    private async loadDefaultCommissionConfig() {
+        try {
+            this.defaultCommissionConfig = await this.dataService.getDefaultCommissionConfig();
+            // Ajouter les paliers par défaut
+            this.addDefaultTiers();
+        } catch (error) {
+            console.error('Error loading default commission config:', error);
+            // En cas d'erreur, utiliser les valeurs par défaut codées en dur
+            this.addDefaultTiers();
+        }
+    }
+
+    private async loadDefaultExceptionsAtStartup() {
+        // Ne charger les exceptions par défaut que si elles ne sont pas déjà chargées
+        if (this.defaultExceptions && this.defaultExceptions.length > 0) {
+            return;
+        }
+        
+        try {
+            this.defaultExceptions = await this.dataService.getDefaultExceptions();
+        } catch (error) {
+            console.error('Error loading default exceptions at startup:', error);
+            this.defaultExceptions = [];
+        }
     }
 
     private addDefaultTiers() {
-        // Ajouter les paliers par défaut comme dans l'image
-        this.addTier(1000, 5000, 'fixed', 300);
-        this.addTier(5001, 100000, 'fixed', 500);
-        this.addTier(100001, 999999999, 'percentage', 1);
+        // Utiliser la configuration de commission par défaut si elle est disponible
+        if (this.defaultCommissionConfig && this.defaultCommissionConfig.tiers) {
+            this.defaultCommissionConfig.tiers.forEach((tier: any) => {
+                this.addTier(tier.from, tier.to, tier.type, tier.value);
+            });
+        } else {
+            // Ajouter les paliers par défaut comme dans l'image
+            this.addTier(0, 1000, 'fixed', 20);
+            this.addTier(1001, 10000, 'fixed', 500);
+            this.addTier(10001, 100000, 'percentage', 1);
+        }
+    }
+
+    private addDefaultExceptions() {
+        // Ajouter les exceptions par défaut comme exceptions initiales
+        this.defaultExceptions.forEach((exception: any) => {
+            const contractException: ContractException = {
+                name: exception.name || 'Exception par défaut',
+                targetType: exception.targetType || 'service',
+                targetId: exception.targetId || '',
+                commissionConfig: exception.commissionConfig || {
+                    type: 'fixed',
+                    partageSociete: 50,
+                    amount: 0
+                }
+            };
+            this.addException(contractException);
+        });
     }
 
     private addTier(fromValue?: number, toValue?: number, typeValue?: string, valueAmount?: number) {
@@ -152,10 +207,10 @@ export class AdminEditContractModal extends BaseModal {
         const tierDiv = document.createElement('div');
         tierDiv.className = 'grid grid-cols-4 gap-3 items-center p-3 bg-white rounded-lg border';
         tierDiv.innerHTML = `
-            <div class="text-sm">De: <span class="font-semibold">${fromValue || 'N/A'}</span></div>
-            <div class="text-sm">À: <span class="font-semibold">${toValue || 'N/A'}</span></div>
-            <div class="text-sm">Type: <span class="font-semibold">${typeValue === 'fixed' ? 'Fixe' : 'Pourcentage'}</span></div>
-            <div class="text-sm">Valeur: <span class="font-semibold">${valueAmount || 'N/A'}</span></div>
+            <div class="text-sm">De: <span class="font-semibold">${fromValue !== undefined ? fromValue : 'N/A'}</span></div>
+            <div class="text-sm">À: <span class="font-semibold">${toValue !== undefined ? toValue : 'N/A'}</span></div>
+            <div class="text-sm">Type: <span class="font-semibold">${typeValue === 'fixed' ? 'Fixe' : typeValue === 'percentage' ? 'Pourcentage' : 'N/A'}</span></div>
+            <div class="text-sm">Valeur: <span class="font-semibold">${valueAmount !== undefined ? valueAmount : 'N/A'}</span></div>
         `;
     
         tiersContainer.appendChild(tierDiv);
@@ -491,11 +546,21 @@ export class AdminEditContractModal extends BaseModal {
     }
 
     private buildTiers(formData: FormData): CommissionTier[] {
+        // Utiliser la configuration de commission par défaut si elle est disponible
+        if (this.defaultCommissionConfig && this.defaultCommissionConfig.tiers) {
+            return this.defaultCommissionConfig.tiers.map((tier: any) => ({
+                from: tier.from,
+                to: tier.to,
+                type: tier.type,
+                value: tier.value
+            }));
+        }
+        
         // Renvoie les paliers par défaut car ils ne sont plus modifiables
         return [
-            { from: 1000, to: 5000, type: 'fixed', value: 300 },
-            { from: 5001, to: 100000, type: 'fixed', value: 500 },
-            { from: 100001, to: 999999999, type: 'percentage', value: 1 }
+            { from: 0, to: 1000, type: 'fixed', value: 20 },
+            { from: 1001, to: 10000, type: 'fixed', value: 500 },
+            { from: 10001, to: 100000, type: 'percentage', value: 1 }
         ];
     }
 
@@ -584,6 +649,16 @@ export class AdminEditContractModal extends BaseModal {
             exceptionsContainer.innerHTML = '';
         }
         
+        // Charger la configuration de commission par défaut si elle n'est pas déjà chargée
+        if (!this.defaultCommissionConfig) {
+            try {
+                this.defaultCommissionConfig = await this.dataService.getDefaultCommissionConfig();
+            } catch (error) {
+                console.error('Error loading default commission config:', error);
+                this.defaultCommissionConfig = null;
+            }
+        }
+        
         if (contract) {
             // Populate form with contract data
             (this.form.elements.namedItem('id') as HTMLInputElement).value = contract.id;
@@ -620,6 +695,15 @@ export class AdminEditContractModal extends BaseModal {
             (this.form.elements.namedItem('status') as HTMLSelectElement).value = 'active';
             (this.form.elements.namedItem('partageSociete') as HTMLInputElement).value = '60';
             this.addDefaultTiers();
+            
+            // Charger et ajouter les exceptions par défaut pour un nouveau contrat
+            try {
+                this.defaultExceptions = await this.dataService.getDefaultExceptions();
+                this.addDefaultExceptions();
+            } catch (error) {
+                console.error('Error loading default exceptions:', error);
+                this.defaultExceptions = [];
+            }
         }
         
         super.show();

@@ -52,6 +52,12 @@ export class AdminDefaultExceptionModal extends BaseModal {
         const form = document.createElement('form');
         form.id = 'defaultExceptionForm';
         form.className = 'space-y-6';
+        
+        // Ajout d'un champ caché pour stocker l'ID de l'exception lors de la modification
+        let hiddenIdField = '';
+        if (config?.id) {
+            hiddenIdField = `<input type="hidden" name="exceptionId" value="${config.id}">`;
+        }
 
         // Extract partageSociete from commissionOverride if it exists
         const partageSociete = config?.commissionOverride?.hasOwnProperty('partageSociete') 
@@ -59,6 +65,7 @@ export class AdminDefaultExceptionModal extends BaseModal {
             : 50; // Default value
 
         form.innerHTML = `
+            ${hiddenIdField}
             <div class="alert alert-info">
                 <i class="fas fa-info-circle mr-2"></i>
                 Les exceptions par défaut s'appliquent à tous les contrats pour des types d'opérations spécifiques.
@@ -74,15 +81,6 @@ export class AdminDefaultExceptionModal extends BaseModal {
             </div>
 
             ${this._createTargetSelector(config)}
-
-            <div>
-                <label class="form-label" for="exceptionCondition">
-                    Condition d'Application
-                    <i class="fas fa-question-circle text-gray-400 ml-1" data-tooltip="Expression logique qui déclenche l'exception. Ex: 'amount > 100000' pour un montant supérieur à 100 000."></i>
-                </label>
-                <input type="text" id="exceptionCondition" name="condition" class="form-input w-full" 
-                       value="${config?.condition || ''}" required placeholder="Ex: Montant > 100000">
-            </div>
 
             <div class="border rounded-md p-4">
                 <h3 class="font-semibold mb-4">Configuration de la Commission</h3>
@@ -184,7 +182,7 @@ export class AdminDefaultExceptionModal extends BaseModal {
                 <div class="col-span-3">
                     <input type="number" name="tier_${index}_to" class="form-input w-full" placeholder="Ex: 5000" min="0" step="1" value="${tier.to || ''}" required>
                 </div>
-                <div class="col-span-3">
+                <div class="col-span-33">
                     <select name="tier_${index}_type" class="form-select w-full">
                         <option value="fixed" ${tier.type === 'fixed' ? 'selected' : ''}>Fixe (FCFA)</option>
                         <option value="percentage" ${tier.type === 'percentage' ? 'selected' : ''}>Pourcentage (%)</option>
@@ -366,10 +364,10 @@ export class AdminDefaultExceptionModal extends BaseModal {
             const configData: any = {};
             
             // Extraire les données du formulaire
+            configData.id = formData.get('exceptionId') as string; // Récupérer l'ID de l'exception
             configData.description = formData.get('description') as string;
             configData.targetType = formData.get('targetType') as 'category' | 'operation_type';
             configData.targetId = formData.get('targetId') as string;
-            configData.condition = formData.get('condition') as string;
             
             // Configuration de la commission
             configData.commissionOverride = {
@@ -418,20 +416,38 @@ export class AdminDefaultExceptionModal extends BaseModal {
             const templates = await this.api.getCommissionTemplates();
             if (templates.length > 0) {
                 const template = templates[0];
-                const exceptions = [...(template.standard_exceptions || [])];
+                let exceptions = [...(template.standard_exceptions || [])];
                 
-                // Si c'est une modification, trouver et mettre à jour l'exception existante
-                // Sinon, ajouter une nouvelle exception
-                // Pour simplifier, nous allons ajouter une nouvelle exception
-                const newException = {
+                // Créer l'objet exception
+                const exceptionData = {
                     targetId: configData.targetId,
                     targetType: configData.targetType,
                     name: configData.description,
-                    condition: configData.condition,
                     commissionConfig: configData.commissionOverride
                 };
                 
-                exceptions.push(newException);
+                // Si c'est une modification, trouver et mettre à jour l'exception existante
+                // Sinon, ajouter une nouvelle exception
+                if (configData.id) {
+                    // Modification d'une exception existante
+                    // Rechercher l'exception par targetId et targetType au lieu de l'ID seulement
+                    const index = exceptions.findIndex((e: any) => 
+                        e.targetId === configData.targetId && 
+                        e.targetType === configData.targetType
+                    );
+                    
+                    if (index !== -1) {
+                        // Mettre à jour l'exception existante
+                        exceptions[index] = { ...exceptions[index], ...exceptionData };
+                    } else {
+                        // Si l'exception n'est pas trouvée, ajouter une nouvelle exception
+                        // avec l'ID fourni
+                        exceptions.push({ ...exceptionData, id: configData.id });
+                    }
+                } else {
+                    // Ajout d'une nouvelle exception
+                    exceptions.push({ ...exceptionData, id: Date.now().toString() });
+                }
                 
                 await this.api.updateCommissionTemplate(template.id, {
                     standard_exceptions: exceptions

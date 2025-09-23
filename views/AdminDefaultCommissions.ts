@@ -404,23 +404,39 @@ export class AdminDefaultCommissionsView {
         }
 
         return this.defaultExceptions.map(exception => {
-            const opType = this.operationTypes.find(ot => ot.id === exception.opTypeId);
-            const opTypeName = opType?.name || 'Type inconnu';
+            // Déterminer le nom de la cible en fonction du type de cible
+            let targetName = 'Cible inconnue';
+            if (exception.condition) {
+                // Extraire le nom de la cible à partir de la condition
+                const parts = exception.condition.split(': ');
+                if (parts.length === 2) {
+                    const targetType = parts[0];
+                    const targetId = parts[1];
+                    
+                    if (targetType === 'operation_type') {
+                        // Pour les types d'opération, chercher le nom dans operationTypes
+                        const opType = this.operationTypes.find(ot => ot.id === targetId);
+                        targetName = opType?.name || targetId;
+                    } else if (targetType === 'category') {
+                        // Pour les catégories, utiliser directement l'ID qui est le nom de la catégorie
+                        targetName = targetId;
+                    } else {
+                        // Pour les autres types, utiliser l'ID
+                        targetName = targetId;
+                    }
+                }
+            }
 
             return `
                 <div class="exception-card">
                     <div class="exception-header">
                         <div>
-                            <h4 class="exception-title">${opTypeName} - Exception</h4>
+                            <h4 class="exception-title">${targetName} - Exception</h4>
                             <p class="exception-description">${exception.description}</p>
                         </div>
                         <span class="commission-status ${exception.isActive ? 'status-active' : 'status-inactive'}">
                             ${exception.isActive ? 'Actif' : 'Inactif'}
                         </span>
-                    </div>
-                    
-                    <div class="exception-condition">
-                        Condition: ${exception.condition}
                     </div>
                     
                     <div class="commission-details">

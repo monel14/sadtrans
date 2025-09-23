@@ -270,6 +270,48 @@ export class DataService {
         return this._auditLogs;
     }
 
+    public async getCommissionTemplates(): Promise<any[]> {
+        const api = ApiService.getInstance();
+        return await api.getCommissionTemplates();
+    }
+
+    public async getDefaultCommissionConfig(): Promise<any> {
+        try {
+            const templates = await this.getCommissionTemplates();
+            if (templates && templates.length > 0) {
+                // Retourner la configuration de commission par défaut du premier template
+                return templates[0].default_commission_config || null;
+            }
+            return null;
+        } catch (error) {
+            console.error('Error loading default commission config:', error);
+            return null;
+        }
+    }
+
+    public async getDefaultExceptions(): Promise<any[]> {
+        try {
+            const templates = await this.getCommissionTemplates();
+            const exceptions: any[] = [];
+            
+            templates.forEach((template: any) => {
+                if (template.standard_exceptions && Array.isArray(template.standard_exceptions)) {
+                    template.standard_exceptions.forEach((exception: any) => {
+                        exceptions.push({
+                            ...exception,
+                            templateId: template.id
+                        });
+                    });
+                }
+            });
+            
+            return exceptions;
+        } catch (error) {
+            console.error('Error loading default exceptions:', error);
+            return [];
+        }
+    }
+
 
     // --- Getter Methods for Maps ---
 
