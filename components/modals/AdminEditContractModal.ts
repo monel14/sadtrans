@@ -1,24 +1,37 @@
-import { BaseModal } from "./BaseModal";
+import { BaseModal } from './BaseModal';
+import { $ } from '../../utils/dom';
+import { ApiService } from '../../services/api.service';
+import { DataService } from '../../services/data.service';
+import { ConfirmationModal } from './ConfirmationModal';
 import { Contract, Partner, OperationType, ContractException, CommissionConfig, CommissionTier } from "../../models";
-import { $ } from "../../utils/dom";
-import { ApiService } from "../../services/api.service";
 
 export class AdminEditContractModal extends BaseModal {
-    private form: HTMLFormElement;
+    private api: ApiService;
+    private dataService: DataService;
+    private partners: Partner[] = [];
+    private operationTypes: OperationType[] = [];
+    public onSave?: () => void;
     private editingContract: Contract | null = null;
-    private partners: Partner[];
-    private operationTypes: OperationType[];
     private tierCounter = 0;
     private exceptionCounter = 0;
-    public onSave?: () => void;
+    private form: HTMLFormElement;
+    private confirmationModal: ConfirmationModal;
 
     constructor(partners: Partner[], operationTypes: OperationType[]) {
-        super('adminEditContractModal', { size: 'lg' });
+        super('admin-edit-contract-modal', { size: 'xl' });
+        this.api = ApiService.getInstance();
+        this.dataService = DataService.getInstance();
         this.partners = partners;
         this.operationTypes = operationTypes;
+        this.confirmationModal = new ConfirmationModal();
         
+        // Create form element
+        this.form = document.createElement('form');
+        this.form.id = 'editContractForm';  // Utiliser le même ID que dans render()
+        this.form.className = 'space-y-6';
+        
+        // Render the modal content
         this.render();
-        this.form = this.modalElement.querySelector('form') as HTMLFormElement;
         this.attachListeners();
     }
 
@@ -27,67 +40,68 @@ export class AdminEditContractModal extends BaseModal {
         
         const partnerOptions = this.partners.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
 
-        const body = document.createElement('div');
-        body.innerHTML = `
-            <form id="editContractForm" class="space-y-6">
-                <input type="hidden" name="id">
-                
-                <!-- Informations de base -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Nom du contrat</label>
-                        <input type="text" name="name" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Partenaire</label>
-                        <select name="partnerId" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required>
-                            <option value="">-- Sélectionner --</option>
-                            ${partnerOptions}
-                        </select>
-                    </div>
-                </div>
-
-                <!-- Configuration principale -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Part de la Société (%)</label>
-                        <input type="number" name="partageSociete" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" min="0" max="100" value="60" required>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Statut</label>
-                        <select name="status" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required>
-                            <option value="active">Actif</option>
-                            <option value="inactive">Inactif</option>
-                            <option value="expired">Expiré</option>
-                        </select>
-                    </div>
-                </div>
-
-                <!-- Paliers de Frais de Service (Read-only) -->
+        // Utiliser this.form au lieu de créer un nouveau formulaire
+        this.form.innerHTML = `
+            <input type="hidden" name="id">
+            
+            <!-- Informations de base -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                    <h3 class="text-lg font-medium text-gray-700 mb-4">Commission par Défaut (Non modifiable)</h3>
-                    <div id="tiersContainer" class="space-y-3 p-4 bg-gray-100 rounded-md border">
-                        <!-- Les paliers par défaut seront affichés ici -->
-                    </div>
-                    <p class="text-sm text-gray-500 mt-2">La commission par défaut est basée sur un modèle standard et ne peut pas être modifiée ici. Seules les exceptions peuvent être ajoutées.</p>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Nom du contrat</label>
+                    <input type="text" name="name" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required>
                 </div>
-
-                <!-- Exceptions -->
                 <div>
-                    <h3 class="text-lg font-medium text-gray-700 mb-4">Exceptions</h3>
-                    <p class="text-sm text-gray-600 mb-4">Configurez des commissions spécifiques pour certains services ou catégories.</p>
-                    <div id="exceptionsContainer" class="space-y-4">
-                        <!-- Les exceptions seront ajoutées ici -->
-                    </div>
-                    <button type="button" id="addExceptionBtn" class="mt-3 inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-                        </svg>
-                        Ajouter une exception
-                    </button>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Partenaire</label>
+                    <select name="partnerId" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                        <option value="">-- Sélectionner --</option>
+                        ${partnerOptions}
+                    </select>
                 </div>
-            </form>
+            </div>
+
+            <!-- Configuration principale -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Part de la Société (%)</label>
+                    <input type="number" name="partageSociete" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" min="0" max="100" value="60" required>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Statut</label>
+                    <select name="status" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                        <option value="active">Actif</option>
+                        <option value="inactive">Inactif</option>
+                        <option value="expired">Expiré</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Paliers de Frais de Service (Read-only) -->
+            <div>
+                <h3 class="text-lg font-medium text-gray-700 mb-4">Commission par Défaut (Non modifiable)</h3>
+                <div id="tiersContainer" class="space-y-3 p-4 bg-gray-100 rounded-md border">
+                    <!-- Les paliers par défaut seront affichés ici -->
+                </div>
+                <p class="text-sm text-gray-500 mt-2">La commission par défaut est basée sur un modèle standard et ne peut pas être modifiée ici. Seules les exceptions peuvent être ajoutées.</p>
+            </div>
+
+            <!-- Exceptions -->
+            <div>
+                <h3 class="text-lg font-medium text-gray-700 mb-4">Exceptions</h3>
+                <p class="text-sm text-gray-600 mb-4">Configurez des commissions spécifiques pour certains services ou catégories.</p>
+                <div id="exceptionsContainer" class="space-y-4">
+                    <!-- Les exceptions seront ajoutées ici -->
+                </div>
+                <button type="button" id="addExceptionBtn" class="mt-3 inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                    Ajouter une exception
+                </button>
+            </div>
         `;
+
+        const body = document.createElement('div');
+        body.appendChild(this.form);
 
         const footer = document.createElement('div');
         footer.className = 'flex justify-end space-x-3 pt-4 border-t';
@@ -184,6 +198,29 @@ export class AdminEditContractModal extends BaseModal {
                            required>
                 </div>
                 <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Part société (%)</label>
+                    <input type="number" 
+                           name="exception_${exceptionIndex}_partageSociete" 
+                           class="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500" 
+                           min="0" 
+                           max="100" 
+                           value="${exceptionData?.commissionConfig.partageSociete || 50}"
+                           required>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Type de commission</label>
+                    <select name="exception_${exceptionIndex}_commissionType" 
+                            class="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 exception-commission-type">
+                        <option value="fixed" ${exceptionData?.commissionConfig.type === 'fixed' ? 'selected' : ''}>Montant fixe</option>
+                        <option value="percentage" ${exceptionData?.commissionConfig.type === 'percentage' ? 'selected' : ''}>Pourcentage</option>
+                        <option value="tiers" ${exceptionData?.commissionConfig.type === 'tiers' ? 'selected' : ''}>Par paliers</option>
+                    </select>
+                </div>
+            </div>
+            
+            <!-- Ciblage de l'exception -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Type de cible</label>
                     <select name="exception_${exceptionIndex}_targetType" 
                             class="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 exception-target-type" 
@@ -203,32 +240,9 @@ export class AdminEditContractModal extends BaseModal {
                 </div>
             </div>
             
-            <!-- Configuration de commission pour cette exception -->
+            <!-- Détails de commission selon le type -->
             <div class="border-t pt-4">
-                <h5 class="font-medium text-gray-600 mb-3">Configuration de commission</h5>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Type</label>
-                        <select name="exception_${exceptionIndex}_commissionType" 
-                                class="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 exception-commission-type">
-                            <option value="fixed" ${exceptionData?.commissionConfig.type === 'fixed' ? 'selected' : ''}>Montant fixe</option>
-                            <option value="percentage" ${exceptionData?.commissionConfig.type === 'percentage' ? 'selected' : ''}>Pourcentage</option>
-                            <option value="tiers" ${exceptionData?.commissionConfig.type === 'tiers' ? 'selected' : ''}>Par paliers</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Part société (%)</label>
-                        <input type="number" 
-                               name="exception_${exceptionIndex}_partageSociete" 
-                               class="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500" 
-                               min="0" 
-                               max="100" 
-                               value="${exceptionData?.commissionConfig.partageSociete || 50}"
-                               required>
-                    </div>
-                </div>
-                
-                <!-- Détails de commission selon le type -->
+                <h5 class="font-medium text-gray-600 mb-3">Détails de commission</h5>
                 <div class="exception-commission-details" data-exception-index="${exceptionIndex}">
                     <!-- Les détails seront rendus ici selon le type -->
                 </div>
@@ -434,23 +448,34 @@ export class AdminEditContractModal extends BaseModal {
             
             // Avertir l'utilisateur si on active un contrat
             if (contract.status === 'active' && (!this.editingContract || this.editingContract.status !== 'active')) {
-                const confirmed = confirm(
-                    `Attention : Activer ce contrat désactivera automatiquement tous les autres contrats de ce partenaire.\n\nContinuer ?`
+                // Remplacer la boîte de confirmation par un modal
+                this.confirmationModal.show(
+                    'Activer le contrat',
+                    'Attention : Activer ce contrat désactivera automatiquement tous les autres contrats de ce partenaire.\n\nContinuer ?',
+                    async () => {
+                        // Si l'utilisateur confirme, continuer avec la sauvegarde
+                        await this.saveContract(contract);
+                    }
                 );
-                if (!confirmed) {
-                    return;
-                }
+                return;
             }
             
-            await api.updateContract(contract);
-            this.hide();
-            
-            if (this.onSave) {
-                this.onSave();
-            }
+            // Si pas de confirmation nécessaire, sauvegarder directement
+            await this.saveContract(contract);
         } catch (error) {
             console.error('Error saving contract:', error);
-            alert('Erreur lors de la sauvegarde du contrat.');
+            document.body.dispatchEvent(new CustomEvent('showToast', {
+                detail: { message: 'Erreur lors de la sauvegarde du contrat.', type: 'error' }
+            }));
+        }
+    }
+
+    private async saveContract(contract: Contract): Promise<void> {
+        await this.api.updateContract(contract);
+        this.hide();
+        
+        if (this.onSave) {
+            this.onSave();
         }
     }
 
@@ -550,8 +575,14 @@ export class AdminEditContractModal extends BaseModal {
         // Clear existing tiers and exceptions
         const tiersContainer = $('#tiersContainer', this.modalElement) as HTMLElement;
         const exceptionsContainer = $('#exceptionsContainer', this.modalElement) as HTMLElement;
-        tiersContainer.innerHTML = '';
-        exceptionsContainer.innerHTML = '';
+        
+        // Vérifier que les éléments existent avant de tenter de les vider
+        if (tiersContainer) {
+            tiersContainer.innerHTML = '';
+        }
+        if (exceptionsContainer) {
+            exceptionsContainer.innerHTML = '';
+        }
         
         if (contract) {
             // Populate form with contract data

@@ -53,6 +53,11 @@ export class AdminDefaultExceptionModal extends BaseModal {
         form.id = 'defaultExceptionForm';
         form.className = 'space-y-6';
 
+        // Extract partageSociete from commissionOverride if it exists
+        const partageSociete = config?.commissionOverride?.hasOwnProperty('partageSociete') 
+            ? (config.commissionOverride as any).partageSociete 
+            : 50; // Default value
+
         form.innerHTML = `
             <div class="alert alert-info">
                 <i class="fas fa-info-circle mr-2"></i>
@@ -82,16 +87,26 @@ export class AdminDefaultExceptionModal extends BaseModal {
             <div class="border rounded-md p-4">
                 <h3 class="font-semibold mb-4">Configuration de la Commission</h3>
                 
-                <div>
-                    <label class="form-label" for="commissionType">
-                        Type de Commission
-                        <i class="fas fa-question-circle text-gray-400 ml-1" data-tooltip="Choisissez le mode de calcul de la commission pour cette exception."></i>
-                    </label>
-                    <select id="commissionType" name="type" class="form-select w-full" required>
-                        <option value="fixed" ${config?.commissionOverride?.type === 'fixed' ? 'selected' : ''}>Montant Fixe</option>
-                        <option value="percentage" ${config?.commissionOverride?.type === 'percentage' ? 'selected' : ''}>Pourcentage</option>
-                        <option value="tiers" ${config?.commissionOverride?.type === 'tiers' ? 'selected' : ''}>Par Paliers</option>
-                    </select>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label class="form-label" for="commissionType">
+                            Type de Commission
+                            <i class="fas fa-question-circle text-gray-400 ml-1" data-tooltip="Choisissez le mode de calcul de la commission pour cette exception."></i>
+                        </label>
+                        <select id="commissionType" name="type" class="form-select w-full" required>
+                            <option value="fixed" ${config?.commissionOverride?.type === 'fixed' ? 'selected' : ''}>Montant Fixe</option>
+                            <option value="percentage" ${config?.commissionOverride?.type === 'percentage' ? 'selected' : ''}>Pourcentage</option>
+                            <option value="tiers" ${config?.commissionOverride?.type === 'tiers' ? 'selected' : ''}>Par Paliers</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label" for="partageSociete">
+                            Part société (%)
+                            <i class="fas fa-question-circle text-gray-400 ml-1" data-tooltip="Pourcentage de la commission qui revient à la société."></i>
+                        </label>
+                        <input type="number" id="partageSociete" name="partageSociete" class="form-input w-full" 
+                               value="${partageSociete}" min="0" max="100" required>
+                    </div>
                 </div>
 
                 <div id="fixedConfig" class="p-4 border rounded-md mt-4" style="display: ${config?.commissionOverride?.type === 'fixed' ? 'block' : 'none'}">
@@ -358,7 +373,8 @@ export class AdminDefaultExceptionModal extends BaseModal {
             
             // Configuration de la commission
             configData.commissionOverride = {
-                type: formData.get('type') as 'fixed' | 'percentage' | 'tiers'
+                type: formData.get('type') as 'fixed' | 'percentage' | 'tiers',
+                partageSociete: parseInt(formData.get('partageSociete') as string) || 50
             };
             
             switch (configData.commissionOverride.type) {

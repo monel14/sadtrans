@@ -1,86 +1,67 @@
-import { BaseModal } from "./BaseModal";
-import { $ } from "../../utils/dom";
-
-interface ConfirmationModalOptions {
-    confirmButtonText?: string;
-    confirmButtonClass?: 'btn-primary' | 'btn-danger' | 'btn-success';
-}
+import { BaseModal } from './BaseModal';
 
 export class ConfirmationModal extends BaseModal {
-    private titleElement: HTMLElement | null;
-    private messageElement: HTMLElement | null;
-    private confirmButton: HTMLButtonElement | null;
-    private onConfirmCallback: (() => Promise<void>) | null = null;
+    private onConfirm?: () => void;
+    private onCancel?: () => void;
 
     constructor() {
-        super('confirmationModal', { size: 'sm' });
-        this.render();
-        this.titleElement = $('#confirmationModalTitle', this.modalElement);
-        this.messageElement = $('#confirmationModalMessage', this.modalElement);
-        this.confirmButton = $('#confirmationModalConfirmBtn', this.modalElement);
-        this.attachListeners();
+        super('confirmation-modal', { size: 'sm' });
     }
 
-    private render() {
-        const title = "Confirmation";
-        const body = document.createElement('div');
-        body.innerHTML = `<p id="confirmationModalMessage" class="text-slate-600 mb-6"></p>`;
+    public async show(title: string, message: string, onConfirm: () => void, onCancel?: () => void): Promise<void> {
+        this.onConfirm = onConfirm;
+        this.onCancel = onCancel;
 
-        const footer = document.createElement('div');
-        footer.className = 'flex justify-end space-x-2';
-        footer.innerHTML = `
-            <button type="button" class="btn btn-secondary" data-modal-close>Annuler</button>
-            <button id="confirmationModalConfirmBtn" class="btn btn-primary">Confirmer</button>
-        `;
+        const body = this.createBody(message);
+        const footer = this.createFooter();
 
         this.setContent(title, body, footer);
-        // Rename title element to be unique
-        const titleEl = this.modalElement.querySelector('h3');
-        if (titleEl) {
-            titleEl.id = 'confirmationModalTitle';
-        }
-    }
-
-    public show(
-        title: string,
-        message: string,
-        onConfirm: () => Promise<void>,
-        options: ConfirmationModalOptions = {}
-    ) {
-        if (this.titleElement) this.titleElement.textContent = title;
-        if (this.messageElement) this.messageElement.innerHTML = message.replace(/\n/g, '<br>'); // Support newlines in message
-        this.onConfirmCallback = onConfirm;
-
-        if (this.confirmButton) {
-            this.confirmButton.innerHTML = options.confirmButtonText || 'Confirmer';
-            this.confirmButton.className = 'btn'; // Reset classes
-            this.confirmButton.classList.add(options.confirmButtonClass || 'btn-primary');
-        }
-        
         super.show();
+        this.attachEventListeners();
     }
 
-    private attachListeners() {
-        this.confirmButton?.addEventListener('click', async () => {
-            if (!this.onConfirmCallback || !this.confirmButton) return;
+    private createBody(message: string): HTMLElement {
+        const body = document.createElement('div');
+        body.className = 'confirmation-body';
+        body.innerHTML = `
+            <div class="flex items-center justify-center w-12 h-12 mx-auto mb-4 rounded-full bg-red-100">
+                <i class="fas fa-exclamation-triangle text-red-600 text-xl"></i>
+            </div>
+            <p class="text-center text-gray-700">${message}</p>
+        `;
+        return body;
+    }
 
-            const originalButtonHtml = this.confirmButton.innerHTML;
-            this.confirmButton.disabled = true;
-            this.confirmButton.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i>Chargement...`;
+    private createFooter(): HTMLElement {
+        const footer = document.createElement('div');
+        footer.className = 'flex justify-end space-x-3';
+        footer.innerHTML = `
+            <button type="button" class="btn btn-secondary" data-action="cancel">
+                <i class="fas fa-times mr-2"></i>Annuler
+            </button>
+            <button type="button" class="btn btn-danger" data-action="confirm">
+                <i class="fas fa-check mr-2"></i>Confirmer
+            </button>
+        `;
+        return footer;
+    }
 
-            try {
-                await this.onConfirmCallback();
-                this.hide(); // Hide only on success
-            } catch (error) {
-                // The calling function should show the toast error.
-                // The button will be restored in the finally block.
-                // The modal stays open for the user to see the error and retry.
-            } finally {
-                if(this.confirmButton.disabled){ // Only restore if it was disabled by this function
-                    this.confirmButton.disabled = false;
-                    this.confirmButton.innerHTML = originalButtonHtml;
-                }
+    private attachEventListeners(): void {
+        const cancelBtn = this.modalElement.querySelector('[data-action="cancel"]') as HTMLButtonElement;
+        const confirmBtn = this.modalElement.querySelector('[data-action="confirm"]') as HTMLButtonElement;
+
+        cancelBtn.addEventListener('click', () => {
+            if (this.onCancel) {
+                this.onCancel();
             }
+            this.hide();
+        });
+
+        confirmBtn.addEventListener('click', () => {
+            if (this.onConfirm) {
+                this.onConfirm();
+            }
+            this.hide();
         });
     }
 }

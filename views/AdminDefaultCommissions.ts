@@ -6,6 +6,7 @@ import { $ } from '../utils/dom';
 import { formatAmount } from '../utils/formatters';
 import { AdminDefaultCommissionModal } from '../components/modals/AdminDefaultCommissionModal';
 import { AdminDefaultExceptionModal } from '../components/modals/AdminDefaultExceptionModal';
+import { ConfirmationModal } from '../components/modals/ConfirmationModal';
 
 interface DefaultCommissionConfig {
     id?: string;
@@ -39,10 +40,12 @@ export class AdminDefaultCommissionsView {
     private operationTypes: OperationType[] = [];
     private defaultCommissionModal: AdminDefaultCommissionModal;
     private defaultExceptionModal: AdminDefaultExceptionModal;
+    private confirmationModal: ConfirmationModal;
 
     constructor() {
         this.defaultCommissionModal = new AdminDefaultCommissionModal();
         this.defaultExceptionModal = new AdminDefaultExceptionModal();
+        this.confirmationModal = new ConfirmationModal();
     }
 
     async render(): Promise<HTMLElement> {
@@ -640,57 +643,110 @@ export class AdminDefaultCommissionsView {
 
     private async deleteCommission(commissionId: string): Promise<void> {
         // Pour l'instant, on ne permet pas la suppression via l'interface
-        alert('La suppression des commissions par défaut nécessite une interface plus avancée.\n\nPour l\'instant, utilisez Supabase Studio pour modifier la table commission_templates.');
+        // alert('La suppression des commissions par défaut nécessite une interface plus avancée.\n\nPour l\'instant, utilisez Supabase Studio pour modifier la table commission_templates.');
         
         // TODO: Implémenter la suppression via modification de standard_exceptions
+        
+        // Afficher un message plus élégant à la place de l'alerte
+        document.body.dispatchEvent(new CustomEvent('showToast', {
+            detail: { 
+                message: 'La suppression des commissions par défaut nécessite une interface plus avancée. Utilisez Supabase Studio pour modifier la table commission_templates.', 
+                type: 'info' 
+            }
+        }));
     }
 
     private async deleteException(exceptionId: string): Promise<void> {
-        if (confirm('Êtes-vous sûr de vouloir supprimer cette exception standard ?')) {
-            try {
-                const api = ApiService.getInstance();
-                const templates = await api.getCommissionTemplates();
-                
-                if (templates.length > 0) {
-                    const template = templates[0];
-                    const exceptions = [...(template.standard_exceptions || [])];
+        // Remplacer la boîte de confirmation par un modal
+        this.confirmationModal.show(
+            'Supprimer l\'exception',
+            'Êtes-vous sûr de vouloir supprimer cette exception standard ?',
+            async () => {
+                try {
+                    const api = ApiService.getInstance();
+                    const templates = await api.getCommissionTemplates();
                     
-                    // Trouver l'exception à supprimer
-                    const exceptionIndex = exceptions.findIndex((ex: any) => `${template.id}_${ex.targetId}` === exceptionId);
-                    if (exceptionIndex !== -1) {
-                        exceptions.splice(exceptionIndex, 1);
-                        await api.updateCommissionTemplate(template.id, {
-                            standard_exceptions: exceptions
+                    if (templates.length > 0) {
+                        const template = templates[0];
+                        const exceptions = [...(template.standard_exceptions || [])];
+                        
+                        // Trouver l'exception à supprimer
+                        // Correction: utiliser le même format d'ID que dans loadDefaultExceptions
+                        const exceptionIndex = exceptions.findIndex((ex: any, index: number) => {
+                            // Générer l'ID de la même manière que dans loadDefaultExceptions
+                            const generatedId = `${template.id}_${ex.targetId}`;
+                            // Comparer avec l'ID fourni
+                            return generatedId === exceptionId;
                         });
                         
-                        document.body.dispatchEvent(new CustomEvent('showToast', {
-                            detail: { message: 'Exception supprimée avec succès', type: 'success' }
-                        }));
-                        
-                        await this.refreshData();
+                        if (exceptionIndex !== -1) {
+                            exceptions.splice(exceptionIndex, 1);
+                            await api.updateCommissionTemplate(template.id, {
+                                standard_exceptions: exceptions
+                            });
+                            
+                            document.body.dispatchEvent(new CustomEvent('showToast', {
+                                detail: { message: 'Exception supprimée avec succès', type: 'success' }
+                            }));
+                            
+                            await this.refreshData();
+                        } else {
+                            // Si non trouvé, tenter de trouver par index (fallback)
+                            const indexFromId = parseInt(exceptionId.split('_').pop() || '-1');
+                            if (!isNaN(indexFromId) && indexFromId >= 0 && indexFromId < exceptions.length) {
+                                exceptions.splice(indexFromId, 1);
+                                await api.updateCommissionTemplate(template.id, {
+                                    standard_exceptions: exceptions
+                                });
+                                
+                                document.body.dispatchEvent(new CustomEvent('showToast', {
+                                    detail: { message: 'Exception supprimée avec succès', type: 'success' }
+                                }));
+                                
+                                await this.refreshData();
+                            } else {
+                                throw new Error('Exception non trouvée');
+                            }
+                        }
                     }
+                } catch (error) {
+                    console.error('Erreur lors de la suppression:', error);
+                    document.body.dispatchEvent(new CustomEvent('showToast', {
+                        detail: { message: 'Erreur lors de la suppression', type: 'error' }
+                    }));
                 }
-            } catch (error) {
-                console.error('Erreur lors de la suppression:', error);
-                document.body.dispatchEvent(new CustomEvent('showToast', {
-                    detail: { message: 'Erreur lors de la suppression', type: 'error' }
-                }));
             }
-        }
+        );
     }
 
     private async toggleCommission(commissionId: string, isActive: boolean): Promise<void> {
         // Pour l'instant, on ne permet pas l'activation/désactivation via l'interface
-        alert('L\'activation/désactivation des commissions par défaut nécessite une interface plus avancée.\n\nPour l\'instant, utilisez Supabase Studio pour modifier la table commission_templates.');
+        // alert('L\'activation/désactivation des commissions par défaut nécessite une interface plus avancée.\n\nPour l\'instant, utilisez Supabase Studio pour modifier la table commission_templates.');
         
         // TODO: Implémenter le toggle via modification de standard_exceptions
+        
+        // Afficher un message plus élégant à la place de l'alerte
+        document.body.dispatchEvent(new CustomEvent('showToast', {
+            detail: { 
+                message: 'L\'activation/désactivation des commissions par défaut nécessite une interface plus avancée. Utilisez Supabase Studio pour modifier la table commission_templates.', 
+                type: 'info' 
+            }
+        }));
     }
 
     private async toggleException(exceptionId: string, isActive: boolean): Promise<void> {
         // Pour l'instant, on ne permet pas l'activation/désactivation via l'interface
-        alert('L\'activation/désactivation des exceptions par défaut nécessite une interface plus avancée.\n\nPour l\'instant, utilisez Supabase Studio pour modifier la table commission_templates.');
+        // alert('L\'activation/désactivation des exceptions par défaut nécessite une interface plus avancée.\n\nPour l\'instant, utilisez Supabase Studio pour modifier la table commission_templates.');
         
         // TODO: Implémenter le toggle via modification de standard_exceptions
+        
+        // Afficher un message plus élégant à la place de l'alerte
+        document.body.dispatchEvent(new CustomEvent('showToast', {
+            detail: { 
+                message: 'L\'activation/désactivation des exceptions par défaut nécessite une interface plus avancée. Utilisez Supabase Studio pour modifier la table commission_templates.', 
+                type: 'info' 
+            }
+        }));
     }
 
     private async refreshData(): Promise<void> {

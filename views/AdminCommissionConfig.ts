@@ -6,6 +6,7 @@ import { formatAmount, formatDate } from '../utils/formatters';
 import { AdminEditContractModal } from '../components/modals/AdminEditContractModal';
 import { ApiService } from '../services/api.service';
 import { showAdminDefaultCommissionsView } from './AdminDefaultCommissions';
+import { ConfirmationModal } from '../components/modals/ConfirmationModal';
 
 // --- Contracts Tab ---
 async function renderContractsTabContent(
@@ -14,6 +15,9 @@ async function renderContractsTabContent(
     partners: Partner[],
     contractModal: AdminEditContractModal
 ) {
+    // Créer une instance du modal de confirmation
+    const confirmationModal = new ConfirmationModal();
+    
     container.innerHTML = `
         <div class="flex flex-col md:flex-row justify-between md:items-center gap-4 mb-6">
             <div>
@@ -86,24 +90,33 @@ async function renderContractsTabContent(
             const contractId = button.dataset.contractId!;
             const contractName = button.dataset.contractName!;
             
-            if (confirm(`Êtes-vous sûr de vouloir supprimer le contrat "${contractName}" ?`)) {
-                try {
-                    const api = ApiService.getInstance();
-                    const success = await api.deleteContract(contractId);
-                    if (success) {
-                        // Refresh the view
-                        const dataService = DataService.getInstance();
-                        dataService.invalidateContractsCache();
-                        const freshContracts = await dataService.getContracts();
-                        await renderContractsTabContent(container, freshContracts, partners, contractModal);
-                    } else {
-                        alert('Erreur lors de la suppression du contrat.');
+            // Remplacer la boîte de confirmation par un modal
+            confirmationModal.show(
+                'Supprimer le contrat',
+                `Êtes-vous sûr de vouloir supprimer le contrat "${contractName}" ?`,
+                async () => {
+                    try {
+                        const api = ApiService.getInstance();
+                        const success = await api.deleteContract(contractId);
+                        if (success) {
+                            // Refresh the view
+                            const dataService = DataService.getInstance();
+                            dataService.invalidateContractsCache();
+                            const freshContracts = await dataService.getContracts();
+                            await renderContractsTabContent(container, freshContracts, partners, contractModal);
+                        } else {
+                            document.body.dispatchEvent(new CustomEvent('showToast', {
+                                detail: { message: 'Erreur lors de la suppression du contrat.', type: 'error' }
+                            }));
+                        }
+                    } catch (error) {
+                        console.error('Error deleting contract:', error);
+                        document.body.dispatchEvent(new CustomEvent('showToast', {
+                            detail: { message: 'Erreur lors de la suppression du contrat.', type: 'error' }
+                        }));
                     }
-                } catch (error) {
-                    console.error('Error deleting contract:', error);
-                    alert('Erreur lors de la suppression du contrat.');
                 }
-            }
+            );
         } else if (action === 'create-contract' || button.id === 'createNewContractBtn') {
             await contractModal.show();
         }
