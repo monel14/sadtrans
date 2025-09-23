@@ -313,50 +313,6 @@ export class AdminDefaultCommissionsView {
                     font-size: 12px;
                 }
 
-                .toggle-switch {
-                    position: relative;
-                    display: inline-block;
-                    width: 44px;
-                    height: 24px;
-                }
-
-                .toggle-switch input {
-                    opacity: 0;
-                    width: 0;
-                    height: 0;
-                }
-
-                .toggle-slider {
-                    position: absolute;
-                    cursor: pointer;
-                    top: 0;
-                    left: 0;
-                    right: 0;
-                    bottom: 0;
-                    background-color: #ccc;
-                    transition: .4s;
-                    border-radius: 24px;
-                }
-
-                .toggle-slider:before {
-                    position: absolute;
-                    content: "";
-                    height: 18px;
-                    width: 18px;
-                    left: 3px;
-                    bottom: 3px;
-                    background-color: white;
-                    transition: .4s;
-                    border-radius: 50%;
-                }
-
-                input:checked + .toggle-slider {
-                    background-color: #3b82f6;
-                }
-
-                input:checked + .toggle-slider:before {
-                    transform: translateX(20px);
-                }
             </style>
         `;
     }
@@ -421,11 +377,6 @@ export class AdminDefaultCommissionsView {
                             <i class="fas fa-edit"></i>
                             Modifier
                         </button>
-                        <label class="toggle-switch">
-                            <input type="checkbox" ${commission.isActive ? 'checked' : ''} 
-                                   data-action="toggle-commission" data-commission-id="${commission.id}">
-                            <span class="toggle-slider"></span>
-                        </label>
                         <button data-action="delete-commission" data-commission-id="${commission.id}" class="btn btn-sm btn-danger">
                             <i class="fas fa-trash"></i>
                         </button>
@@ -485,11 +436,6 @@ export class AdminDefaultCommissionsView {
                             <i class="fas fa-edit"></i>
                             Modifier
                         </button>
-                        <label class="toggle-switch">
-                            <input type="checkbox" ${exception.isActive ? 'checked' : ''} 
-                                   data-action="toggle-exception" data-exception-id="${exception.id}">
-                            <span class="toggle-slider"></span>
-                        </label>
                         <button data-action="delete-exception" data-exception-id="${exception.id}" class="btn btn-sm btn-danger">
                             <i class="fas fa-trash"></i>
                         </button>
@@ -597,16 +543,6 @@ export class AdminDefaultCommissionsView {
                 case 'delete-exception':
                     const deleteExceptionId = button.dataset.exceptionId;
                     await this.deleteException(deleteExceptionId!);
-                    break;
-                case 'toggle-commission':
-                    const toggleCommissionId = button.dataset.commissionId;
-                    const isChecked = (button as HTMLInputElement).checked;
-                    await this.toggleCommission(toggleCommissionId!, isChecked);
-                    break;
-                case 'toggle-exception':
-                    const toggleExceptionId = button.dataset.exceptionId;
-                    const isExceptionChecked = (button as HTMLInputElement).checked;
-                    await this.toggleException(toggleExceptionId!, isExceptionChecked);
                     break;
             }
         });

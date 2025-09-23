@@ -674,58 +674,26 @@ export class ApiService {
     // --- COMMISSION TEMPLATES ---
 
     public async getCommissionTemplates(): Promise<any[]> {
-        const { data, error } = await supabase.from('commission_templates').select('*').order('created_at', { ascending: false });
-        if (error) {
-            console.error('Error fetching commission templates:', error);
-            throw error;
-        }
+        const { data, error } = await supabase.from('commission_templates').select('*');
+        if (error) { console.error('Error fetching commission templates:', error); throw error; }
         return data || [];
     }
 
-    public async getCommissionTemplate(templateId: string): Promise<any | null> {
-        const { data, error } = await supabase.from('commission_templates').select('*').eq('id', templateId).single();
-        if (error) {
-            console.error('Error fetching commission template:', error);
-            return null;
-        }
+    public async updateCommissionTemplate(templateId: string, updates: any): Promise<any> {
+        const { data, error } = await supabase.from('commission_templates').update(updates).eq('id', templateId).select().single();
+        if (error) { console.error('Error updating commission template:', error); throw error; }
         return data;
     }
 
     public async createCommissionTemplate(template: any): Promise<any> {
         const { data, error } = await supabase.from('commission_templates').insert(template).select().single();
-        if (error) {
-            console.error('Error creating commission template:', error);
-            throw error;
-        }
-        await this.logAction('CREATE_COMMISSION_TEMPLATE', { entity_id: data.id, name: template.name });
-        return data;
-    }
-
-    public async updateCommissionTemplate(templateId: string, template: any): Promise<any> {
-        const { data, error } = await supabase.from('commission_templates')
-            .update({ ...template, updated_at: new Date().toISOString() })
-            .eq('id', templateId)
-            .select()
-            .single();
-        if (error) {
-            console.error('Error updating commission template:', error);
-            throw error;
-        }
-        await this.logAction('UPDATE_COMMISSION_TEMPLATE', { entity_id: templateId, name: template.name });
+        if (error) { console.error('Error creating commission template:', error); throw error; }
         return data;
     }
 
     public async deleteCommissionTemplate(templateId: string): Promise<boolean> {
-        if (templateId === 'default') {
-            throw new Error('Cannot delete the default template');
-        }
-
         const { error } = await supabase.from('commission_templates').delete().eq('id', templateId);
-        if (error) {
-            console.error('Error deleting commission template:', error);
-            return false;
-        }
-        await this.logAction('DELETE_COMMISSION_TEMPLATE', { entity_id: templateId });
+        if (error) { console.error('Error deleting commission template:', error); return false; }
         return true;
     }
 
