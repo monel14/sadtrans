@@ -967,15 +967,54 @@ export class ApiService {
             await this.deactivateOtherContractsForPartner(contract.partnerId, contract.id);
         }
 
-        const { data, error } = await supabase.from('contracts').upsert({
-            ...contract,
-            partner_id: contract.partnerId,
-            default_commission_config: contract.defaultCommissionConfig,
-            start_date: contract.startDate,
-            end_date: contract.endDate
-        }).select().single();
-        if (error) throw error;
-        return data as Contract;
+        // Préparer les données du contrat pour l'insertion/upsert
+        // Enlever les propriétés qui ne doivent pas être envoyées directement
+        const { id, partnerId, defaultCommissionConfig, status, startDate, endDate, exceptions, ...rest } = contract;
+
+        const contractData: any = {
+            ...rest, // Inclure les autres propriétés du contrat
+            id: id,
+            partner_id: partnerId,
+            default_commission_config: defaultCommissionConfig,
+            status: status,
+            exceptions: exceptions
+        };
+
+        // Ajouter les dates seulement si elles sont définies
+        if (startDate) {
+            contractData.start_date = startDate;
+        }
+        if (endDate !== undefined) {
+            contractData.end_date = endDate;
+        }
+
+        // S'assurer que les champs requis sont présents
+        if (!contractData.name) {
+            throw new Error("Le nom du contrat est requis");
+        }
+        if (!contractData.partner_id) {
+            throw new Error("Le partenaire est requis");
+        }
+
+        console.log('Sending contract data to Supabase:', contractData);
+
+        const { data, error } = await supabase.from('contracts').upsert(contractData).select().single();
+        
+        if (error) {
+            console.error('Error updating contract in Supabase:', error);
+            throw error;
+        }
+        
+        // Mapper les données retournées par Supabase vers notre modèle Contract
+        return {
+            ...data,
+            partnerId: data.partner_id,
+            defaultCommissionConfig: data.default_commission_config,
+            startDate: data.start_date,
+            endDate: data.end_date,
+            status: data.status,
+            exceptions: data.exceptions || []
+        } as Contract;
     }
 
     private async deactivateOtherContractsForPartner(partnerId: string, excludeContractId?: string): Promise<void> {

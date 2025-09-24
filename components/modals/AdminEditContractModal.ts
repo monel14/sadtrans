@@ -489,17 +489,34 @@ export class AdminEditContractModal extends BaseModal {
         const api = ApiService.getInstance();
         
         try {
-            // Build contract object
+            // Récupérer les valeurs du formulaire
+            const contractId = formData.get('id') as string;
+            const contractName = formData.get('name') as string;
+            const partnerId = formData.get('partnerId') as string;
+            const status = formData.get('status') as 'active' | 'inactive' | 'expired';
+            
+            // Vérifier que les champs obligatoires sont remplis
+            if (!contractName || !partnerId) {
+                document.body.dispatchEvent(new CustomEvent('showToast', {
+                    detail: { message: 'Veuillez remplir tous les champs obligatoires.', type: 'error' }
+                }));
+                return;
+            }
+            
+            // Build contract object avec des valeurs par défaut appropriées
             const contract: Contract = {
-                id: formData.get('id') as string || `contract_${Date.now()}`,
-                name: formData.get('name') as string,
-                partnerId: formData.get('partnerId') as string,
-                status: formData.get('status') as 'active' | 'inactive' | 'expired',
-                startDate: new Date().toISOString(),
-                endDate: null,
+                id: contractId || `contract_${Date.now()}`,
+                name: contractName,
+                partnerId: partnerId,
+                status: status,
+                startDate: new Date().toISOString(), // Toujours définir la date de début
+                endDate: null, // Par défaut, pas de date de fin
                 defaultCommissionConfig: this.buildCommissionConfig(formData),
                 exceptions: this.buildExceptions(formData)
             };
+            
+            // Afficher les données du contrat dans la console pour le débogage
+            console.log('Contract data to be saved:', contract);
             
             // Avertir l'utilisateur si on active un contrat
             if (contract.status === 'active' && (!this.editingContract || this.editingContract.status !== 'active')) {
@@ -518,24 +535,48 @@ export class AdminEditContractModal extends BaseModal {
             // Si pas de confirmation nécessaire, sauvegarder directement
             await this.saveContract(contract);
         } catch (error) {
-            console.error('Error saving contract:', error);
+            console.error('Error preparing contract data:', error);
             document.body.dispatchEvent(new CustomEvent('showToast', {
-                detail: { message: 'Erreur lors de la sauvegarde du contrat.', type: 'error' }
+                detail: { message: 'Erreur lors de la préparation des données du contrat.', type: 'error' }
             }));
         }
     }
 
     private async saveContract(contract: Contract): Promise<void> {
-        await this.api.updateContract(contract);
-        this.hide();
-        
-        if (this.onSave) {
-            this.onSave();
+        try {
+            // Afficher un message de chargement
+            document.body.dispatchEvent(new CustomEvent('showToast', {
+                detail: { message: 'Enregistrement du contrat en cours...', type: 'info' }
+            }));
+            
+            await this.api.updateContract(contract);
+            this.hide();
+            
+            if (this.onSave) {
+                this.onSave();
+            }
+            
+            document.body.dispatchEvent(new CustomEvent('showToast', {
+                detail: { message: 'Contrat enregistré avec succès.', type: 'success' }
+            }));
+        } catch (error: any) {
+            console.error('Error saving contract:', error);
+            // Afficher un message d'erreur plus détaillé
+            const errorMessage = error.message || 'Erreur lors de l\'enregistrement du contrat.';
+            document.body.dispatchEvent(new CustomEvent('showToast', {
+                detail: { message: errorMessage, type: 'error' }
+            }));
         }
     }
 
     private buildCommissionConfig(formData: FormData): CommissionConfig {
         const partageSociete = parseInt(formData.get('partageSociete') as string) || 60;
+        
+        // Valider que le partage société est entre 0 et 100
+        if (partageSociete < 0 || partageSociete > 100) {
+            throw new Error("Le partage société doit être entre 0 et 100%");
+        }
+        
         const tiers = this.buildTiers(formData);
         
         return {
@@ -574,7 +615,13 @@ export class AdminEditContractModal extends BaseModal {
             const commissionType = formData.get(`exception_${i}_commissionType`) as 'fixed' | 'percentage' | 'tiers';
             const partageSociete = parseInt(formData.get(`exception_${i}_partageSociete`) as string);
             
+            // Vérifier que les champs obligatoires sont remplis
             if (name && targetType && targetId && commissionType) {
+                // Valider que le partage société est entre 0 et 100
+                if (partageSociete < 0 || partageSociete > 100) {
+                    throw new Error(`Le partage société pour l'exception "${name}" doit être entre 0 et 100%`);
+                }
+                
                 const commissionConfig: CommissionConfig = {
                     type: commissionType,
                     partageSociete: partageSociete || 50
@@ -584,14 +631,23 @@ export class AdminEditContractModal extends BaseModal {
                     const value = parseFloat(formData.get(`exception_${i}_value`) as string);
                     if (!isNaN(value)) {
                         commissionConfig.amount = value;
+                    } else {
+                        throw new Error(`Valeur invalide pour l'exception "${name}" de type fixe`);
                     }
                 } else if (commissionType === 'percentage') {
                     const value = parseFloat(formData.get(`exception_${i}_value`) as string);
                     if (!isNaN(value)) {
                         commissionConfig.rate = value;
+                    } else {
+                        throw new Error(`Valeur invalide pour l'exception "${name}" de type pourcentage`);
                     }
                 } else if (commissionType === 'tiers') {
                     commissionConfig.tiers = this.buildExceptionTiers(formData, i);
+                    
+                    // Vérifier qu'il y a au moins un palier
+                    if (!commissionConfig.tiers || commissionConfig.tiers.length === 0) {
+                        throw new Error(`L'exception "${name}" de type paliers doit avoir au moins un palier`);
+                    }
                 }
                 
                 // Only add if we have valid configuration
