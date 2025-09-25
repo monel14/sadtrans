@@ -7,14 +7,6 @@
   ],
   "routes": [
     {
-      "src": "/images/(.*)",
-      "dest": "/images/$1"
-    },
-    {
-      "src": "/(.*)\\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|json)",
-      "dest": "/$1.$2"
-    },
-    {
       "src": "/(.*)",
       "dest": "/index.html"
     }
