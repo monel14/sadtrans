@@ -42,9 +42,11 @@ export class App {
     private confirmationModal: ConfirmationModal | null = null;
     private adminAdjustBalanceModal: AdminAdjustBalanceModal | null = null;
     private toastContainer: ToastContainer | null = null;
+    private deferredInstallPrompt: any = null;
 
     constructor(rootElement: HTMLElement) {
         this.rootElement = rootElement;
+        this.listenForInstallPrompt();
     }
 
     public async init() {
@@ -97,6 +99,31 @@ export class App {
         }
 
         this.registerServiceWorker();
+    }
+
+    private listenForInstallPrompt() {
+        window.addEventListener('beforeinstallprompt', (e) => {
+            // Prevent Chrome 67 and earlier from automatically showing the prompt
+            e.preventDefault();
+            // Stash the event so it can be triggered later.
+            this.deferredInstallPrompt = e;
+            // Update UI to notify the user they can add to home screen
+            const installButton = document.getElementById('installAppBtn');
+            if (installButton) {
+                installButton.style.display = 'block';
+            }
+        });
+
+        window.addEventListener('appinstalled', () => {
+            // Hide the install button
+            const installButton = document.getElementById('installAppBtn');
+            if (installButton) {
+                installButton.style.display = 'none';
+            }
+            // Clear the deferred prompt
+            this.deferredInstallPrompt = null;
+            console.log('PWA was installed');
+        });
     }
 
     private registerServiceWorker() {
@@ -461,6 +488,27 @@ export class App {
 
         // Restore previous navigation state or load default view
         this.restoreNavigationState();
+
+        // PWA Install Button Logic
+        const installButton = header.querySelector('#installAppBtn');
+        if (this.deferredInstallPrompt) {
+            installButton?.removeAttribute('style');
+        }
+
+        installButton?.addEventListener('click', async () => {
+            if (!this.deferredInstallPrompt) {
+                return;
+            }
+            // Show the install prompt
+            this.deferredInstallPrompt.prompt();
+            // Wait for the user to respond to the prompt
+            const { outcome } = await this.deferredInstallPrompt.userChoice;
+            console.log(`User response to the install prompt: ${outcome}`);
+            // We've used the prompt, and can't use it again, throw it away
+            this.deferredInstallPrompt = null;
+            // Hide the install button
+            installButton.setAttribute('style', 'display: none;');
+        });
     }
 
     private restoreNavigationState = () => {
