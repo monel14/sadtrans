@@ -26,9 +26,6 @@ export function renderHeader(user: User): HTMLElement {
             <h2 id="pageTitle" class="text-xl sm:text-2xl font-semibold text-slate-800">Tableau de Bord</h2>
         </div>
         <div class="flex items-center space-x-4">
-            <button id="installAppBtn" style="display: none;" class="text-slate-500 hover:text-slate-700 focus:outline-none mr-4" title="Installer l'application">
-                <i class="fas fa-download text-xl"></i>
-            </button>
             <div class="relative" id="notificationsContainer">
                 <button class="text-slate-500 hover:text-slate-700 focus:outline-none">
                     <i class="fas fa-bell text-xl"></i>
