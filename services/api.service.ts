@@ -149,11 +149,30 @@ export class ApiService {
     }
 
     public async getTransactions(filters: any = {}): Promise<Transaction[]> {
-        const { data, error } = await supabase.functions.invoke('get-transactions');
+        // Try Edge Function first
+        let data: any[] | null = null;
+        try {
+            const resp = await supabase.functions.invoke('get-transactions');
+            if (resp.error) {
+                console.error('Error fetching transactions via Edge Function:', resp.error);
+            } else {
+                data = resp.data || [];
+            }
+        } catch (err) {
+            console.error('Edge Function get-transactions failed:', err);
+        }
 
-        if (error) {
-            console.error('Error fetching transactions via Edge Function:', error);
-            throw error;
+        // Fallback: direct DB query if Edge is unavailable
+        if (!data) {
+            const { data: dbData, error: dbError } = await supabase
+                .from('transactions')
+                .select('*')
+                .order('created_at', { ascending: false });
+            if (dbError) {
+                console.error('Error fetching transactions from DB:', dbError);
+                throw dbError;
+            }
+            data = dbData || [];
         }
 
         return (data || []).map(item => ({
@@ -164,12 +183,13 @@ export class ApiService {
             data: item.form_data || {},
             montant_principal: item.montant_principal,
             frais: item.frais || 0,
-            montant_total: item.montant_total, // Now provided by the function
+            // If Edge function didn't provide montant_total, compute it locally
+            montant_total: item.montant_total ?? ((item.montant_principal || 0) + (item.frais || 0)),
             statut: item.statut,
             preuveUrl: item.preuve_url,
             // Note: Le nom du champ de la commission totale peut être 'commission'
             commission_societe: (item.commission || 0) - (item.commission_partenaire || 0),
-            commission_partenaire: item.commission_partenaire || 0, // Now provided by the function
+            commission_partenaire: item.commission_partenaire || 0, // Now provided by the function or computed elsewhere
             validateurId: item.validateur_id,
             motif_rejet: item.motif_rejet,
             assignedTo: item.assigned_to
@@ -895,6 +915,24 @@ export class ApiService {
     // Commission profile update method removed - commissions are now configured directly in contracts
 
     public async getFeePreview(userId: string, opTypeId: string, amount: number): Promise<{ totalFee: number; partnerShare: number; companyShare: number }> {
+        // 1) Source de vérité: Edge Function
+        try {
+            const { data, error } = await supabase.functions.invoke('get-fee-preview', {
+                body: { agentId: userId, opTypeId, amount }
+            });
+            if (!error && data) {
+                const totalFee = Math.round(Number(data.totalFee || 0));
+                const companyShare = Math.round(Number(data.companyShare ?? 0));
+                const partnerShare = Math.round(Number(data.partnerShare ?? (totalFee - companyShare)));
+                return { totalFee, partnerShare, companyShare };
+            } else if (error) {
+                console.error('Error invoking get-fee-preview:', error);
+            }
+        } catch (err) {
+            console.error('get-fee-preview Edge invocation failed, falling back to local calculation:', err);
+        }
+
+        // 2) Fallback local pour continuité de service (même logique que Edge)
         const dataService = DataService.getInstance();
         try {
             const [user, opType, activeContractsMap] = await Promise.all([
@@ -906,28 +944,24 @@ export class ApiService {
             if (!user || !opType) throw new Error("User or Operation Type not found");
 
             let totalFee = 0;
-            let companySharePercent = 40;
+            let companySharePercent = 40; // Aligné avec l’Edge par défaut
 
             let relevantConfig: CommissionConfig | null = null;
             const contract = user.partnerId ? activeContractsMap.get(user.partnerId) : undefined;
 
             if (contract) {
-                // 1. Vérifier d'abord les exceptions spécifiques au service
                 const serviceException = contract.exceptions.find(ex => ex.targetType === 'service' && ex.targetId === opType.id);
                 if (serviceException) {
                     relevantConfig = serviceException.commissionConfig;
                 } else {
-                    // 2. Vérifier les exceptions par catégorie
                     const categoryException = contract.exceptions.find(ex => ex.targetType === 'category' && ex.targetId === opType.category);
                     if (categoryException) {
                         relevantConfig = categoryException.commissionConfig;
                     } else {
-                        // 3. Utiliser la configuration par défaut du contrat (TOUJOURS)
                         relevantConfig = contract.defaultCommissionConfig;
                     }
                 }
             } else {
-                // Pas de contrat : utiliser la config du service si elle existe
                 if (opType.commissionConfig.type !== 'none') {
                     relevantConfig = opType.commissionConfig;
                 }
@@ -956,7 +990,7 @@ export class ApiService {
             return { totalFee, partnerShare, companyShare };
 
         } catch (error) {
-            console.error("Error calculating fee preview:", error);
+            console.error("Error calculating fee preview (fallback):", error);
             return { totalFee: 0, partnerShare: 0, companyShare: 0 };
         }
     }
