@@ -819,8 +819,19 @@ export class ApiService {
 
         await this.logAction('TRANSFER_REVENUE', { entity_id: user.agencyId, user_id: userId, amount: amountToTransfer });
 
-        DataService.getInstance().invalidateUsersCache();
         DataService.getInstance().invalidateAgenciesCache();
+        DataService.getInstance().invalidateUsersCache();
+
+        // Dispatch a custom event to notify UI about the balance transfer
+        document.body.dispatchEvent(new CustomEvent('balanceTransferCompleted', {
+            detail: { 
+                agencyId: agencyId, 
+                userId: userId, 
+                amountTransferred: amountToTransfer,
+                newPrincipalBalance: agency.solde_principal + amountToTransfer,
+                newRevenueBalance: 0
+            }
+        }));
 
         const updatedUser = await this.getUserWithAgency(userId);
 

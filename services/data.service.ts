@@ -149,6 +149,31 @@ export class DataService {
 
         this.channels.set('partners', partnersChannel);
 
+        // Subscribe to agencies changes (pour les soldes)
+        const agenciesChannel = supabase
+            .channel('agencies-changes')
+            .on(
+                'postgres_changes',
+                {
+                    event: 'UPDATE',
+                    schema: 'public',
+                    table: 'agencies'
+                },
+                (payload) => {
+                    console.log('Agency balance change received:', payload);
+                    this.invalidateAgenciesCache();
+                    this.invalidateUsersCache(); // Also invalidate users as they are linked to agencies
+                    
+                    // Dispatch a custom event for UI updates
+                    document.body.dispatchEvent(new CustomEvent('agencyBalanceChanged', {
+                        detail: { change: payload }
+                    }));
+                }
+            )
+            .subscribe();
+
+        this.channels.set('agencies', agenciesChannel);
+
         // Subscribe to notifications changes
         const notificationsChannel = supabase
             .channel('notifications-changes')
@@ -181,7 +206,6 @@ export class DataService {
                         detail: { 
                             message: payload.new.message || 'Nouvelle notification',
                             type: 'info'
-                            // Note: The toast type could be determined by payload.new.type if available
                         }
                     }));
                 }
@@ -513,6 +537,11 @@ export class DataService {
     public async getPartnerById(id: string): Promise<Partner | undefined> {
         const partnerMap = await this.getPartnerMap();
         return partnerMap.get(id);
+    }
+
+    public async getAgencyById(id: string): Promise<Agency | undefined> {
+        const agencies = await this.getAgencies();
+        return agencies.find(agency => agency.id === id);
     }
 
     public async getActiveContractForPartner(partnerId: string): Promise<Contract | null> {
