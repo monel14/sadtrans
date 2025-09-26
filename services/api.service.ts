@@ -18,6 +18,7 @@ import { DataService } from './data.service';
  */
 export class ApiService {
     private static instance: ApiService;
+    private channels: Map<string, any> = new Map();
 
     private constructor() { }
 

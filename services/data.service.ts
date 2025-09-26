@@ -7,6 +7,7 @@ import {
     RechargePaymentMethod, Card, Order, CardType, Contract, Agency
 } from '../models';
 import { ApiService } from './api.service';
+import { supabase } from './supabase.service';
 
 /**
  * A singleton service responsible for fetching, caching, and providing application-wide data.
@@ -16,6 +17,7 @@ import { ApiService } from './api.service';
 export class DataService {
     private static instance: DataService;
     private api: ApiService;
+    private channels: Map<string, any> = new Map();
 
     // Private cache properties for data arrays
     private _users: User[] | null = null;
@@ -46,6 +48,7 @@ export class DataService {
 
     private constructor() {
         this.api = ApiService.getInstance();
+        this.setupRealtimeSubscriptions();
     }
 
     /**
@@ -70,6 +73,130 @@ export class DataService {
             DataService.instance = new DataService();
         }
         return DataService.instance;
+    }
+
+    // --- Realtime Subscriptions ---
+    private setupRealtimeSubscriptions() {
+        // Subscribe to transactions changes
+        const transactionsChannel = supabase
+            .channel('transactions-changes')
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'transactions'
+                },
+                (payload) => {
+                    console.log('Transaction change received:', payload);
+                    this.invalidateTransactionsCache();
+                    
+                    // Dispatch a custom event for UI updates
+                    document.body.dispatchEvent(new CustomEvent('transactionChanged', {
+                        detail: { change: payload }
+                    }));
+                }
+            )
+            .subscribe();
+
+        this.channels.set('transactions', transactionsChannel);
+
+        // Subscribe to users changes
+        const usersChannel = supabase
+            .channel('users-changes')
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'users'
+                },
+                (payload) => {
+                    console.log('User change received:', payload);
+                    this.invalidateUsersCache();
+                    
+                    // Dispatch a custom event for UI updates
+                    document.body.dispatchEvent(new CustomEvent('userChanged', {
+                        detail: { change: payload }
+                    }));
+                }
+            )
+            .subscribe();
+
+        this.channels.set('users', usersChannel);
+
+        // Subscribe to partners changes
+        const partnersChannel = supabase
+            .channel('partners-changes')
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'partners'
+                },
+                (payload) => {
+                    console.log('Partner change received:', payload);
+                    this.invalidatePartnersCache();
+                    
+                    // Dispatch a custom event for UI updates
+                    document.body.dispatchEvent(new CustomEvent('partnerChanged', {
+                        detail: { change: payload }
+                    }));
+                }
+            )
+            .subscribe();
+
+        this.channels.set('partners', partnersChannel);
+
+        // Subscribe to notifications changes
+        const notificationsChannel = supabase
+            .channel('notifications-changes')
+            .on(
+                'postgres_changes',
+                {
+                    event: 'INSERT',
+                    schema: 'public',
+                    table: 'notifications'
+                },
+                (payload) => {
+                    console.log('New notification received:', payload);
+                    
+                    // Dispatch a custom event for UI updates
+                    document.body.dispatchEvent(new CustomEvent('newNotification', {
+                        detail: { 
+                            notification: {
+                                id: payload.new.id,
+                                text: payload.new.message || 'Notification sans contenu.',
+                                time: payload.new.created_at,
+                                read: payload.new.read || false,
+                                icon: 'fa-bell',
+                                userId: payload.new.user_id
+                            }
+                        }
+                    }));
+                    
+                    // Show toast notification
+                    document.body.dispatchEvent(new CustomEvent('showToast', {
+                        detail: { 
+                            message: payload.new.message || 'Nouvelle notification',
+                            type: 'info'
+                            // Note: The toast type could be determined by payload.new.type if available
+                        }
+                    }));
+                }
+            )
+            .subscribe();
+
+        this.channels.set('notifications', notificationsChannel);
+    }
+
+    public unsubscribeAll() {
+        this.channels.forEach((channel, key) => {
+            supabase.removeChannel(channel);
+            console.log(`Unsubscribed from channel: ${key}`);
+        });
+        this.channels.clear();
     }
 
     // --- Invalidation Methods ---

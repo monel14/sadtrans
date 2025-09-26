@@ -15,4 +15,10 @@ if (!supabaseUrl || !supabaseAnonKey) {
     throw new Error(errorMsg);
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  realtime: {
+    params: {
+      eventsPerSecond: 2
+    }
+  }
+});
