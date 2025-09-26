@@ -1,5 +1,3 @@
-
-
 import { User } from '../models';
 import { DataService } from '../services/data.service';
 import { createCard } from '../components/Card';
@@ -95,6 +93,29 @@ export async function renderAgentDashboardView(user: User): Promise<HTMLElement>
 
     const latestOpsCard = createCard('Dernières Opérations', latestOpsContent, 'fa-receipt', '');
     container.children[2].appendChild(latestOpsCard);
+    
+    // --- Realtime Balance Update Listener ---
+    const handleBalanceUpdate = (event: CustomEvent) => {
+        const { change } = event.detail;
+        const updatedAgency = change.new;
+        
+        // Update main balance display
+        const mainBalanceElement = container.querySelector('.text-3xl.font-bold.text-emerald-600');
+        if (mainBalanceElement) {
+            mainBalanceElement.textContent = formatAmount(updatedAgency.solde_principal);
+        }
+    };
+
+    // Add realtime event listeners
+    document.body.addEventListener('agencyBalanceChanged', handleBalanceUpdate as EventListener);
+    
+    // Clean up event listeners when the view is removed
+    const cleanup = () => {
+        document.body.removeEventListener('agencyBalanceChanged', handleBalanceUpdate as EventListener);
+    };
+
+    // Store cleanup function on the container for later use
+    (container as any).cleanup = cleanup;
     
     // Delegated event listener for the entire dashboard
     container.addEventListener('click', (e) => {

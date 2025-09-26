@@ -253,6 +253,12 @@ export class App {
             // Update active sidebar link
             this.updateActiveNav({ detail: { navId } } as CustomEvent);
 
+            // Clean up previous view if it has a cleanup function
+            const currentPageContent = this.mainLayout.pageContent;
+            if (currentPageContent.firstChild && (currentPageContent.firstChild as any).cleanup) {
+                (currentPageContent.firstChild as any).cleanup();
+            }
+
             // Render view content
             this.mainLayout.pageContent.innerHTML = '<div class="text-center p-8"><i class="fas fa-spinner fa-spin text-3xl text-indigo-500"></i></div>';
             try {

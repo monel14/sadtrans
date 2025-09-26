@@ -800,10 +800,11 @@ export class ApiService {
         }
 
         // 2. Perform the update
+        const newPrincipalBalance = agency.solde_principal + amountToTransfer;
         const { error: updateError } = await supabase
             .from('agencies')
             .update({
-                solde_principal: agency.solde_principal + amountToTransfer,
+                solde_principal: newPrincipalBalance,
                 solde_revenus: 0
             })
             .eq('id', agencyId);
@@ -828,8 +829,25 @@ export class ApiService {
                 agencyId: agencyId, 
                 userId: userId, 
                 amountTransferred: amountToTransfer,
-                newPrincipalBalance: agency.solde_principal + amountToTransfer,
+                newPrincipalBalance: newPrincipalBalance,
                 newRevenueBalance: 0
+            }
+        }));
+
+        // Dispatch the agencyBalanceChanged event to trigger realtime UI updates
+        document.body.dispatchEvent(new CustomEvent('agencyBalanceChanged', {
+            detail: { 
+                change: {
+                    schema: 'public',
+                    table: 'agencies',
+                    commit_timestamp: new Date().toISOString(),
+                    eventType: 'UPDATE',
+                    new: {
+                        id: agencyId,
+                        solde_principal: newPrincipalBalance,
+                        solde_revenus: 0
+                    }
+                }
             }
         }));
 

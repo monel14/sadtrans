@@ -1,5 +1,3 @@
-
-
 import { User } from '../models';
 import { ApiService } from '../services/api.service';
 import { DataService } from '../services/data.service';
@@ -55,7 +53,7 @@ export async function renderPartnerDashboardView(user: User): Promise<HTMLElemen
             <div class="card p-6 flex flex-col justify-between">
                 <div>
                     <p class="text-sm text-slate-500">Solde Principal (Opérations)</p>
-                    <p class="text-4xl font-bold text-emerald-600">${formatAmount(mainBalance)}</p>
+                    <p class="text-4xl font-bold text-emerald-600" id="main-balance">${formatAmount(mainBalance)}</p>
                 </div>
                 <p class="text-xs text-slate-400 mt-2">Utilisé pour toutes les transactions de vos agents.</p>
             </div>
@@ -64,7 +62,7 @@ export async function renderPartnerDashboardView(user: User): Promise<HTMLElemen
             <div class="card p-6 flex flex-col justify-between bg-violet-50 border-violet-200">
                 <div>
                     <p class="text-sm text-violet-700">Solde Secondaire (Revenus Agence)</p>
-                    <p class="text-4xl font-bold text-violet-600">${formatAmount(revenueBalance)}</p>
+                    <p class="text-4xl font-bold text-violet-600" id="revenue-balance">${formatAmount(revenueBalance)}</p>
                     <p class="text-xs text-violet-500 mt-2">Total des commissions perçues par votre agence.</p>
                 </div>
                 <button id="transfer-revenue-btn" class="btn btn-primary mt-4 w-full" ${!revenueBalance || revenueBalance === 0 ? 'disabled' : ''}>
@@ -194,6 +192,41 @@ export async function renderPartnerDashboardView(user: User): Promise<HTMLElemen
         });
     };
     flattenNavs(navigationLinks.partner);
+
+    // --- Realtime Balance Update Listener ---
+    const handleBalanceUpdate = (event: CustomEvent) => {
+        const { change } = event.detail;
+        const updatedAgency = change.new;
+        
+        // Update main balance display
+        const mainBalanceElement = container.querySelector('#main-balance');
+        if (mainBalanceElement) {
+            mainBalanceElement.textContent = formatAmount(updatedAgency.solde_principal);
+        }
+        
+        // Update revenue balance display
+        const revenueBalanceElement = container.querySelector('#revenue-balance');
+        if (revenueBalanceElement) {
+            revenueBalanceElement.textContent = formatAmount(updatedAgency.solde_revenus);
+        }
+        
+        // Update transfer button state
+        const transferBtn = container.querySelector('#transfer-revenue-btn') as HTMLButtonElement;
+        if (transferBtn) {
+            transferBtn.disabled = !updatedAgency.solde_revenus || updatedAgency.solde_revenus === 0;
+        }
+    };
+
+    // Add realtime event listeners
+    document.body.addEventListener('agencyBalanceChanged', handleBalanceUpdate as EventListener);
+    
+    // Clean up event listeners when the view is removed
+    const cleanup = () => {
+        document.body.removeEventListener('agencyBalanceChanged', handleBalanceUpdate as EventListener);
+    };
+
+    // Store cleanup function on the container for later use
+    (container as any).cleanup = cleanup;
 
     container.addEventListener('click', async (e) => {
         const target = e.target as HTMLElement;
