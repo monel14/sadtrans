@@ -7,27 +7,15 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [
       VitePWA({
+        strategies: 'injectManifest',
+        srcDir: '.',
+        filename: 'sw.js',
         registerType: 'autoUpdate',
+        injectRegister: null,
         devOptions: {
           enabled: true
         },
         includeAssets: ['images/*.png'],
-        workbox: {
-          globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
-          runtimeCaching: [
-            {
-              urlPattern: /^https:\/\/[^.]*\.supabase\.co\/.*$/,
-              handler: 'NetworkOnly',
-              options: {
-                cacheName: 'supabase-api',
-                expiration: {
-                  maxEntries: 0,
-                  maxAgeSeconds: 60 * 5 // 5 minutes
-                }
-              }
-            }
-          ]
-        },
         manifest: {
           name: 'SadTrans B2B Platform',
           short_name: 'SadTrans',
