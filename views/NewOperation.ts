@@ -644,9 +644,6 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
 
         try {
             const newTransaction = await api.createTransaction(user.id, selectedOperationType.id, data);
-            document.body.dispatchEvent(new CustomEvent('showToast', {
-                detail: { message: `Opération #${newTransaction.id} soumise avec succès !`, type: 'success' }
-            }));
             handleCancelNavigation(container, user);
         } catch (error) {
             console.error("Transaction creation failed:", (error as Error).message || error);
