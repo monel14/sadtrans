@@ -11,6 +11,7 @@ export default defineConfig(({ mode }) => {
         devOptions: {
           enabled: true
         },
+        includeAssets: ['images/*.png'],
         workbox: {
           globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
           runtimeCaching: [
