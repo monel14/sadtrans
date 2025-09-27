@@ -15,6 +15,8 @@ export class NotificationService {
     private notificationCache: Map<number | string, number> = new Map(); // id -> timestamp
     // Ajout d'un cache pour les messages de notification
     private messageCache: Map<string, number> = new Map(); // message -> timestamp
+    // Ajout d'un cache pour les timestamps de dernière vérification
+    private lastCheckCache: Map<string, number> = new Map(); // id -> timestamp
 
     private constructor() {
         this.api = ApiService.getInstance();
@@ -56,6 +58,13 @@ export class NotificationService {
             for (const [message, timestamp] of this.messageCache.entries()) {
                 if (now - timestamp > 300000) { // 5 minutes
                     this.messageCache.delete(message);
+                }
+            }
+            
+            // Nettoyer le cache des dernières vérifications (plus de 5 minutes)
+            for (const [id, timestamp] of this.lastCheckCache.entries()) {
+                if (now - timestamp > 300000) { // 5 minutes
+                    this.lastCheckCache.delete(id);
                 }
             }
             
@@ -112,10 +121,20 @@ export class NotificationService {
             }
         }
         
+        // Nettoyer le cache des dernières vérifications
+        for (const [id, timestamp] of this.lastCheckCache.entries()) {
+            if (timestamp < fiveMinutesAgo) {
+                this.lastCheckCache.delete(id);
+            }
+        }
+        
         // Vérifier si cette notification a déjà été vue récemment par ID
         if (this.notificationCache.has(notification.id)) {
-            console.log('Notification en double par ID:', notification.id);
-            return true;
+            const lastSeen = this.notificationCache.get(notification.id);
+            if (lastSeen && lastSeen > tenSecondsAgo) {
+                console.log('Notification en double par ID (récemment vue):', notification.id);
+                return true;
+            }
         }
         
         // Vérifier si un message similaire a été vu récemment (dans les 10 secondes)
@@ -127,9 +146,20 @@ export class NotificationService {
             }
         }
         
+        // Vérifier si nous avons déjà vérifié cette notification récemment
+        const checkKey = `${notification.id}-${notification.text}`;
+        if (this.lastCheckCache.has(checkKey)) {
+            const lastCheck = this.lastCheckCache.get(checkKey);
+            if (lastCheck && lastCheck > tenSecondsAgo) {
+                console.log('Notification déjà vérifiée récemment:', checkKey);
+                return true;
+            }
+        }
+        
         // Ajouter cette notification au cache
         this.notificationCache.set(notification.id, now);
         this.messageCache.set(notification.text, now);
+        this.lastCheckCache.set(checkKey, now);
         return false;
     }
     

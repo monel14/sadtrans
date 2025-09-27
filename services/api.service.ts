@@ -10,6 +10,7 @@ import {
 } from '../models';
 import { supabase } from './supabase.service';
 import { DataService } from './data.service';
+import { formatAmount } from '../utils/formatters';
 
 
 /**
@@ -85,6 +86,32 @@ export class ApiService {
             user_id: userId, action, entity_type: details.entity_type, entity_id: details.entity_id, details
         });
         if (error) console.error("Failed to log action:", error);
+    }
+
+    // --- COMMISSION TEMPLATES ---
+
+    public async getCommissionTemplates(): Promise<any[]> {
+        const { data, error } = await supabase.from('commission_templates').select('*');
+        if (error) { console.error('Error fetching commission templates:', error); throw error; }
+        return data || [];
+    }
+
+    public async updateCommissionTemplate(templateId: string, updates: any): Promise<any> {
+        const { data, error } = await supabase.from('commission_templates').update(updates).eq('id', templateId).select().single();
+        if (error) { console.error('Error updating commission template:', error); throw error; }
+        return data;
+    }
+
+    public async createCommissionTemplate(template: any): Promise<any> {
+        const { data, error } = await supabase.from('commission_templates').insert(template).select().single();
+        if (error) { console.error('Error creating commission template:', error); throw error; }
+        return data;
+    }
+
+    public async deleteCommissionTemplate(templateId: string): Promise<boolean> {
+        const { error } = await supabase.from('commission_templates').delete().eq('id', templateId);
+        if (error) { console.error('Error deleting commission template:', error); return false; }
+        return true;
     }
 
     // --- REST-LIKE METHODS ---
@@ -275,7 +302,7 @@ export class ApiService {
     public async getNotifications(userId: string): Promise<Notification[]> {
         console.log('getNotifications appelé pour userId:', userId);
         try {
-            const { data, error } = await supabase.from('notifications').select('*').or(`user_id.eq.${userId},user_id.eq.all`);
+            const { data, error } = await supabase.from('notifications').select('*').or(`user_id.eq.${userId},user_id.is.null`);
             if (error) { 
                 console.error('Error fetching notifications:', error); 
                 return []; 
@@ -383,6 +410,58 @@ export class ApiService {
         await dataService.invalidateTransactionsCache();
         await dataService.invalidateUsersCache();
 
+        // Create notifications
+        const agentNotifTitle = 'Transaction validée';
+        const agentNotifMessage = `Votre transaction de ${formatAmount(transaction.montant_principal)} FCFA a été validée.`;
+        const validatorNotifTitle = 'Transaction validée';
+        const validatorNotifMessage = `Vous avez validé une transaction de ${formatAmount(transaction.montant_principal)} FCFA pour l'agent ${agent?.name}.`;
+
+        const validateurId = await this.getCurrentAppUserId();
+
+        // Notification for agent
+        // Suppression de l'insertion explicite - gérée par les triggers de base de données
+        /*
+        const { data: agentNotif, error: agentNotifError } = await supabase
+          .from('notifications')
+          .insert({
+            user_id: transaction.agentId,
+            title: agentNotifTitle,
+            message: agentNotifMessage,
+            type: 'success'
+          })
+          .select()
+          .single();
+
+        if (!agentNotifError && agentNotif) {
+          await supabase.functions.invoke('send-push', {
+            body: { notificationId: agentNotif.id }
+          });
+        }
+        */
+
+        // Notification for validator (if different from agent)
+        // Suppression de l'insertion explicite - gérée par les triggers de base de données
+        /*
+        if (validateurId && validateurId !== transaction.agentId) {
+          const { data: validatorNotif, error: validatorNotifError } = await supabase
+            .from('notifications')
+            .insert({
+              user_id: validateurId,
+              title: validatorNotifTitle,
+              message: validatorNotifMessage,
+              type: 'success'
+            })
+            .select()
+            .single();
+
+          if (!validatorNotifError && validatorNotif) {
+            await supabase.functions.invoke('send-push', {
+              body: { notificationId: validatorNotif.id }
+            });
+          }
+        }
+        */
+
         document.body.dispatchEvent(new CustomEvent('transactionValidated', { detail: { transactionId: taskId } }));
         return true;
     }
@@ -430,6 +509,58 @@ export class ApiService {
         await dataService.invalidateTransactionsCache();
         await dataService.invalidateUsersCache();
 
+        // Create notifications
+        const agentNotifTitle = 'Transaction rejetée';
+        const agentNotifMessage = `Votre transaction de ${formatAmount(transaction.montant_principal)} FCFA a été rejetée. Motif: ${reason}`;
+        const validatorNotifTitle = 'Transaction rejetée';
+        const validatorNotifMessage = `Vous avez rejeté une transaction de ${formatAmount(transaction.montant_principal)} FCFA pour l'agent ${agent?.name}. Motif: ${reason}`;
+
+        const validateurId = await this.getCurrentAppUserId();
+
+        // Notification for agent
+        // Suppression de l'insertion explicite - gérée par les triggers de base de données
+        /*
+        const { data: agentNotif, error: agentNotifError } = await supabase
+          .from('notifications')
+          .insert({
+            user_id: transaction.agentId,
+            title: agentNotifTitle,
+            message: agentNotifMessage,
+            type: 'error'
+          })
+          .select()
+          .single();
+
+        if (!agentNotifError && agentNotif) {
+          await supabase.functions.invoke('send-push', {
+            body: { notificationId: agentNotif.id }
+          });
+        }
+        */
+
+        // Notification for validator (if different)
+        // Suppression de l'insertion explicite - gérée par les triggers de base de données
+        /*
+        if (validateurId && validateurId !== transaction.agentId) {
+          const { data: validatorNotif, error: validatorNotifError } = await supabase
+            .from('notifications')
+            .insert({
+              user_id: validateurId,
+              title: validatorNotifTitle,
+              message: validatorNotifMessage,
+              type: 'warning'
+            })
+            .select()
+            .single();
+
+          if (!validatorNotifError && validatorNotif) {
+            await supabase.functions.invoke('send-push', {
+              body: { notificationId: validatorNotif.id }
+            });
+          }
+        }
+        */
+
         document.body.dispatchEvent(new CustomEvent('transactionRejected', { detail: { transactionId: taskId, reason } }));
         return true;
     }
@@ -464,6 +595,65 @@ export class ApiService {
             document.body.dispatchEvent(new CustomEvent('rechargeRejected', {
                 detail: { requestId, reason }
             }));
+        }
+        // Create notifications for approve/reject
+        const { data: req } = await supabase.from('agent_recharge_requests').select('agent_id, montant, notes').eq('id', requestId).single();
+        if (!req) return false;
+
+        const agent = await DataService.getInstance().getUserById(req.agent_id);
+        if (!agent) return false;
+
+        const processor = await DataService.getInstance().getUserById(processorId || '');
+
+        if (status === 'Approuvée') {
+          const agentNotifTitle = 'Recharge approuvée';
+          const agentNotifMessage = `Votre demande de recharge de ${formatAmount(req.montant)} FCFA a été approuvée.`;
+          const processorNotifTitle = 'Recharge approuvée';
+          const processorNotifMessage = `Vous avez approuvé une recharge de ${formatAmount(req.montant)} FCFA pour l'agent ${agent.name}.`;
+
+          // Notification for agent
+          // Suppression de l'insertion explicite - gérée par les triggers de base de données
+          /*
+          const { data: agentNotif, error: agentNotifError } = await supabase
+            .from('notifications')
+            .insert({
+              user_id: req.agent_id,
+              title: agentNotifTitle,
+              message: agentNotifMessage,
+              type: 'success'
+            })
+            .select()
+            .single();
+
+          if (!agentNotifError && agentNotif) {
+            await supabase.functions.invoke('send-push', {
+              body: { notificationId: agentNotif.id }
+            });
+          }
+          */
+
+          // Notification for processor
+          // Suppression de l'insertion explicite - gérée par les triggers de base de données
+          /*
+          if (processorId && processorId !== req.agent_id) {
+            const { data: processorNotif, error: processorNotifError } = await supabase
+              .from('notifications')
+              .insert({
+                user_id: processorId,
+                title: processorNotifTitle,
+                message: processorNotifMessage,
+                type: 'success'
+              })
+              .select()
+              .single();
+
+            if (!processorNotifError && processorNotif) {
+              await supabase.functions.invoke('send-push', {
+                body: { notificationId: processorNotif.id }
+              });
+            }
+          }
+          */
         }
         return true;
     }
@@ -582,6 +772,65 @@ export class ApiService {
         await dataService.invalidateTransactionsCache();
         await dataService.invalidateUsersCache(); // Pour rafraîchir le solde de l'utilisateur/agence
 
+        // Create notifications
+        const agentName = user.name;
+        const transactionTitle = `Transaction créée`;
+        const agentMessage = `Votre transaction de ${formatAmount(amount)} FCFA a été créée et est en attente de validation.`;
+        const adminMessage = `Une nouvelle transaction de ${formatAmount(amount)} FCFA a été créée par l'agent ${agentName}`;
+
+        // Notification for agent
+        // Suppression de l'insertion explicite - gérée par les triggers de base de données
+        /*
+        const { data: agentNotif, error: agentNotifError } = await supabase
+          .from('notifications')
+          .insert({
+            user_id: userId,
+            title: transactionTitle,
+            message: agentMessage,
+            type: 'info'
+          })
+          .select()
+          .single();
+
+        if (!agentNotifError && agentNotif) {
+          // Send push for agent
+          await supabase.functions.invoke('send-push', {
+            body: { notificationId: agentNotif.id }
+          });
+        }
+        */
+
+        // Notifications for admins (all active admins)
+        // Suppression de l'insertion explicite - gérée par les triggers de base de données
+        /*
+        const { data: admins, error: adminsError } = await supabase
+          .from('users')
+          .select('id')
+          .or('role.eq.admin_general,role.eq.sous_admin')
+          .eq('status', 'active');
+
+        if (!adminsError && admins) {
+          for (const admin of admins) {
+            const { data: adminNotif, error: adminNotifError } = await supabase
+              .from('notifications')
+              .insert({
+                user_id: admin.id,
+                title: transactionTitle,
+                message: adminMessage,
+                type: 'info'
+              })
+              .select()
+              .single();
+
+            if (!adminNotifError && adminNotif) {
+              await supabase.functions.invoke('send-push', {
+                body: { notificationId: adminNotif.id }
+              });
+            }
+          }
+        }
+        */
+
         document.body.dispatchEvent(new CustomEvent('transactionCreated', { detail: { transactionId: createdTx.id } }));
 
         return {
@@ -686,29 +935,6 @@ export class ApiService {
 
     // --- COMMISSION TEMPLATES ---
 
-    public async getCommissionTemplates(): Promise<any[]> {
-        const { data, error } = await supabase.from('commission_templates').select('*');
-        if (error) { console.error('Error fetching commission templates:', error); throw error; }
-        return data || [];
-    }
-
-    public async updateCommissionTemplate(templateId: string, updates: any): Promise<any> {
-        const { data, error } = await supabase.from('commission_templates').update(updates).eq('id', templateId).select().single();
-        if (error) { console.error('Error updating commission template:', error); throw error; }
-        return data;
-    }
-
-    public async createCommissionTemplate(template: any): Promise<any> {
-        const { data, error } = await supabase.from('commission_templates').insert(template).select().single();
-        if (error) { console.error('Error creating commission template:', error); throw error; }
-        return data;
-    }
-
-    public async deleteCommissionTemplate(templateId: string): Promise<boolean> {
-        const { error } = await supabase.from('commission_templates').delete().eq('id', templateId);
-        if (error) { console.error('Error deleting commission template:', error); return false; }
-        return true;
-    }
 
     public async applyCommissionTemplate(contractId: string, templateId: string = 'default'): Promise<boolean> {
         const { error } = await supabase.rpc('apply_commission_template', {

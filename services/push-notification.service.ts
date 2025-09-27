@@ -1,6 +1,7 @@
 import { initializeApp, FirebaseApp } from 'firebase/app';
 import { getMessaging, getToken, onMessage, isSupported, Messaging } from 'firebase/messaging';
 import { User } from '../models';
+import { supabase } from './supabase.service';
 
 // Configuration Firebase (à remplacer par vos propres clés)
 const firebaseConfig = {
@@ -97,23 +98,30 @@ export class PushNotificationService {
    * Enregistre le token FCM de l'utilisateur dans la base de données
    */
   public async registerUserToken(userId: string, token: string): Promise<boolean> {
-    // Cette méthode doit être implémentée pour enregistrer le token dans votre base de données
-    // Vous pouvez utiliser Supabase pour stocker le token associé à l'utilisateur
     try {
-      // Exemple d'implémentation avec Supabase:
-      /*
+      const deviceInfo = {
+        browser: navigator.userAgent,
+        deviceType: 'web'
+      };
+
       const { data, error } = await supabase
         .from('user_fcm_tokens')
-        .upsert({ user_id: userId, fcm_token: token, updated_at: new Date().toISOString() });
-      
+        .upsert({
+          user_id: userId,
+          fcm_token: token,
+          device_info: deviceInfo,
+          is_active: true,
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'user_id'
+        });
+
       if (error) {
         console.error('Error registering user token:', error);
         return false;
       }
-      
-      console.log('User token registered successfully');
-      */
-      console.log(`Registering token ${token} for user ${userId}`);
+
+      console.log('User token registered successfully:', data);
       return true;
     } catch (error) {
       console.error('Error registering user token:', error);

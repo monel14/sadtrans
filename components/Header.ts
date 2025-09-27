@@ -197,14 +197,21 @@ export function renderHeader(user: User): HTMLElement {
         const newNotif = customEvent.detail.notification;
         console.log('Nouvelle notification reçue:', newNotif);
         
-        // Vérifier si la notification est un doublon
-        if (isDuplicateNotification(newNotif)) {
-            console.log('Notification en double, ignorée:', newNotif.id);
+        // Utiliser le service de notification pour vérifier les doublons
+        if (notificationService.isDuplicate(newNotif)) {
+            console.log('Notification en double détectée par le service, ignorée:', newNotif.id);
             return;
         }
         
         // Vérifier si la notification est pour l'utilisateur courant ou pour tous
-        if (newNotif.userId === user.id || newNotif.userId === 'all') {
+        if (newNotif.userId === user.id || newNotif.userId === 'all' || !newNotif.userId) {
+            // Vérifier à nouveau si la notification existe déjà dans la liste
+            const existingNotification = notifications.find(n => n.id === newNotif.id);
+            if (existingNotification) {
+                console.log('Notification déjà présente dans la liste, ignorée:', newNotif.id);
+                return;
+            }
+            
             notifications.unshift(newNotif);
             if (!newNotif.read) unreadCount++;
             updateNotifications();
