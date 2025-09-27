@@ -86,7 +86,6 @@ export class PushNotificationService {
         serviceWorkerRegistration: registration
       });
 
-      console.log('FCM token:', token);
       return token;
     } catch (error) {
       console.error('Error getting FCM token:', error);
@@ -138,8 +137,6 @@ export class PushNotificationService {
     }
 
     onMessage(this.messaging, (payload) => {
-      console.log('Message received in foreground:', payload);
-      
       // Extraire les données du message
       const { title, body, icon, data } = payload.notification || {} as any;
       
@@ -166,8 +163,6 @@ export class PushNotificationService {
     // Cette méthode doit être implémentée côté serveur
     // Elle enverrait une requête à votre backend qui utiliserait l'API FCM
     try {
-      console.log(`Sending notification to user ${userId}: ${title} - ${body}`);
-      
       // Exemple d'implémentation avec un appel à votre backend:
       /*
       const response = await fetch('/api/send-push-notification', {
@@ -201,8 +196,6 @@ export class PushNotificationService {
   public async sendNotificationToAll(title: string, body: string, data?: any): Promise<boolean> {
     // Cette méthode doit être implémentée côté serveur
     try {
-      console.log(`Sending notification to all users: ${title} - ${body}`);
-      
       // Exemple d'implémentation avec un appel à votre backend:
       /*
       const response = await fetch('/api/send-push-notification-all', {
