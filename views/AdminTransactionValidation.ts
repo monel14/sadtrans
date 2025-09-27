@@ -185,15 +185,24 @@ export async function renderAdminTransactionValidationView(user: User, defaultFi
     const api = ApiService.getInstance();
     const dataService = DataService.getInstance();
     
-    const [allPending, userMap, partnerMap, opTypeMap] = await Promise.all([
-        dataService.getTransactions({ status: 'pending' }),
-        dataService.getUserMap(),
-        dataService.getPartnerMap(),
-        dataService.getOpTypeMap()
-    ]);
+    let allPending: Transaction[] = [];
+    let userMap: Map<string, User>;
+    let partnerMap: Map<string, Partner>;
+    let opTypeMap: Map<string, OperationType>;
     
-    const unassignedItems = allPending.filter(item => !item.assignedTo);
-    const myItems = allPending.filter(item => item.assignedTo === user.id);
+    const loadData = async () => {
+        [allPending, userMap, partnerMap, opTypeMap] = await Promise.all([
+            dataService.getTransactions({ status: 'pending' }),
+            dataService.getUserMap(),
+            dataService.getPartnerMap(),
+            dataService.getOpTypeMap()
+        ]);
+    };
+    
+    await loadData();
+    
+    let unassignedItems = allPending.filter(item => !item.assignedTo);
+    let myItems = allPending.filter(item => item.assignedTo === user.id);
 
     const showDetailsModal = (transaction: Transaction) => {
         const opType = opTypeMap.get(transaction.opTypeId);
@@ -316,6 +325,17 @@ export async function renderAdminTransactionValidationView(user: User, defaultFi
             details.appendChild(listWrapper);
             tableContainer.appendChild(details);
         }
+
+        // Update tab counts
+        const unassignedCount = unassignedItems.length;
+        const myCount = myItems.length;
+        const allCount = allPending.length;
+        const unassignedTab = tabsContent.querySelector('[data-tab="unassigned"]') as HTMLButtonElement;
+        const myTab = tabsContent.querySelector('[data-tab="assigned_to_me"]') as HTMLButtonElement;
+        const allTab = tabsContent.querySelector('[data-tab="all"]') as HTMLButtonElement;
+        if (unassignedTab) unassignedTab.textContent = `Non Assignées (${unassignedCount})`;
+        if (myTab) myTab.textContent = `Mes Transactions (${myCount})`;
+        if (allTab) allTab.textContent = `Toutes en Attente (${allCount})`;
     }
 
     card.querySelector('.tabs')?.addEventListener('click', (e) => {
@@ -327,6 +347,18 @@ export async function renderAdminTransactionValidationView(user: User, defaultFi
             if (tabName) renderContentForTab(tabName);
         }
     });
+
+    // Listen for realtime transaction changes
+    const handleTransactionUpdate = async () => {
+        await loadData();
+        unassignedItems = allPending.filter(item => !item.assignedTo);
+        myItems = allPending.filter(item => item.assignedTo === user.id);
+        
+        const activeTab = card.querySelector('.tabs button.active')?.getAttribute('data-tab') || defaultFilter;
+        renderContentForTab(activeTab);
+    };
+    
+    document.body.addEventListener('transactionChanged', handleTransactionUpdate);
 
     card.addEventListener('change', (e) => {
         const target = e.target as HTMLInputElement;
@@ -445,5 +477,12 @@ export async function renderAdminTransactionValidationView(user: User, defaultFi
     });
 
     await renderContentForTab(defaultFilter);
+
+    // Cleanup listener when view is destroyed
+    const cleanup = () => {
+        document.body.removeEventListener('transactionChanged', handleTransactionUpdate);
+    };
+    (card as any)._cleanup = cleanup;
+
     return card;
 }

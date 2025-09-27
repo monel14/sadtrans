@@ -476,11 +476,15 @@ export async function renderAllTransactionsView(user: User): Promise<HTMLElement
     document.body.addEventListener('transactionRejected', handleTransactionUpdate);
     document.body.addEventListener('transactionCreated', handleTransactionUpdate);
     
+    // Listen for realtime transaction changes from Supabase
+    document.body.addEventListener('transactionChanged', handleTransactionUpdate);
+    
     // Cleanup listeners when the view is destroyed
     const cleanup = () => {
         document.body.removeEventListener('transactionValidated', handleTransactionUpdate);
         document.body.removeEventListener('transactionRejected', handleTransactionUpdate);
         document.body.removeEventListener('transactionCreated', handleTransactionUpdate);
+        document.body.removeEventListener('transactionChanged', handleTransactionUpdate);
     };
     
     // Store cleanup function on the card element for later use

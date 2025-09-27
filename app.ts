@@ -88,6 +88,11 @@ export class App {
         
         if (user) {
             this.currentUser = user;
+            
+            // Re-subscribe to realtime channels with authenticated session
+            const dataService = DataService.getInstance();
+            dataService.reSubscribe();
+            
             this.renderMainLayout();
             // FIX: Corrected invalid method name 'pre-fetchData' to 'preFetchData'.
             this.preFetchData(); // Pre-fetch data to warm up cache
@@ -123,6 +128,11 @@ export class App {
     private handleLoginSuccess = (event: Event) => {
         const customEvent = event as CustomEvent;
         this.currentUser = customEvent.detail.user;
+        
+        // Re-subscribe to realtime channels with authenticated session
+        const dataService = DataService.getInstance();
+        dataService.reSubscribe();
+        
         this.renderMainLayout();
         // FIX: Corrected invalid method name 'pre-fetchData' to 'preFetchData'.
         this.preFetchData(); // Pre-fetch data to warm up cache

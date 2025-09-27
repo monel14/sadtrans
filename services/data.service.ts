@@ -48,7 +48,7 @@ export class DataService {
 
     private constructor() {
         this.api = ApiService.getInstance();
-        this.setupRealtimeSubscriptions();
+        // Subscriptions will be set up after authentication
     }
 
     /**
@@ -221,6 +221,15 @@ export class DataService {
             console.log(`Unsubscribed from channel: ${key}`);
         });
         this.channels.clear();
+    }
+
+    /**
+     * Re-subscribe to all realtime channels (call after authentication)
+     */
+    public reSubscribe(): void {
+        console.log('Re-subscribing to realtime channels after authentication');
+        this.unsubscribeAll();
+        this.setupRealtimeSubscriptions();
     }
 
     // --- Invalidation Methods ---

@@ -6,6 +6,7 @@ import { User } from '../models';
 import { NotificationService } from '../services/notification.service';
 import { $ } from '../utils/dom';
 import { formatRelativeTime } from '../utils/formatters';
+import { Notification } from '../models';
 
 export function renderHeader(user: User): HTMLElement {
     const header = document.createElement('header');
@@ -56,13 +57,21 @@ export function renderHeader(user: User): HTMLElement {
     const badge = $('#notificationBadge', header);
     const list = $('#notificationsList', header);
 
-    const updateNotifications = async () => {
-        if (!badge || !list) return;
-        const state = await notificationService.getNotificationState(user.id);
-        badge.textContent = String(state.unreadCount);
-        badge.classList.toggle('hidden', state.unreadCount === 0);
+    let notifications: Notification[] = [];
+    let unreadCount = 0;
 
-        const displayNotifications = state.notifications.slice(0, 5);
+    const updateNotifications = async (refreshFromServer = false) => {
+        if (refreshFromServer) {
+            const state = await notificationService.getNotificationState(user.id);
+            notifications = state.notifications;
+            unreadCount = state.unreadCount;
+        }
+
+        if (!badge || !list) return;
+        badge.textContent = String(unreadCount);
+        badge.classList.toggle('hidden', unreadCount === 0);
+
+        const displayNotifications = notifications.slice(0, 5);
         list.innerHTML = '';
         if (displayNotifications.length === 0) {
             list.innerHTML = `<p class="p-4 text-sm text-slate-500">Aucune notification récente.</p>`;
@@ -83,7 +92,12 @@ export function renderHeader(user: User): HTMLElement {
                 </div>`;
             item.onclick = (e) => {
                 e.preventDefault();
-                notif.read = true; // Simulate marking as read
+                if (!notif.read) {
+                    notif.read = true;
+                    unreadCount--;
+                    updateNotifications();
+                    // TODO: Call API to mark as read server-side
+                }
                 
                 // If the notification has a target, navigate to it
                 if (notif.target) {
@@ -94,12 +108,25 @@ export function renderHeader(user: User): HTMLElement {
                     }));
                     dropdown?.classList.add('hidden'); // Close dropdown on navigation
                 }
-
-                updateNotifications();
             };
             list.appendChild(item);
         });
     };
+
+    // Initial load
+    updateNotifications(true);
+
+    // Listen for new notifications via realtime
+    const handleNewNotification = (event: Event) => {
+        const customEvent = event as CustomEvent;
+        const newNotif = customEvent.detail.notification;
+        if (newNotif.userId === user.id) {  // Only for current user
+            notifications.unshift(newNotif);
+            if (!newNotif.read) unreadCount++;
+            updateNotifications();
+        }
+    };
+    document.body.addEventListener('newNotification', handleNewNotification);
 
     notificationContainer?.querySelector('button')?.addEventListener('click', () => {
         dropdown?.classList.toggle('hidden');
@@ -111,7 +138,11 @@ export function renderHeader(user: User): HTMLElement {
         }
     });
 
-    updateNotifications();
+    // Cleanup listener when header is destroyed (called from app.ts if needed)
+    const cleanup = () => {
+        document.body.removeEventListener('newNotification', handleNewNotification);
+    };
+    (header as any)._cleanup = cleanup;
 
     return header;
 }
