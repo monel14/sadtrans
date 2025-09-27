@@ -1,5 +1,6 @@
 import { Notification } from '../models';
 import { ApiService } from './api.service';
+import { PushNotificationService } from './push-notification.service';
 
 export interface NotificationState {
     notifications: Notification[];
@@ -8,6 +9,7 @@ export interface NotificationState {
 
 export class NotificationService {
     private api: ApiService;
+    private pushNotificationService: PushNotificationService;
     private static instance: NotificationService;
     // Ajout d'un cache pour éviter les duplications
     private notificationCache: Map<number | string, number> = new Map(); // id -> timestamp
@@ -16,6 +18,7 @@ export class NotificationService {
 
     private constructor() {
         this.api = ApiService.getInstance();
+        this.pushNotificationService = PushNotificationService.getInstance();
     }
     
     public static getInstance(): NotificationService {
@@ -128,5 +131,27 @@ export class NotificationService {
         this.notificationCache.set(notification.id, now);
         this.messageCache.set(notification.text, now);
         return false;
+    }
+    
+    // Méthode pour envoyer une notification push à un utilisateur
+    public async sendPushNotificationToUser(userId: string, title: string, body: string, data?: any): Promise<boolean> {
+        try {
+            const result = await this.pushNotificationService.sendNotificationToUser(userId, title, body, data);
+            return result;
+        } catch (error) {
+            console.error('Error sending push notification:', error);
+            return false;
+        }
+    }
+    
+    // Méthode pour envoyer une notification push à tous les utilisateurs
+    public async sendPushNotificationToAll(title: string, body: string, data?: any): Promise<boolean> {
+        try {
+            const result = await this.pushNotificationService.sendNotificationToAll(title, body, data);
+            return result;
+        } catch (error) {
+            console.error('Error sending push notification to all users:', error);
+            return false;
+        }
     }
 }

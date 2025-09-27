@@ -45,3 +45,58 @@ self.addEventListener('fetch', event => {
     )
   );
 });
+
+// Gestion des notifications push
+self.addEventListener('push', event => {
+  console.log('Push event received:', event);
+  
+  let data;
+  if (event.data) {
+    data = event.data.json();
+  } else {
+    data = {
+      title: 'Nouvelle notification',
+      body: 'Vous avez une nouvelle notification',
+      icon: '/images/icon-192x192.png'
+    };
+  }
+  
+  const title = data.title;
+  const options = {
+    body: data.body,
+    icon: data.icon || '/images/icon-192x192.png',
+    badge: '/images/icon-192x192.png',
+    data: data.data || {}
+  };
+  
+  event.waitUntil(
+    self.registration.showNotification(title, options)
+  );
+});
+
+// Gestion du clic sur les notifications
+self.addEventListener('notificationclick', event => {
+  console.log('Notification click received:', event);
+  
+  event.notification.close();
+  
+  // Récupérer les données de la notification
+  const notificationData = event.notification.data;
+  
+  // Ouvrir une nouvelle fenêtre ou mettre le focus sur l'onglet existant
+  event.waitUntil(
+    clients.matchAll({ type: 'window' }).then(clientList => {
+      // Si l'application est déjà ouverte, la mettre au premier plan
+      for (const client of clientList) {
+        if (client.url === '/' && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      
+      // Sinon, ouvrir une nouvelle fenêtre
+      if (clients.openWindow) {
+        return clients.openWindow('/');
+      }
+    })
+  );
+});

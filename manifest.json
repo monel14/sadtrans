@@ -6,6 +6,7 @@
   "background_color": "#f8fafc",
   "theme_color": "#7c3aed",
   "description": "A B2B PaaS platform for financial service partners, providing tools for transaction management, user administration, and reporting.",
+  "gcm_sender_id": "103953800507",
   "icons": [
     {
       "src": "/images/icon-192x192.png",

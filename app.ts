@@ -18,6 +18,7 @@ import { PartnerTransferRevenueModal } from './components/modals/PartnerTransfer
 import { ConfirmationModal } from './components/modals/ConfirmationModal';
 import { AdminAdjustBalanceModal } from './components/modals/AdminAdjustBalanceModal';
 import { RefreshService } from './services/refresh.service';
+import { PushNotificationService } from './services/push-notification.service';
 
 export class App {
     private rootElement: HTMLElement;
@@ -42,6 +43,7 @@ export class App {
     private confirmationModal: ConfirmationModal | null = null;
     private adminAdjustBalanceModal: AdminAdjustBalanceModal | null = null;
     private toastContainer: ToastContainer | null = null;
+    private pushNotificationService: PushNotificationService | null = null;
 
     constructor(rootElement: HTMLElement) {
         this.rootElement = rootElement;
@@ -54,6 +56,9 @@ export class App {
         // Initialize DataService to ensure all partners have contracts
         const dataService = DataService.getInstance();
         await dataService.initialize();
+        
+        // Initialize Push Notification Service
+        this.pushNotificationService = PushNotificationService.getInstance();
         
         // Create and append the toast container
         this.toastContainer = new ToastContainer();
@@ -82,6 +87,9 @@ export class App {
         // Ajout du gestionnaire pour l'événement servicesLoaded
         document.body.addEventListener('servicesLoaded', this.handleServicesLoaded as EventListener);
         
+        // Écouter les notifications push
+        document.body.addEventListener('pushNotificationReceived', this.handlePushNotification as EventListener);
+        
         // Check for an active session on startup
         const authService = AuthService.getInstance();
         const user = await authService.getCurrentUser();
@@ -97,11 +105,35 @@ export class App {
             // FIX: Corrected invalid method name 'pre-fetchData' to 'preFetchData'.
             this.preFetchData(); // Pre-fetch data to warm up cache
             this.startUserStatusCheck();
+            
+            // Initialiser les notifications push pour l'utilisateur connecté
+            this.initializePushNotifications(user);
         } else {
             this.showLoginPage();
         }
 
         this.registerServiceWorker();
+    }
+
+    private async initializePushNotifications(user: User) {
+        if (!this.pushNotificationService) return;
+        
+        try {
+            // Demander la permission pour les notifications
+            const permissionGranted = await this.pushNotificationService.requestPermission();
+            
+            if (permissionGranted) {
+                // Récupérer le token FCM
+                const token = await this.pushNotificationService.getFCMToken();
+                
+                if (token) {
+                    // Enregistrer le token dans la base de données
+                    await this.pushNotificationService.registerUserToken(user.id, token);
+                }
+            }
+        } catch (error) {
+            console.error('Error initializing push notifications:', error);
+        }
     }
 
     private registerServiceWorker() {
@@ -136,6 +168,42 @@ export class App {
         this.renderMainLayout();
         // FIX: Corrected invalid method name 'pre-fetchData' to 'preFetchData'.
         this.preFetchData(); // Pre-fetch data to warm up cache
+        
+        // Initialiser les notifications push pour l'utilisateur connecté
+        if (this.pushNotificationService && this.currentUser) {
+            this.initializePushNotifications(this.currentUser);
+        }
+    }
+
+    // FIX: Converted to arrow function and added type safety for event.
+    private handleUpdateCurrentUser = (event: Event) => {
+        const customEvent = event as CustomEvent;
+        if (customEvent.detail.user && this.currentUser && customEvent.detail.user.id === this.currentUser.id) {
+            this.currentUser = customEvent.detail.user;
+        }
+    }
+
+    // Gestionnaire pour les notifications push reçues
+    private handlePushNotification = (event: Event) => {
+        const customEvent = event as CustomEvent;
+        const { title, body, data } = customEvent.detail;
+        
+        console.log('Push notification received:', { title, body, data });
+        
+        // Afficher un toast avec la notification
+        if (this.toastContainer) {
+            this.toastContainer.showToast(body || 'Vous avez une nouvelle notification', 'info');
+        }
+        
+        // Si la notification contient des données de navigation, naviguer vers la page appropriée
+        if (data && data.target) {
+            // Déclencher la navigation
+            this.rootElement.dispatchEvent(new CustomEvent('navigateTo', {
+                detail: data.target,
+                bubbles: true,
+                composed: true,
+            }));
+        }
     }
 
     // FIX: Corrected invalid method name 'pre-fetchData' to 'preFetchData'.
@@ -188,14 +256,6 @@ export class App {
         this.showLoginPage();
     }
     
-    // FIX: Converted to arrow function and added type safety for event.
-    private handleUpdateCurrentUser = (event: Event) => {
-        const customEvent = event as CustomEvent;
-        if (customEvent.detail.user && this.currentUser && customEvent.detail.user.id === this.currentUser.id) {
-            this.currentUser = customEvent.detail.user;
-        }
-    }
-
     // Gestionnaire pour l'événement servicesLoaded
     private handleServicesLoaded = () => {
         // Rafraîchir l'affichage de la navigation si l'interface est déjà rendue
