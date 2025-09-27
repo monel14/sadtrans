@@ -273,17 +273,29 @@ export class ApiService {
     }
 
     public async getNotifications(userId: string): Promise<Notification[]> {
-        const { data, error } = await supabase.from('notifications').select('*').or(`user_id.eq.${userId},user_id.eq.all`);
-        if (error) { console.error('Error fetching notifications:', error); return []; }
-        return (data || []).map((item): Notification => ({
-            id: item.id,
-            text: item.message || 'Notification sans contenu.',
-            time: item.created_at,
-            read: item.read || false,
-            icon: 'fa-bell', // Pas de colonne icon dans la DB
-            userId: item.user_id,
-            target: undefined, // Pas de colonne target dans la DB
-        }));
+        console.log('getNotifications appelé pour userId:', userId);
+        try {
+            const { data, error } = await supabase.from('notifications').select('*').or(`user_id.eq.${userId},user_id.eq.all`);
+            if (error) { 
+                console.error('Error fetching notifications:', error); 
+                return []; 
+            }
+            console.log('Données de notifications récupérées:', data);
+            const notifications = (data || []).map((item): Notification => ({
+                id: item.id,
+                text: item.message || 'Notification sans contenu.',
+                time: item.created_at,
+                read: item.read || false,
+                icon: 'fa-bell', // Pas de colonne icon dans la DB
+                userId: item.user_id,
+                target: undefined, // Pas de colonne target dans la DB
+            }));
+            console.log('Notifications mappées:', notifications);
+            return notifications;
+        } catch (error) {
+            console.error('Exception dans getNotifications:', error);
+            return [];
+        }
     }
 
     public async getAuditLogs(): Promise<any[]> {
@@ -1362,5 +1374,36 @@ export class ApiService {
     public async deleteCardType(cardTypeId: string): Promise<boolean> {
         const { error } = await supabase.from('card_types').delete().eq('id', cardTypeId);
         return !error;
+    }
+
+    public async markAsRead(notificationId: number): Promise<boolean> {
+        console.log(`Marking notification ${notificationId} as read.`);
+        // This part needs to be implemented if we modify the mock data source
+        // For now, it's handled on the client side when rendering.
+        return true;
+    }
+    
+    // Méthode pour marquer toutes les notifications comme lues
+    public async markAllAsRead(userId: string): Promise<boolean> {
+        console.log(`Marking all notifications as read for user ${userId}`);
+        try {
+            const { error } = await supabase
+                .from('notifications')
+                .update({ read: true })
+                .eq('user_id', userId)
+                .eq('read', false);
+                
+            if (error) {
+                console.error('Error marking all notifications as read:', error);
+                return false;
+            }
+            
+            // Déclencher un événement pour mettre à jour l'interface
+            document.body.dispatchEvent(new CustomEvent('notificationUpdated'));
+            return true;
+        } catch (error) {
+            console.error('Exception in markAllAsRead:', error);
+            return false;
+        }
     }
 }

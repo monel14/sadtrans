@@ -95,6 +95,11 @@ export class DataService {
                     document.body.dispatchEvent(new CustomEvent('transactionChanged', {
                         detail: { change: payload }
                     }));
+                    
+                    // Créer une notification automatiquement quand une transaction est validée
+                    if (payload.new.statut === 'Validé') {
+                        this.createTransactionNotification(payload.new);
+                    }
                 }
             )
             .subscribe();
@@ -208,6 +213,9 @@ export class DataService {
                             type: 'info'
                         }
                     }));
+                    
+                    // Déclencher un événement pour mettre à jour les notifications dans l'interface
+                    document.body.dispatchEvent(new CustomEvent('notificationUpdated'));
                 }
             )
             .subscribe();
@@ -230,6 +238,14 @@ export class DataService {
         console.log('Re-subscribing to realtime channels after authentication');
         this.unsubscribeAll();
         this.setupRealtimeSubscriptions();
+    }
+    
+    /**
+     * Méthode pour forcer une mise à jour des notifications
+     */
+    public async refreshNotifications(): Promise<void> {
+        console.log('Forcing notifications refresh');
+        document.body.dispatchEvent(new CustomEvent('notificationUpdated'));
     }
 
     // --- Invalidation Methods ---
@@ -555,5 +571,35 @@ export class DataService {
 
     public async getActiveContractForPartner(partnerId: string): Promise<Contract | null> {
         return await this.api.getActiveContractForPartner(partnerId);
+    }
+
+    private async createTransactionNotification(transaction: any) {
+        try {
+            const user = await this.getUserById(transaction.agent_id);
+            if (user) {
+                // Créer un message de notification
+                const message = `Votre transaction de ${transaction.montant_principal} FCFA a été validée.`;
+                
+                // Créer la notification dans la base de données
+                const { error } = await supabase
+                    .from('notifications')
+                    .insert({
+                        user_id: transaction.agent_id,
+                        title: 'Transaction validée',
+                        message: message,
+                        type: 'success',
+                        read: false,
+                        created_at: new Date().toISOString()
+                    });
+                
+                if (error) {
+                    console.error('Erreur lors de la création de la notification:', error);
+                } else {
+                    console.log('Notification créée pour la transaction validée:', transaction.id);
+                }
+            }
+        } catch (error) {
+            console.error('Erreur lors de la création de la notification de transaction:', error);
+        }
     }
 }
