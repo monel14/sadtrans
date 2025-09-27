@@ -8,7 +8,8 @@ const URLS_TO_CACHE = [
   'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap',
   'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css',
   '/images/icon-192x192.png',
-  '/images/icon-512x512.png'
+  '/images/icon-512x512.png',
+  'offline.html'
 ];
 
 self.addEventListener('install', event => {
@@ -40,7 +41,10 @@ self.addEventListener('fetch', event => {
         }
 
         // Not in cache - fetch from network.
-        return fetch(event.request);
+        return fetch(event.request).catch(() => {
+          // Network failure - return offline page
+          return caches.match('offline.html');
+        });
       }
     )
   );
