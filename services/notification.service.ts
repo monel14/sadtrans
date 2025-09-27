@@ -9,6 +9,10 @@ export interface NotificationState {
 export class NotificationService {
     private api: ApiService;
     private static instance: NotificationService;
+    // Ajout d'un cache pour éviter les duplications
+    private notificationCache: Map<number | string, number> = new Map(); // id -> timestamp
+    // Ajout d'un cache pour les messages de notification
+    private messageCache: Map<string, number> = new Map(); // message -> timestamp
 
     private constructor() {
         this.api = ApiService.getInstance();
@@ -36,6 +40,21 @@ export class NotificationService {
                 total: sortedNotifications.length,
                 unread: unreadCount
             });
+            
+            // Nettoyer le cache des anciennes notifications (plus de 5 minutes)
+            const now = Date.now();
+            for (const [id, timestamp] of this.notificationCache.entries()) {
+                if (now - timestamp > 300000) { // 5 minutes
+                    this.notificationCache.delete(id);
+                }
+            }
+            
+            // Nettoyer le cache des messages (plus de 5 minutes)
+            for (const [message, timestamp] of this.messageCache.entries()) {
+                if (now - timestamp > 300000) { // 5 minutes
+                    this.messageCache.delete(message);
+                }
+            }
             
             return {
                 notifications: sortedNotifications,
@@ -68,5 +87,46 @@ export class NotificationService {
             console.error('Error marking all notifications as read:', error);
             return false;
         }
+    }
+    
+    // Méthode pour vérifier si une notification est un doublon
+    public isDuplicate(notification: Notification): boolean {
+        const now = Date.now();
+        const fiveMinutesAgo = now - 300000; // 5 minutes
+        const tenSecondsAgo = now - 10000; // 10 secondes
+        
+        // Nettoyer le cache des anciennes entrées
+        for (const [id, timestamp] of this.notificationCache.entries()) {
+            if (timestamp < fiveMinutesAgo) {
+                this.notificationCache.delete(id);
+            }
+        }
+        
+        // Nettoyer le cache des messages
+        for (const [message, timestamp] of this.messageCache.entries()) {
+            if (timestamp < fiveMinutesAgo) {
+                this.messageCache.delete(message);
+            }
+        }
+        
+        // Vérifier si cette notification a déjà été vue récemment par ID
+        if (this.notificationCache.has(notification.id)) {
+            console.log('Notification en double par ID:', notification.id);
+            return true;
+        }
+        
+        // Vérifier si un message similaire a été vu récemment (dans les 10 secondes)
+        if (this.messageCache.has(notification.text)) {
+            const lastSeen = this.messageCache.get(notification.text);
+            if (lastSeen && lastSeen > tenSecondsAgo) {
+                console.log('Notification en double par message:', notification.text);
+                return true;
+            }
+        }
+        
+        // Ajouter cette notification au cache
+        this.notificationCache.set(notification.id, now);
+        this.messageCache.set(notification.text, now);
+        return false;
     }
 }

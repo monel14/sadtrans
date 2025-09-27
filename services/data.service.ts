@@ -96,10 +96,14 @@ export class DataService {
                         detail: { change: payload }
                     }));
                     
+                    // Les notifications sont maintenant gérées par le trigger PostgreSQL
+                    // Plus besoin de créer des notifications manuellement ici
+                    /*
                     // Créer une notification automatiquement quand une transaction est validée
                     if (payload.new.statut === 'Validé') {
                         this.createTransactionNotification(payload.new);
                     }
+                    */
                 }
             )
             .subscribe();
@@ -206,16 +210,8 @@ export class DataService {
                         }
                     }));
                     
-                    // Show toast notification
-                    document.body.dispatchEvent(new CustomEvent('showToast', {
-                        detail: { 
-                            message: payload.new.message || 'Nouvelle notification',
-                            type: 'info'
-                        }
-                    }));
-                    
-                    // Déclencher un événement pour mettre à jour les notifications dans l'interface
-                    document.body.dispatchEvent(new CustomEvent('notificationUpdated'));
+                    // Suppression de l'événement notificationUpdated pour éviter les doublons
+                    // L'événement newNotification suffit à mettre à jour l'interface
                 }
             )
             .subscribe();
@@ -573,33 +569,92 @@ export class DataService {
         return await this.api.getActiveContractForPartner(partnerId);
     }
 
+    /*
     private async createTransactionNotification(transaction: any) {
         try {
-            const user = await this.getUserById(transaction.agent_id);
-            if (user) {
-                // Créer un message de notification
-                const message = `Votre transaction de ${transaction.montant_principal} FCFA a été validée.`;
-                
-                // Créer la notification dans la base de données
-                const { error } = await supabase
+            // Notification for the agent
+            const agent = await this.getUserById(transaction.agent_id);
+            if (agent) {
+                const agentMessage = `Votre transaction de ${transaction.montant_principal} FCFA a été validée.`;
+                // Vérifier si une notification similaire existe déjà
+                const fiveMinutesAgo = new Date(Date.now() - 300000).toISOString(); // 5 minutes
+                const { data: existingAgentNotifications, error: checkAgentError } = await supabase
                     .from('notifications')
-                    .insert({
-                        user_id: transaction.agent_id,
-                        title: 'Transaction validée',
-                        message: message,
-                        type: 'success',
-                        read: false,
-                        created_at: new Date().toISOString()
-                    });
+                    .select('id')
+                    .eq('user_id', transaction.agent_id)
+                    .eq('title', 'Transaction validée')
+                    .ilike('message', `%${transaction.montant_principal} FCFA%`)
+                    .gte('created_at', fiveMinutesAgo);
                 
-                if (error) {
-                    console.error('Erreur lors de la création de la notification:', error);
+                if (checkAgentError) {
+                    console.error('Erreur lors de la vérification des notifications existantes pour l\'agent:', checkAgentError);
+                } else if (!existingAgentNotifications || existingAgentNotifications.length === 0) {
+                    // Créer la notification seulement si elle n'existe pas
+                    const { error: agentError } = await supabase
+                        .from('notifications')
+                        .insert({
+                            user_id: transaction.agent_id,
+                            title: 'Transaction validée',
+                            message: agentMessage,
+                            type: 'success',
+                            read: false,
+                            created_at: new Date().toISOString()
+                        });
+                    
+                    if (agentError) {
+                        console.error('Erreur lors de la création de la notification pour l\'agent:', agentError);
+                    } else {
+                        console.log('Notification créée pour l\'agent:', transaction.id);
+                    }
                 } else {
-                    console.log('Notification créée pour la transaction validée:', transaction.id);
+                    console.log('Notification déjà existante pour l\'agent, ignorée:', transaction.id);
+                }
+            }
+    
+            // Notification for the validator/admin
+            if (transaction.validateur_id) {
+                const validator = await this.getUserById(transaction.validateur_id);
+                if (validator) {
+                    const validatorMessage = `Vous avez validé une transaction de ${transaction.montant_principal} FCFA pour l\'agent ${agent?.name || transaction.agent_id}.`;
+                    // Vérifier si une notification similaire existe déjà
+                    const fiveMinutesAgo = new Date(Date.now() - 300000).toISOString(); // 5 minutes
+                    const { data: existingValidatorNotifications, error: checkValidatorError } = await supabase
+                        .from('notifications')
+                        .select('id')
+                        .eq('user_id', transaction.validateur_id)
+                        .eq('title', 'Transaction validée')
+                        .ilike('message', `%${transaction.montant_principal} FCFA%`)
+                        .gte('created_at', fiveMinutesAgo);
+                    
+                    if (checkValidatorError) {
+                        console.error('Erreur lors de la vérification des notifications existantes pour le validateur:', checkValidatorError);
+                    } else if (!existingValidatorNotifications || existingValidatorNotifications.length === 0) {
+                        // Créer la notification seulement si elle n'existe pas
+                        const { error: validatorError } = await supabase
+                            .from('notifications')
+                            .insert({
+                                user_id: transaction.validateur_id,
+                                title: 'Transaction validée',
+                                message: validatorMessage,
+                                type: 'success',
+                                read: false,
+                                created_at: new Date().toISOString()
+                            });
+                        
+                        if (validatorError) {
+                            console.error('Erreur lors de la création de la notification pour le validateur:', validatorError);
+                        } else {
+                            console.log('Notification créée pour le validateur:', transaction.id);
+                        }
+                    } else {
+                        console.log('Notification déjà existante pour le validateur, ignorée:', transaction.id);
+                    }
                 }
             }
         } catch (error) {
-            console.error('Erreur lors de la création de la notification de transaction:', error);
+            console.error('Erreur lors de la création des notifications de transaction:', error);
         }
     }
+    */
+
 }

@@ -28,7 +28,7 @@ export function renderHeader(user: User): HTMLElement {
                     <i class="fas fa-bell text-xl"></i>
                     <span id="notificationBadge" class="hidden absolute -top-1 -right-1 block h-4 w-4 rounded-full bg-red-500 text-white text-xs flex items-center justify-center ring-2 ring-white">0</span>
                 </button>
-                <div id="notificationsDropdown" class="hidden absolute right-0 mt-2 w-80 bg-white rounded-md shadow-xl z-20 border border-slate-200">
+                <div id="notificationsDropdown" class="hidden absolute right-0 mt-2 w-80 bg-white rounded-md shadow-xl z-20 border border-slate-200 md:right-0 md:left-auto md:top-auto md:bottom-auto md:transform-none sm:w-96 md:w-80" style="left: 50%; transform: translateX(-50%); max-width: calc(100vw - 2rem);">
                     <div class="p-3 border-b border-slate-200 font-semibold text-sm text-slate-700">Notifications Récentes</div>
                     <div class="py-1 max-h-64 overflow-y-auto" id="notificationsList">
                         <p class="p-4 text-sm text-slate-500">Chargement des notifications...</p>
@@ -55,6 +55,10 @@ export function renderHeader(user: User): HTMLElement {
 
     let notifications: Notification[] = [];
     let unreadCount = 0;
+    // Ajout d'un Set pour suivre les IDs de notifications déjà reçues
+    let receivedNotificationIds = new Set<number | string>();
+    // Ajout d'un Map pour suivre les messages de notification et éviter les doublons
+    let recentNotificationMessages = new Map<string, number>(); // message -> timestamp
 
     const updateNotifications = async (refreshFromServer = false) => {
         console.log('Mise à jour des notifications, refreshFromServer:', refreshFromServer);
@@ -64,6 +68,24 @@ export function renderHeader(user: User): HTMLElement {
                 notifications = state.notifications;
                 unreadCount = state.unreadCount;
                 console.log('Notifications récupérées du serveur:', { notifications, unreadCount });
+                // Réinitialiser le Set quand on recharge depuis le serveur
+                receivedNotificationIds.clear();
+                // Réinitialiser le Map des messages
+                recentNotificationMessages.clear();
+                // Ajouter toutes les notifications existantes au Set pour éviter les duplications
+                notifications.forEach(notif => {
+                    receivedNotificationIds.add(notif.id);
+                    // Ajouter le message au Map avec le timestamp actuel
+                    recentNotificationMessages.set(notif.text, Date.now());
+                });
+                
+                // Nettoyer les anciens messages (plus de 5 minutes)
+                const now = Date.now();
+                for (const [message, timestamp] of recentNotificationMessages.entries()) {
+                    if (now - timestamp > 300000) { // 5 minutes
+                        recentNotificationMessages.delete(message);
+                    }
+                }
             } catch (error) {
                 console.error('Erreur lors de la récupération des notifications:', error);
                 list.innerHTML = `<p class="p-4 text-sm text-red-500">Erreur lors du chargement des notifications.</p>`;
@@ -130,24 +152,80 @@ export function renderHeader(user: User): HTMLElement {
     // Initial load
     updateNotifications(true);
 
+    // Fonction pour vérifier si une notification est un doublon
+    const isDuplicateNotification = (notification: any): boolean => {
+        const now = Date.now();
+        const tenSecondsAgo = now - 10000; // 10 secondes
+        const fiveMinutesAgo = now - 300000; // 5 minutes
+        
+        // Vérifier d'abord par ID
+        if (receivedNotificationIds.has(notification.id)) {
+            console.log('Notification déjà reçue par ID:', notification.id);
+            return true;
+        }
+        
+        // Nettoyer les anciens messages
+        for (const [message, timestamp] of recentNotificationMessages.entries()) {
+            if (timestamp < fiveMinutesAgo) {
+                recentNotificationMessages.delete(message);
+            }
+        }
+        
+        // Nettoyer les anciens IDs (plus de 5 minutes)
+        // Note: Comme les IDs sont des strings, nous devons les gérer différemment
+        // Pour simplifier, nous nous appuyons principalement sur le message
+        
+        // Vérifier si un message similaire a été reçu récemment
+        if (recentNotificationMessages.has(notification.text || notification.message)) {
+            const lastReceived = recentNotificationMessages.get(notification.text || notification.message);
+            if (lastReceived && lastReceived > tenSecondsAgo) {
+                console.log('Notification en double par message similaire:', notification.text || notification.message);
+                return true;
+            }
+        }
+        
+        // Ajouter cette notification aux Sets
+        receivedNotificationIds.add(notification.id);
+        recentNotificationMessages.set(notification.text || notification.message, now);
+        
+        return false;
+    };
+
     // Listen for new notifications via realtime
     const handleNewNotification = (event: Event) => {
         const customEvent = event as CustomEvent;
         const newNotif = customEvent.detail.notification;
         console.log('Nouvelle notification reçue:', newNotif);
         
+        // Vérifier si la notification est un doublon
+        if (isDuplicateNotification(newNotif)) {
+            console.log('Notification en double, ignorée:', newNotif.id);
+            return;
+        }
+        
         // Vérifier si la notification est pour l'utilisateur courant ou pour tous
         if (newNotif.userId === user.id || newNotif.userId === 'all') {
             notifications.unshift(newNotif);
             if (!newNotif.read) unreadCount++;
             updateNotifications();
+            
+            // Show toast only for the recipient and only if added
+            document.body.dispatchEvent(new CustomEvent('showToast', {
+                detail: {
+                    message: newNotif.text || newNotif.message || 'Nouvelle notification',
+                    type: 'info'
+                }
+            }));
         }
     };
 
     // Écouter également les événements de mise à jour des notifications
     const handleNotificationUpdate = () => {
         console.log('Mise à jour des notifications en temps réel');
-        updateNotifications(true); // Forcer le rafraîchissement depuis le serveur
+        // Ne pas forcer le rafraîchissement depuis le serveur pour éviter les duplications
+        // updateNotifications(true);
+        // Juste mettre à jour l'affichage avec les données actuelles
+        updateNotifications(false);
     };
     
     // Ajouter les écouteurs pour les différents événements qui peuvent déclencher une mise à jour
@@ -192,6 +270,8 @@ export function renderHeader(user: User): HTMLElement {
         document.body.removeEventListener('transactionRejected', handleNotificationUpdate);
         document.body.removeEventListener('rechargeApproved', handleNotificationUpdate);
         document.body.removeEventListener('rechargeRejected', handleNotificationUpdate);
+        // Nettoyer le Set lors du nettoyage
+        receivedNotificationIds.clear();
     };
     (header as any)._cleanup = cleanup;
 
