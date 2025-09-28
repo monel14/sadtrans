@@ -141,6 +141,18 @@ export class NotificationService {
      */
     public async sendPushNotification(userId: string, title: string, body: string, url?: string): Promise<boolean> {
         try {
+            // Vérifier d'abord si l'utilisateur a un abonnement push
+            const { data: subscriptionData, error: subscriptionError } = await supabase
+                .from('push_subscriptions')
+                .select('id')
+                .eq('user_id', userId)
+                .limit(1);
+
+            if (subscriptionError || !subscriptionData || subscriptionData.length === 0) {
+                console.log('Aucun abonnement push trouvé pour l\'utilisateur:', userId);
+                return false;
+            }
+
             const session = await supabase.auth.getSession();
             const token = session.data.session?.access_token;
 
@@ -148,6 +160,17 @@ export class NotificationService {
                 console.warn('Aucun token d\'authentification disponible pour l\'envoi de notification push');
                 return false;
             }
+
+            // Ajout d'un timeout pour éviter que la requête ne bloque indéfiniment
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 secondes timeout
+
+            console.log('Envoi de la requête de notification push:', {
+                url: 'https://fmdefcgenhfesdxozvxz.supabase.co/functions/v1/send-push-notification',
+                userId,
+                title,
+                body
+            });
 
             const response = await fetch('https://fmdefcgenhfesdxozvxz.supabase.co/functions/v1/send-push-notification', {
                 method: 'POST',
@@ -161,18 +184,48 @@ export class NotificationService {
                     body: body,
                     url: url || '/',
                 }),
+                signal: controller.signal
             });
 
-            if (response.ok) {
-                console.log('Notification push envoyée avec succès:', { userId, title });
-                return true;
+            clearTimeout(timeoutId);
+
+            console.log('Réponse reçue de la fonction Edge:', {
+                status: response.status,
+                statusText: response.statusText
+            });
+
+            // Vérifier explicitement le statut de la réponse
+            if (response.status >= 200 && response.status < 300) {
+                try {
+                    const result = await response.json();
+                    console.log('Notification push envoyée avec succès:', { userId, title, result });
+                    return true;
+                } catch (parseError) {
+                    console.error('Erreur lors du parsing de la réponse JSON:', parseError);
+                    return false;
+                }
             } else {
-                const errorData = await response.json();
-                console.error('Erreur lors de l\'envoi de la notification push:', errorData);
+                try {
+                    const errorData = await response.json().catch(() => ({}));
+                    console.error('Erreur lors de l\'envoi de la notification push:', {
+                        status: response.status,
+                        statusText: response.statusText,
+                        error: errorData
+                    });
+                } catch (parseError) {
+                    console.error('Erreur lors de l\'envoi de la notification push (pas de données d\'erreur):', {
+                        status: response.status,
+                        statusText: response.statusText
+                    });
+                }
                 return false;
             }
         } catch (error) {
-            console.error('Erreur réseau lors de l\'envoi de la notification push:', error);
+            if (error.name === 'AbortError') {
+                console.error('Timeout lors de l\'envoi de la notification push');
+            } else {
+                console.error('Erreur réseau lors de l\'envoi de la notification push:', error);
+            }
             return false;
         }
     }
