@@ -41,44 +41,46 @@ export async function subscribeToPushNotifications() {
 
     if (subscription) {
       console.log('L\'utilisateur est déjà abonné.');
-      // Idéalement, envoyez l'abonnement au serveur pour le maintenir à jour.
+      // Même si l'utilisateur est déjà abonné, on enregistre l'abonnement dans la base de données
+      // pour s'assurer qu'il est correctement synchronisé
+    } else {
+      if (!VAPID_PUBLIC_KEY) {
+        console.error('La clé publique VAPID n\'est pas définie. Veuillez l\'ajouter dans vos variables d\'environnement (VITE_VAPID_PUBLIC_KEY).');
+        return;
+      }
+
+      const applicationServerKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: applicationServerKey
+      });
+
+      console.log('Nouvel abonnement créé :', subscription);
+    }
+
+    // Sauvegarder/mettre à jour l'abonnement dans la base de données Supabase
+    if (subscription) {
+      const authService = AuthService.getInstance();
+      const user = await authService.getCurrentUser();
+      if (user) {
+        const { error } = await supabase
+          .from('push_subscriptions')
+          .upsert({
+            user_id: user.id,
+            subscription: subscription
+          });
+        
+        if (error) {
+          console.error('Erreur lors de la sauvegarde de l\'abonnement :', error);
+        } else {
+          console.log('Abonnement sauvegardé avec succès dans Supabase.');
+        }
+      } else {
+        console.warn('Aucun utilisateur connecté, abonnement non sauvegardé.');
+      }
+
       return subscription;
     }
-
-    if (!VAPID_PUBLIC_KEY) {
-      console.error('La clé publique VAPID n\'est pas définie. Veuillez l\'ajouter dans vos variables d\'environnement (VITE_VAPID_PUBLIC_KEY).');
-      return;
-    }
-
-    const applicationServerKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
-    subscription = await registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: applicationServerKey
-    });
-
-    console.log('Nouvel abonnement créé :', subscription);
-
-    // Sauvegarder l'abonnement dans la base de données Supabase
-    const authService = AuthService.getInstance();
-    const user = await authService.getCurrentUser();
-    if (user) {
-      const { error } = await supabase
-        .from('push_subscriptions')
-        .upsert({
-          user_id: user.id,
-          subscription: subscription
-        });
-      
-      if (error) {
-        console.error('Erreur lors de la sauvegarde de l\'abonnement :', error);
-      } else {
-        console.log('Abonnement sauvegardé avec succès dans Supabase.');
-      }
-    } else {
-      console.warn('Aucun utilisateur connecté, abonnement non sauvegardé.');
-    }
-
-    return subscription;
   } catch (error) {
     console.error('Échec de l\'abonnement de l\'utilisateur : ', error);
   }

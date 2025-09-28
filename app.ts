@@ -1,24 +1,24 @@
-import { User, UserRole } from './models';
+import { User } from './models';
 import { renderLoginPage } from './components/LoginPage';
 import { renderSidebar } from './components/Sidebar';
-import { renderHeader } from './components/Header';
-import { renderFooter } from './components/Footer';
-import { navigationLinks } from './config/navigation';
+import { ToastContainer, ToastType } from './components/ToastContainer';
+import { AuthService } from './services/auth.service';
+import { DataService } from './services/data.service';
 import { AgentRequestRechargeModal } from './components/modals/AgentRequestRechargeModal';
 import { ViewProofModal } from './components/modals/ViewProofModal';
 import { AssignToSubAdminModal } from './components/modals/AssignToSubAdminModal';
-import { DataService } from './services/data.service';
 import { PartnerEditAgentModal } from './components/modals/PartnerEditAgentModal';
 import { AdminEditUserModal } from './components/modals/AdminEditUserModal';
-import { ToastContainer, ToastType } from './components/ToastContainer';
 import { AdminEditPartnerModal } from './components/modals/AdminEditPartnerModal';
-import { AuthService } from './services/auth.service';
 import { AdminRejectRechargeModal } from './components/modals/AdminRejectRechargeModal';
 import { PartnerTransferRevenueModal } from './components/modals/PartnerTransferRevenueModal';
 import { ConfirmationModal } from './components/modals/ConfirmationModal';
 import { AdminAdjustBalanceModal } from './components/modals/AdminAdjustBalanceModal';
 import { RefreshService } from './services/refresh.service';
 import { subscribeToPushNotifications } from './services/push-notification.service';
+import { renderHeader } from './components/Header';
+import { renderFooter } from './components/Footer';
+import { navigationLinks } from './config/navigation';
 
 export class App {
     private rootElement: HTMLElement;
@@ -153,6 +153,9 @@ export class App {
         // Re-subscribe to realtime channels with authenticated session
         const dataService = DataService.getInstance();
         dataService.reSubscribe();
+        
+        // S'abonner aux notifications push
+        subscribeToPushNotifications();
         
         this.renderMainLayout();
         // FIX: Corrected invalid method name 'pre-fetchData' to 'preFetchData'.
