@@ -113,17 +113,43 @@ export class App {
                     console.log('ServiceWorker registration successful with scope: ', registration.scope);
                     console.log('ServiceWorker state:', registration.active?.state || 'no active');
                     
-                    // Attendre que le SW soit prêt et demander l'abonnement
-                    if (registration.installing) {
-                        registration.installing.addEventListener('statechange', () => {
-                            if (registration.installing?.state === 'activated') {
-                                console.log('ServiceWorker is activated and ready for push!');
-                                subscribeToPushNotifications();
-                            }
-                        });
-                    } else if (registration.active) {
-                        // SW déjà actif
-                        subscribeToPushNotifications();
+                    // Vérifier si une mise à jour est disponible
+                    registration.addEventListener('updatefound', () => {
+                        const installingWorker = registration.installing;
+                        if (installingWorker) {
+                            installingWorker.addEventListener('statechange', () => {
+                                if (installingWorker.state === 'installed') {
+                                    if (navigator.serviceWorker.controller) {
+                                        // Nouvelle mise à jour disponible
+                                        console.log('New content is available; please refresh.');
+                                        // Optionnellement, afficher une notification à l'utilisateur
+                                        // pour qu'il rafraîchisse la page
+                                    } else {
+                                        // Première installation
+                                        console.log('Content is cached for offline use.');
+                                    }
+                                } else if (installingWorker.state === 'activated') {
+                                    console.log('New ServiceWorker is activated and ready for push!');
+                                    // Attendre un peu pour s'assurer que tout est prêt
+                                    setTimeout(() => subscribeToPushNotifications(), 1000);
+                                }
+                            });
+                        }
+                    });
+                    
+                    // Vérifier périodiquement les mises à jour (toutes les 10 minutes)
+                    setInterval(() => {
+                        registration.update();
+                    }, 1000 * 60 * 10);
+                    
+                    // Si le SW est déjà actif
+                    if (registration.active) {
+                        // Vérifier si c'est un nouveau SW qui vient de prendre le contrôle
+                        if (navigator.serviceWorker.controller) {
+                            console.log('ServiceWorker is already active and controlling the page');
+                            // Attendre un peu pour s'assurer que tout est prêt
+                            setTimeout(() => subscribeToPushNotifications(), 1000);
+                        }
                     }
                 })
                 .catch(error => {
@@ -133,6 +159,8 @@ export class App {
             // Écouter les changements d'état pour debugging
             navigator.serviceWorker.addEventListener('controllerchange', () => {
                 console.log('New Service Worker took over!');
+                // Recharger la page quand un nouveau service worker prend le contrôle
+                window.location.reload();
             });
         } else {
             console.log('Service Workers non supportés dans ce navigateur.');

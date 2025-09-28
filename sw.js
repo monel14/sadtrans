@@ -1,9 +1,9 @@
-const CACHE_NAME = 'sadtrans-b2b-v5'; // Forcer la mise à jour
+const CACHE_NAME = 'sadtrans-b2b-v6'; // Incrémenter le numéro pour forcer la mise à jour
 const URLS_TO_CACHE = [
   '/',
-  'index.html',
-  'index.css',
-  'index.tsx',
+  '/index.html',
+  '/index.css',
+  '/index.tsx',
   '/images/icon-192x192.png',
   '/images/icon-512x512.png'
 ];
@@ -35,35 +35,33 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('push', event => {
-  let data = {};
-  // Vérifier si des données sont présentes dans l'événement push
-  if (event.data) {
-    try {
-      data = event.data.json();
-    } catch (e) {
-      console.error('Erreur de parsing JSON pour les données push:', e);
-      data = { body: event.data.text() }; // Fallback au texte brut si le JSON échoue
-    }
-  } else {
-    console.log('Événement push reçu sans données (test depuis DevTools).');
+  console.log('[Service Worker] Push Received.');
+  let pushData = {};
+  try {
+    pushData = event.data.json();
+    console.log('[Service Worker] Push data is JSON:', pushData);
+  } catch (e) {
+    pushData = { body: event.data.text() };
+    console.log('[Service Worker] Push data is plain text:', pushData.body);
   }
 
-  const title = data.title || 'Notification de Test';
+  const title = pushData.title || 'Sadtrans Notification';
   const options = {
-    body: data.body || 'Ceci est un message de test envoyé depuis les outils de développement.',
-    icon: data.icon || '/images/icon-192x192.png',
-    badge: data.badge || '/images/icon-192x192.png',
+    body: pushData.body || 'You have a new notification.',
+    icon: pushData.icon || '/images/icon-192x192.png',
+    badge: pushData.badge || '/images/icon-192x192.png',
     data: {
-      url: data.url || '/'
+      url: pushData.url || '/'
     }
   };
 
-  event.waitUntil(
-    self.registration.showNotification(title, options)
-  );
+  event.waitUntil(self.registration.showNotification(title, options));
 });
 
 self.addEventListener('notificationclick', event => {
+  // Vérifier que l'événement existe
+  if (!event) return;
+  
   event.notification.close();
 
   event.waitUntil(
@@ -71,13 +69,42 @@ self.addEventListener('notificationclick', event => {
   );
 });
 
+// Nouvelle stratégie pour le CSS - network first avec fallback sur le cache
+function handleCSSRequest(request) {
+  // Pour les fichiers CSS, utiliser une stratégie network-first
+  return fetch(request)
+    .then(response => {
+      // Si la requête réussit, mettre en cache la réponse
+      if (response.ok) {
+        const responseToCache = response.clone();
+        caches.open(CACHE_NAME).then(cache => {
+          cache.put(request, responseToCache);
+        });
+      }
+      return response;
+    })
+    .catch(() => {
+      // En cas d'échec, essayer de récupérer depuis le cache
+      return caches.match(request);
+    });
+}
+
 self.addEventListener('fetch', event => {
+  // Vérifier que l'événement existe
+  if (!event) return;
+  
   const requestUrl = new URL(event.request.url);
 
   // If the request is for the Supabase API, bypass the service worker entirely.
   // This ensures that authentication requests and API calls are handled directly by the browser.
   if (requestUrl.hostname.endsWith('supabase.co')) {
     return; // Let the browser handle the request, bypassing the cache.
+  }
+
+  // Gérer les fichiers CSS avec une stratégie spéciale
+  if (requestUrl.pathname.endsWith('.css')) {
+    event.respondWith(handleCSSRequest(event.request));
+    return;
   }
 
   // For all other requests, use a cache-first strategy.
@@ -90,8 +117,14 @@ self.addEventListener('fetch', event => {
         }
 
         // Not in cache - fetch from network.
-        return fetch(event.request);
-      }
-    )
+        return fetch(event.request).catch(error => {
+          console.error('Fetch failed:', error);
+          // Retourner une réponse par défaut en cas d'erreur
+          return new Response('Offline content', {
+            status: 200,
+            headers: { 'Content-Type': 'text/plain' }
+          });
+        });
+      })
   );
 });

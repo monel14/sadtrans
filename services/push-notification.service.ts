@@ -36,7 +36,12 @@ export async function subscribeToPushNotifications() {
   }
 
   try {
+    // Attendre que le service worker soit prêt
     const registration = await navigator.serviceWorker.ready;
+    
+    // Ajouter un délai pour s'assurer que le service worker est complètement activé
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
     let subscription = await registration.pushManager.getSubscription();
 
     if (subscription) {
@@ -50,12 +55,22 @@ export async function subscribeToPushNotifications() {
       }
 
       const applicationServerKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
-      subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: applicationServerKey
-      });
-
-      console.log('Nouvel abonnement créé :', subscription);
+      
+      try {
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: applicationServerKey
+        });
+        console.log('Nouvel abonnement créé :', subscription);
+      } catch (subscribeError) {
+        console.error('Échec de la création de l\'abonnement push :', subscribeError);
+        // Si l'erreur est liée à l'autorisation, demander explicitement la permission
+        if (Notification.permission === 'denied') {
+          console.warn('Les notifications sont bloquées par l\'utilisateur.');
+          return;
+        }
+        throw subscribeError;
+      }
     }
 
     // Sauvegarder/mettre à jour l'abonnement dans la base de données Supabase
@@ -68,6 +83,8 @@ export async function subscribeToPushNotifications() {
           .upsert({
             user_id: user.id,
             subscription: subscription
+          }, {
+            onConflict: 'user_id'
           });
         
         if (error) {
@@ -83,5 +100,6 @@ export async function subscribeToPushNotifications() {
     }
   } catch (error) {
     console.error('Échec de l\'abonnement de l\'utilisateur : ', error);
+    // Ne pas propager l'erreur pour éviter de casser l'application
   }
 }

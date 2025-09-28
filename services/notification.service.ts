@@ -144,7 +144,7 @@ export class NotificationService {
             // Vérifier d'abord si l'utilisateur a un abonnement push
             const { data: subscriptionData, error: subscriptionError } = await supabase
                 .from('push_subscriptions')
-                .select('id')
+                .select('subscription')
                 .eq('user_id', userId)
                 .limit(1);
 
@@ -153,79 +153,30 @@ export class NotificationService {
                 return false;
             }
 
-            const session = await supabase.auth.getSession();
-            const token = session.data.session?.access_token;
+            // Utiliser la fonction Edge publique qui gère mieux les abonnements
+            try {
+                const { data, error } = await supabase.functions.invoke('send-push-notification-public', {
+                    body: {
+                        user_id: userId,
+                        title: title,
+                        body: body,
+                        url: url || '/',
+                    }
+                });
 
-            if (!token) {
-                console.warn('Aucun token d\'authentification disponible pour l\'envoi de notification push');
-                return false;
-            }
-
-            // Ajout d'un timeout pour éviter que la requête ne bloque indéfiniment
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 secondes timeout
-
-            console.log('Envoi de la requête de notification push:', {
-                url: 'https://fmdefcgenhfesdxozvxz.supabase.co/functions/v1/send-push-notification',
-                userId,
-                title,
-                body
-            });
-
-            const response = await fetch('https://fmdefcgenhfesdxozvxz.supabase.co/functions/v1/send-push-notification', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    user_id: userId,
-                    title: title,
-                    body: body,
-                    url: url || '/',
-                }),
-                signal: controller.signal
-            });
-
-            clearTimeout(timeoutId);
-
-            console.log('Réponse reçue de la fonction Edge:', {
-                status: response.status,
-                statusText: response.statusText
-            });
-
-            // Vérifier explicitement le statut de la réponse
-            if (response.status >= 200 && response.status < 300) {
-                try {
-                    const result = await response.json();
-                    console.log('Notification push envoyée avec succès:', { userId, title, result });
-                    return true;
-                } catch (parseError) {
-                    console.error('Erreur lors du parsing de la réponse JSON:', parseError);
+                if (error) {
+                    console.error('Erreur lors de l\'envoi de la notification push via supabase.functions.invoke:', error);
                     return false;
                 }
-            } else {
-                try {
-                    const errorData = await response.json().catch(() => ({}));
-                    console.error('Erreur lors de l\'envoi de la notification push:', {
-                        status: response.status,
-                        statusText: response.statusText,
-                        error: errorData
-                    });
-                } catch (parseError) {
-                    console.error('Erreur lors de l\'envoi de la notification push (pas de données d\'erreur):', {
-                        status: response.status,
-                        statusText: response.statusText
-                    });
-                }
+
+                console.log('Notification push envoyée avec succès:', { userId, title, data });
+                return true;
+            } catch (invokeError) {
+                console.error('Erreur lors de l\'invocation de la fonction Edge:', invokeError);
                 return false;
             }
         } catch (error) {
-            if (error.name === 'AbortError') {
-                console.error('Timeout lors de l\'envoi de la notification push');
-            } else {
-                console.error('Erreur réseau lors de l\'envoi de la notification push:', error);
-            }
+            console.error('Erreur lors de l\'envoi de la notification push:', error);
             return false;
         }
     }
