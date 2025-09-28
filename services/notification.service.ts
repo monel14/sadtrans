@@ -1,5 +1,6 @@
 import { Notification } from '../models';
 import { ApiService } from './api.service';
+import { supabase } from './supabase.service';
 
 export interface NotificationState {
     notifications: Notification[];
@@ -128,5 +129,51 @@ export class NotificationService {
         this.notificationCache.set(notification.id, now);
         this.messageCache.set(notification.text, now);
         return false;
+    }
+
+    /**
+     * Envoie une notification push à un utilisateur spécifique via la Supabase Edge Function.
+     * @param userId L'ID de l'utilisateur destinataire
+     * @param title Le titre de la notification
+     * @param body Le corps (message) de la notification
+     * @param url URL optionnelle à ouvrir lors du clic (par défaut '/')
+     * @returns Promise<boolean> Succès de l'envoi
+     */
+    public async sendPushNotification(userId: string, title: string, body: string, url?: string): Promise<boolean> {
+        try {
+            const session = await supabase.auth.getSession();
+            const token = session.data.session?.access_token;
+
+            if (!token) {
+                console.warn('Aucun token d\'authentification disponible pour l\'envoi de notification push');
+                return false;
+            }
+
+            const response = await fetch('https://fmdefcgenhfesdxozvxz.supabase.co/functions/v1/send-push-notification', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    user_id: userId,
+                    title: title,
+                    body: body,
+                    url: url || '/',
+                }),
+            });
+
+            if (response.ok) {
+                console.log('Notification push envoyée avec succès:', { userId, title });
+                return true;
+            } else {
+                const errorData = await response.json();
+                console.error('Erreur lors de l\'envoi de la notification push:', errorData);
+                return false;
+            }
+        } catch (error) {
+            console.error('Erreur réseau lors de l\'envoi de la notification push:', error);
+            return false;
+        }
     }
 }

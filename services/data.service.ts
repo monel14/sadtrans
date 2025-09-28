@@ -8,6 +8,7 @@ import {
 } from '../models';
 import { ApiService } from './api.service';
 import { supabase } from './supabase.service';
+import { NotificationService } from './notification.service';
 
 /**
  * A singleton service responsible for fetching, caching, and providing application-wide data.
@@ -87,7 +88,7 @@ export class DataService {
                     schema: 'public',
                     table: 'transactions'
                 },
-                (payload) => {
+                (payload: any) => {
                     console.log('Transaction change received:', payload);
                     this.invalidateTransactionsCache();
                     
@@ -95,6 +96,27 @@ export class DataService {
                     document.body.dispatchEvent(new CustomEvent('transactionChanged', {
                         detail: { change: payload }
                     }));
+                    
+                    // Envoyer une notification push pour les transactions validées
+                    if (payload.new && payload.new.statut === 'Validé') {
+                        const agentId = payload.new.agent_id;
+                        if (agentId) {
+                            NotificationService.getInstance().sendPushNotification(
+                                agentId,
+                                'Transaction Validée',
+                                `Votre transaction TRN-${payload.new.id} d'un montant de ${payload.new.montant_principal} FCFA a été validée avec succès.`
+                            );
+                        }
+
+                        const validateurId = payload.new.validateur_id;
+                        if (validateurId) {
+                            NotificationService.getInstance().sendPushNotification(
+                                validateurId,
+                                'Validation Effectuée',
+                                `Vous avez validé la transaction TRN-${payload.new.id} pour l'agent associé.`
+                            );
+                        }
+                    }
                     
                     // Les notifications sont maintenant gérées par le trigger PostgreSQL
                     // Plus besoin de créer des notifications manuellement ici
@@ -182,6 +204,43 @@ export class DataService {
             .subscribe();
 
         this.channels.set('agencies', agenciesChannel);
+
+        // Subscribe to agent recharge requests changes
+        const rechargeRequestsChannel = supabase
+            .channel('agent-recharge-requests-changes')
+            .on(
+                'postgres_changes',
+                {
+                    event: 'UPDATE',
+                    schema: 'public',
+                    table: 'agent_recharge_requests'
+                },
+                (payload: any) => {
+                    console.log('Agent recharge request change received:', payload);
+                    this.invalidateAgentRechargeRequestsCache();
+                    
+                    // Dispatch a custom event for UI updates
+                    document.body.dispatchEvent(new CustomEvent('agentRechargeRequestChanged', {
+                        detail: { change: payload }
+                    }));
+                    
+                    // Envoyer une notification push pour les demandes de recharge approuvées ou rejetées
+                    if (payload.new && (payload.new.statut === 'Approuvée' || payload.new.statut === 'Rejetée')) {
+                        const agentId = payload.new.agent_id;
+                        if (agentId) {
+                            const statusText = payload.new.statut === 'Approuvée' ? 'approuvée' : 'rejetée';
+                            NotificationService.getInstance().sendPushNotification(
+                                agentId,
+                                `Demande de Recharge ${statusText}`,
+                                `Votre demande de recharge de ${payload.new.montant} FCFA a été ${statusText}.`
+                            );
+                        }
+                    }
+                }
+            )
+            .subscribe();
+
+        this.channels.set('agent-recharge-requests', rechargeRequestsChannel);
 
         // Subscribe to notifications changes
         const notificationsChannel = supabase

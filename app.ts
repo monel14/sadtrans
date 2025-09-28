@@ -18,6 +18,7 @@ import { PartnerTransferRevenueModal } from './components/modals/PartnerTransfer
 import { ConfirmationModal } from './components/modals/ConfirmationModal';
 import { AdminAdjustBalanceModal } from './components/modals/AdminAdjustBalanceModal';
 import { RefreshService } from './services/refresh.service';
+import { subscribeToPushNotifications } from './services/push-notification.service';
 
 export class App {
     private rootElement: HTMLElement;
@@ -106,15 +107,35 @@ export class App {
 
     private registerServiceWorker() {
         if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js')
-                    .then(registration => {
-                        console.log('ServiceWorker registration successful with scope: ', registration.scope);
-                    })
-                    .catch(error => {
-                        console.log('ServiceWorker registration failed: ', error);
-                    });
+            // Enregistrement immédiat pour éviter le délai 'load'
+            navigator.serviceWorker.register('/sw.js', { scope: '/' })
+                .then(registration => {
+                    console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                    console.log('ServiceWorker state:', registration.active?.state || 'no active');
+                    
+                    // Attendre que le SW soit prêt et demander l'abonnement
+                    if (registration.installing) {
+                        registration.installing.addEventListener('statechange', () => {
+                            if (registration.installing?.state === 'activated') {
+                                console.log('ServiceWorker is activated and ready for push!');
+                                subscribeToPushNotifications();
+                            }
+                        });
+                    } else if (registration.active) {
+                        // SW déjà actif
+                        subscribeToPushNotifications();
+                    }
+                })
+                .catch(error => {
+                    console.error('ServiceWorker registration failed: ', error);
+                });
+
+            // Écouter les changements d'état pour debugging
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+                console.log('New Service Worker took over!');
             });
+        } else {
+            console.log('Service Workers non supportés dans ce navigateur.');
         }
     }
 
