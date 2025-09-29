@@ -25,16 +25,18 @@ export class OneSignalService {
     const user = await authService.getCurrentUser();
     if (user && user.id) {
         window.OneSignalDeferred.push(function(OneSignal) {
-            OneSignal.setExternalUserId(user.id);
-            console.log(`OneSignal external user ID set to: ${user.id}`);
+            // Utilisation d'un alias personnalisé au lieu de l'alias réservé "external_id"
+            OneSignal.User.addAlias("user_id", user.id);
+            console.log(`OneSignal user ID alias set to: ${user.id}`);
         });
     }
   }
 
   public static async logout() {
     window.OneSignalDeferred.push(function(OneSignal) {
-        OneSignal.removeExternalUserId();
-        console.log("OneSignal external user ID removed.");
+        // Suppression de l'alias utilisateur lors de la déconnexion
+        OneSignal.User.removeAlias("user_id");
+        console.log("OneSignal user ID alias removed.");
     });
   }
 }
