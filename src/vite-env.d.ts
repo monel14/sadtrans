@@ -10,5 +10,5 @@ interface ImportMeta {
 }
 
 interface Window {
-  OneSignalDeferred?: any[];
+  OneSignalDeferred: any[];
 }
