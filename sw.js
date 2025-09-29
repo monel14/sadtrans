@@ -1,3 +1,5 @@
+importScripts('https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js');
+
 const CACHE_NAME = 'sadtrans-b2b-v6'; // Incrémenter le numéro pour forcer la mise à jour
 const URLS_TO_CACHE = [
   '/',

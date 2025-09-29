@@ -15,7 +15,7 @@ import { PartnerTransferRevenueModal } from './components/modals/PartnerTransfer
 import { ConfirmationModal } from './components/modals/ConfirmationModal';
 import { AdminAdjustBalanceModal } from './components/modals/AdminAdjustBalanceModal';
 import { RefreshService } from './services/refresh.service';
-import { subscribeToPushNotifications } from './services/push-notification.service';
+import { OneSignalService } from './services/onesignal.service';
 import { renderHeader } from './components/Header';
 import { renderFooter } from './components/Footer';
 import { navigationLinks } from './config/navigation';
@@ -49,6 +49,9 @@ export class App {
     }
 
     public async init() {
+        // Initialize OneSignal
+        OneSignalService.init();
+
         // Initialize refresh service
         RefreshService.getInstance();
         
@@ -98,6 +101,9 @@ export class App {
             // FIX: Corrected invalid method name 'pre-fetchData' to 'preFetchData'.
             this.preFetchData(); // Pre-fetch data to warm up cache
             this.startUserStatusCheck();
+            
+            // Login to OneSignal with the existing session
+            OneSignalService.login();
         } else {
             this.showLoginPage();
         }
@@ -131,7 +137,7 @@ export class App {
                                 } else if (installingWorker.state === 'activated') {
                                     console.log('New ServiceWorker is activated and ready for push!');
                                     // Attendre un peu pour s'assurer que tout est prêt
-                                    setTimeout(() => subscribeToPushNotifications(), 1000);
+                                    // setTimeout(() => subscribeToPushNotifications(), 1000); // Remplacé par OneSignal
                                 }
                             });
                         }
@@ -148,7 +154,7 @@ export class App {
                         if (navigator.serviceWorker.controller) {
                             console.log('ServiceWorker is already active and controlling the page');
                             // Attendre un peu pour s'assurer que tout est prêt
-                            setTimeout(() => subscribeToPushNotifications(), 1000);
+                            // setTimeout(() => subscribeToPushNotifications(), 1000); // Remplacé par OneSignal
                         }
                     }
                 })
@@ -182,8 +188,8 @@ export class App {
         const dataService = DataService.getInstance();
         dataService.reSubscribe();
         
-        // S'abonner aux notifications push
-        subscribeToPushNotifications();
+        // Login to OneSignal
+        OneSignalService.login();
         
         this.renderMainLayout();
         // FIX: Corrected invalid method name 'pre-fetchData' to 'preFetchData'.
@@ -230,6 +236,7 @@ export class App {
     // FIX: Converted to arrow function to correctly bind `this`.
     private handleLogout = async () => {
         this.stopUserStatusCheck();
+        OneSignalService.logout(); // Logout from OneSignal
         await AuthService.getInstance().logout();
         this.currentUser = null;
         this.mainLayout = null;
