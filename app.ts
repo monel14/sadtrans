@@ -130,6 +130,7 @@ export class App {
                                         console.log('New content is available; please refresh.');
                                         // Optionnellement, afficher une notification à l'utilisateur
                                         // pour qu'il rafraîchisse la page
+                                        this.notifyUserOfUpdate();
                                     } else {
                                         // Première installation
                                         console.log('Content is cached for offline use.');
@@ -163,14 +164,56 @@ export class App {
                 });
 
             // Écouter les changements d'état pour debugging
-            navigator.serviceWorker.addEventListener('controllerchange', () => {
-                console.log('New Service Worker took over!');
-                // Recharger la page quand un nouveau service worker prend le contrôle
-                window.location.reload();
-            });
+            // Suppression du rechargement automatique qui causait des rechargements infinis
+            // navigator.serviceWorker.addEventListener('controllerchange', () => {
+            //     console.log('New Service Worker took over!');
+            //     // Recharger la page quand un nouveau service worker prend le contrôle
+            //     window.location.reload();
+            // });
         } else {
             console.log('Service Workers non supportés dans ce navigateur.');
         }
+    }
+
+    // Méthode pour notifier l'utilisateur d'une mise à jour disponible
+    private notifyUserOfUpdate() {
+        // Créer une notification discrète en haut de la page
+        const notification = document.createElement('div');
+        notification.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: #4f46e5;
+            color: white;
+            padding: 12px;
+            text-align: center;
+            z-index: 9999;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        `;
+        notification.innerHTML = `
+            Une nouvelle version est disponible. 
+            <button onclick="location.reload()" style="
+                background: white;
+                color: #4f46e5;
+                border: none;
+                padding: 4px 8px;
+                border-radius: 4px;
+                margin-left: 8px;
+                cursor: pointer;
+                font-weight: bold;
+            ">Recharger</button>
+            <button onclick="this.parentElement.remove()" style="
+                background: transparent;
+                color: white;
+                border: 1px solid white;
+                padding: 4px 8px;
+                border-radius: 4px;
+                margin-left: 8px;
+                cursor: pointer;
+            ">Fermer</button>
+        `;
+        document.body.appendChild(notification);
     }
 
     private showLoginPage() {
