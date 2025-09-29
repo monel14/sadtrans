@@ -12,6 +12,7 @@ const ONE_SIGNAL_APP_ID = "aa956232-9277-40b3-b0f0-44c2b67f7a7b";
 
 export class OneSignalService {
   private static isInitialized = false;
+  private static currentUserId: string | null = null;
 
   public static async init() {
     if (this.isInitialized) {
@@ -32,23 +33,43 @@ export class OneSignalService {
     const authService = AuthService.getInstance();
     const user = await authService.getCurrentUser();
     if (user && user.id) {
-        window.OneSignalDeferred.push(function(OneSignal) {
-            // Utilisation d'un alias personnalisé au lieu de l'alias réservé "external_id"
+      // Vérifier si l'utilisateur est déjà associé pour éviter les conflits
+      if (this.currentUserId === user.id) {
+        console.log(`OneSignal user already associated with: ${user.id}`);
+        return;
+      }
+
+      window.OneSignalDeferred.push(async function(OneSignal) {
+        try {
+          // Vérifier les alias existants
+          const existingAliases = await OneSignal.User.getAliases();
+          
+          // Si l'alias est déjà correct, ne rien faire
+          if (existingAliases?.user_id === user.id) {
+            console.log(`OneSignal user ID alias already set to: ${user.id}`);
+            OneSignalService.currentUserId = user.id;
+            return;
+          }
+          
+          // Si un autre alias existe, le supprimer (gestion côté client uniquement)
+          if (existingAliases?.user_id && existingAliases.user_id !== user.id) {
+            console.log(`Removing existing alias for ${existingAliases.user_id}`);
+            // Note: La suppression côté client peut échouer avec 403, on continue quand même
             try {
-                OneSignal.User.addAlias("user_id", user.id);
-                console.log(`OneSignal user ID alias set to: ${user.id}`);
-            } catch (error) {
-                console.error("Erreur lors de la définition de l'alias OneSignal:", error);
-                // En cas d'erreur, on tente de supprimer l'alias existant puis de le recréer
-                try {
-                    OneSignal.User.removeAlias("user_id");
-                    OneSignal.User.addAlias("user_id", user.id);
-                    console.log(`OneSignal user ID alias recreated for: ${user.id}`);
-                } catch (retryError) {
-                    console.error("Erreur lors de la tentative de recréation de l'alias:", retryError);
-                }
+              await OneSignal.User.removeAlias("user_id");
+            } catch (removeError) {
+              console.warn("Could not remove existing alias (may not have permission):", removeError);
             }
-        });
+          }
+
+          // Ajouter le nouvel alias
+          await OneSignal.User.addAlias("user_id", user.id);
+          OneSignalService.currentUserId = user.id;
+          console.log(`OneSignal user ID alias set to: ${user.id}`);
+        } catch (error) {
+          console.error("Error setting OneSignal user alias:", error);
+        }
+      });
     }
   }
 
@@ -72,8 +93,11 @@ export class OneSignalService {
                 }
               });
               resolve(true);
+            } else if (permission === 'denied') {
+              console.log('Permission OneSignal refusée par l\'utilisateur');
+              resolve(false);
             } else {
-              console.log('Permission OneSignal refusée');
+              console.log('Permission OneSignal non accordée (default)');
               resolve(false);
             }
           }).catch(function(error) {
@@ -89,14 +113,9 @@ export class OneSignalService {
   }
 
   public static async logout() {
-    window.OneSignalDeferred.push(function(OneSignal) {
-        try {
-            // Suppression de l'alias utilisateur lors de la déconnexion
-            OneSignal.User.removeAlias("user_id");
-            console.log("OneSignal user ID alias removed.");
-        } catch (error) {
-            console.error("Erreur lors de la suppression de l'alias OneSignal:", error);
-        }
-    });
+    // Ne pas tenter de supprimer l'alias côté client (permission refusée)
+    // On se contente de nettoyer l'état local
+    this.currentUserId = null;
+    console.log("OneSignal user state cleared (alias not removed due to permissions).");
   }
 }
