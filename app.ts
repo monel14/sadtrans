@@ -104,6 +104,14 @@ export class App {
             
             // Login to OneSignal with the existing session
             OneSignalService.login();
+            
+            // Request push notification permission via OneSignal
+            const subscribed = await OneSignalService.subscribeToNotifications();
+            if (subscribed) {
+              console.log('User subscribed to OneSignal push notifications on session restore');
+            } else {
+              console.log('User not subscribed to push notifications on session restore');
+            }
         } else {
             this.showLoginPage();
         }
@@ -223,7 +231,7 @@ export class App {
     }
 
     // FIX: Converted to arrow function to correctly bind `this` and handle CustomEvent details.
-    private handleLoginSuccess = (event: Event) => {
+    private handleLoginSuccess = async (event: Event) => {
         const customEvent = event as CustomEvent;
         this.currentUser = customEvent.detail.user;
         
@@ -233,6 +241,14 @@ export class App {
         
         // Login to OneSignal
         OneSignalService.login();
+        
+        // Request push notification permission via OneSignal
+        const subscribed = await OneSignalService.subscribeToNotifications();
+        if (subscribed) {
+          console.log('User subscribed to OneSignal push notifications');
+        } else {
+          console.log('User not subscribed to push notifications');
+        }
         
         this.renderMainLayout();
         // FIX: Corrected invalid method name 'pre-fetchData' to 'preFetchData'.

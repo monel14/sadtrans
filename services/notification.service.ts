@@ -132,7 +132,7 @@ export class NotificationService {
     }
 
     /**
-     * Envoie une notification push à un utilisateur spécifique via la Supabase Edge Function.
+     * Envoie une notification push à un utilisateur spécifique via OneSignal (Supabase Edge Function).
      * @param userId L'ID de l'utilisateur destinataire
      * @param title Le titre de la notification
      * @param body Le corps (message) de la notification
@@ -140,44 +140,43 @@ export class NotificationService {
      * @returns Promise<boolean> Succès de l'envoi
      */
     public async sendPushNotification(userId: string, title: string, body: string, url?: string): Promise<boolean> {
-        try {
-            // Vérifier d'abord si l'utilisateur a un abonnement push
-            const { data: subscriptionData, error: subscriptionError } = await supabase
-                .from('push_subscriptions')
-                .select('subscription')
-                .eq('user_id', userId)
-                .limit(1);
-
-            if (subscriptionError || !subscriptionData || subscriptionData.length === 0) {
-                console.log('Aucun abonnement push trouvé pour l\'utilisateur:', userId);
-                return false;
-            }
-
-            // Utiliser la fonction Edge publique qui gère mieux les abonnements
-            try {
-                const { data, error } = await supabase.functions.invoke('send-push-notification-public', {
-                    body: {
-                        user_id: userId,
-                        title: title,
-                        body: body,
-                        url: url || '/',
-                    }
-                });
-
-                if (error) {
-                    console.error('Erreur lors de l\'envoi de la notification push via supabase.functions.invoke:', error);
-                    return false;
-                }
-
-                console.log('Notification push envoyée avec succès:', { userId, title, data });
-                return true;
-            } catch (invokeError) {
-                console.error('Erreur lors de l\'invocation de la fonction Edge:', invokeError);
-                return false;
-            }
-        } catch (error) {
-            console.error('Erreur lors de l\'envoi de la notification push:', error);
-            return false;
-        }
+      // Validation des paramètres requis
+      if (!userId || !title || !body) {
+          console.error('Paramètres manquants pour sendPushNotification:', { userId, title, body });
+          return false;
+      }
+      
+      // Vérification que les paramètres ne sont pas des chaînes vides
+      if (typeof userId !== 'string' || userId.trim() === '' ||
+          typeof title !== 'string' || title.trim() === '' ||
+          typeof body !== 'string' || body.trim() === '') {
+          console.error('Paramètres invalides pour sendPushNotification:', { userId, title, body });
+          return false;
+      }
+  
+      try {
+          console.log('Tentative d\'envoi de notification push via OneSignal:', { userId, title, body, url });
+          
+          // OneSignal gère les abonnements server-side, invocation directe de la fonction Edge
+          const { data, error } = await supabase.functions.invoke('send-onesignal-notification', {
+              body: {
+                  userId: userId,
+                  title: title,
+                  message: body,
+                  url: url || '/',
+              }
+          });
+  
+          if (error) {
+              console.error('Erreur lors de l\'envoi de la notification push OneSignal:', error);
+              return false;
+          }
+  
+          console.log('Notification push OneSignal envoyée avec succès:', { userId, title, data });
+          return true;
+      } catch (error) {
+          console.error('Erreur lors de l\'envoi de la notification push OneSignal:', error);
+          return false;
+      }
     }
 }

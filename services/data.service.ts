@@ -97,10 +97,21 @@ export class DataService {
                         detail: { change: payload }
                     }));
                     
+                    // Envoyer une notification push pour les nouvelles transactions
+                    if (payload.eventType === 'INSERT') {
+                        console.log('Nouvelle transaction détectée, envoi de notification aux administrateurs');
+                        // Notification aux administrateurs pour les nouvelles transactions
+                        this.notifyAdmins('Nouvelle transaction créée', 
+                            `Une nouvelle transaction a été créée.`);
+                    }
+                    
                     // Envoyer une notification push pour les transactions validées
                     if (payload.new && payload.new.statut === 'Validé') {
+                        console.log('Transaction validée détectée, envoi de notifications:', payload.new);
+                        
                         const agentId = payload.new.agent_id;
                         if (agentId) {
+                            console.log('Envoi de notification à l\'agent:', agentId);
                             NotificationService.getInstance().sendPushNotification(
                                 agentId,
                                 'Transaction Validée',
@@ -110,12 +121,18 @@ export class DataService {
 
                         const validateurId = payload.new.validateur_id;
                         if (validateurId) {
+                            console.log('Envoi de notification au validateur:', validateurId);
                             NotificationService.getInstance().sendPushNotification(
                                 validateurId,
                                 'Validation Effectuée',
                                 `Vous avez validé la transaction TRN-${payload.new.id} pour l'agent associé.`
                             );
                         }
+                        
+                        // Notification aux administrateurs pour les transactions validées
+                        console.log('Envoi de notification aux administrateurs pour transaction validée');
+                        this.notifyAdmins(`Nouvelle transaction validée`, 
+                            `La transaction TRN-${payload.new.id} de ${payload.new.montant_principal} FCFA a été validée.`);
                     }
                     
                     // Les notifications sont maintenant gérées par le trigger PostgreSQL
@@ -226,15 +243,24 @@ export class DataService {
                     
                     // Envoyer une notification push pour les demandes de recharge approuvées ou rejetées
                     if (payload.new && (payload.new.statut === 'Approuvée' || payload.new.statut === 'Rejetée')) {
+                        console.log('Demande de recharge traitée détectée:', payload.new);
+                        
                         const agentId = payload.new.agent_id;
                         if (agentId) {
                             const statusText = payload.new.statut === 'Approuvée' ? 'approuvée' : 'rejetée';
+                            console.log('Envoi de notification à l\'agent:', agentId);
                             NotificationService.getInstance().sendPushNotification(
                                 agentId,
                                 `Demande de Recharge ${statusText}`,
                                 `Votre demande de recharge de ${payload.new.montant} FCFA a été ${statusText}.`
                             );
                         }
+                        
+                        // Notification aux administrateurs pour les demandes de recharge traitées
+                        const statusText = payload.new.statut === 'Approuvée' ? 'approuvée' : 'rejetée';
+                        console.log('Envoi de notification aux administrateurs pour demande de recharge traitée');
+                        this.notifyAdmins(`Demande de recharge ${statusText}`, 
+                            `Une demande de recharge de ${payload.new.montant} FCFA a été ${statusText}.`);
                     }
                 }
             )
@@ -293,6 +319,50 @@ export class DataService {
         console.log('Re-subscribing to realtime channels after authentication');
         this.unsubscribeAll();
         this.setupRealtimeSubscriptions();
+    }
+
+    /**
+     * Envoie une notification à tous les administrateurs
+     * @param title Le titre de la notification
+     * @param message Le message de la notification
+     */
+    private async notifyAdmins(title: string, message: string): Promise<void> {
+        try {
+            console.log('Tentative d\'envoi de notification aux administrateurs:', { title, message });
+            
+            // Récupérer tous les administrateurs
+            const { data: admins, error } = await supabase
+                .from('users')
+                .select('id')
+                .or('role.eq.admin_general,role.eq.sous_admin');
+                
+            if (error) {
+                console.error('Erreur lors de la récupération des administrateurs:', error);
+                return;
+            }
+            
+            console.log('Administrateurs trouvés:', admins);
+            
+            // Envoyer une notification à chaque administrateur
+            if (admins && admins.length > 0) {
+                const notificationService = NotificationService.getInstance();
+                for (const admin of admins) {
+                    console.log('Envoi de notification à l\'administrateur:', admin.id);
+                    // Ne pas envoyer de notification à l'administrateur qui a effectué l'action
+                    // (il reçoit déjà une notification spécifique)
+                    const result = await notificationService.sendPushNotification(
+                        admin.id,
+                        title,
+                        message
+                    );
+                    console.log('Résultat de l\'envoi de notification:', { adminId: admin.id, success: result });
+                }
+            } else {
+                console.log('Aucun administrateur trouvé');
+            }
+        } catch (error) {
+            console.error('Erreur lors de l\'envoi des notifications aux administrateurs:', error);
+        }
     }
     
     /**
