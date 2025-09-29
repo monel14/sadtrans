@@ -1,4 +1,15 @@
-importScripts('https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js');
+// Service Worker personnalisé - version modifiée pour éviter les conflits avec OneSignal
+(function() {
+  const CDN_URL = 'https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js';
+  
+  // Charger le SDK OneSignal en dehors du scope de notre Service Worker
+  // pour éviter les conflits
+  try {
+    importScripts(CDN_URL);
+  } catch (e) {
+    console.warn('Impossible de charger le SDK OneSignal dans ce Service Worker:', e);
+  }
+})();
 
 const CACHE_NAME = 'sadtrans-b2b-v6';
 const URLS_TO_CACHE = [
@@ -39,8 +50,6 @@ self.addEventListener('activate', event => {
     }).then(() => self.clients.claim())
   );
 });
-
-// Suppression des gestionnaires de notifications push puisque nous utilisons OneSignal
 
 self.addEventListener('fetch', event => {
   if (!event) return;

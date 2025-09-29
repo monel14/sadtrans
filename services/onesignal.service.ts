@@ -19,12 +19,20 @@ export class OneSignalService {
       return;
     }
 
+    // Utiliser OneSignalDeferred pour l'initialisation différée
     window.OneSignalDeferred = window.OneSignalDeferred || [];
+    
+    // Configuration de OneSignal avec des paramètres plus robustes
     window.OneSignalDeferred.push(function(OneSignal) {
       OneSignal.init({
         appId: ONE_SIGNAL_APP_ID,
+        // Spécifier uniquement les Service Workers requis par OneSignal
+        serviceWorkerPath: '/OneSignalSDKWorker.js',
+        serviceWorkerUpdaterPath: '/OneSignalSDKUpdaterWorker.js',
+        allowLocalhostAsSecureOrigin: true, // Autoriser localhost pour le développement
       });
     });
+    
     this.isInitialized = true;
     console.log("OneSignal Service Initialized.");
   }

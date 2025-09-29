@@ -122,7 +122,7 @@ export class App {
     private registerServiceWorker() {
         if ('serviceWorker' in navigator) {
             // Enregistrement immédiat pour éviter le délai 'load'
-            navigator.serviceWorker.register('/sw.js', { scope: '/' })
+            navigator.serviceWorker.register('/custom-sw.js', { scope: '/' })
                 .then(registration => {
                     console.log('ServiceWorker registration successful with scope: ', registration.scope);
                     console.log('ServiceWorker state:', registration.active?.state || 'no active');
