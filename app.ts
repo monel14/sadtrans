@@ -112,9 +112,10 @@ export class App {
             this.showLoginPage();
         }
 
-        this.registerServiceWorker();
+        // this.registerServiceWorker(); // Disabled to avoid conflict with OneSignal Service Worker
     }
 
+    /*
     private registerServiceWorker() {
         if ('serviceWorker' in navigator) {
             // Enregistrement immédiat pour éviter le délai 'load'
@@ -166,7 +167,7 @@ export class App {
                 .catch(error => {
                     console.error('ServiceWorker registration failed: ', error);
                 });
-
+    
             // Écouter les changements d'état pour debugging
             // Suppression du rechargement automatique qui causait des rechargements infinis
             // navigator.serviceWorker.addEventListener('controllerchange', () => {
@@ -177,6 +178,28 @@ export class App {
         } else {
             console.log('Service Workers non supportés dans ce navigateur.');
         }
+    }
+    */
+
+    // Méthode pour envoyer un message au Service Worker en attendant qu'il soit prêt
+    private sendMessageToServiceWorker(message: any): Promise<void> {
+        return new Promise((resolve, reject) => {
+            if ('serviceWorker' in navigator) {
+                // Attendre que le service worker soit prêt
+                navigator.serviceWorker.ready.then((registration) => {
+                    if (registration.active) {
+                        registration.active.postMessage(message);
+                        resolve();
+                    } else {
+                        reject(new Error('Service Worker is not active'));
+                    }
+                }).catch((error) => {
+                    reject(error);
+                });
+            } else {
+                reject(new Error('Service Workers not supported'));
+            }
+        });
     }
 
     // Méthode pour notifier l'utilisateur d'une mise à jour disponible
@@ -207,17 +230,15 @@ export class App {
                 cursor: pointer;
                 font-weight: bold;
             ">Recharger</button>
-            <button onclick="this.parentElement.remove()" style="
-                background: transparent;
-                color: white;
-                border: 1px solid white;
-                padding: 4px 8px;
-                border-radius: 4px;
-                margin-left: 8px;
-                cursor: pointer;
-            ">Fermer</button>
         `;
         document.body.appendChild(notification);
+        
+        // Supprimer la notification après 10 secondes
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        }, 10000);
     }
 
     private showLoginPage() {

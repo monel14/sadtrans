@@ -9,7 +9,7 @@
     
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <link rel="stylesheet" href="index.css">
+    <link rel="stylesheet" href="/index.css">
 <script type="importmap">
 {
   "imports": {
@@ -22,6 +22,27 @@
 <body>
     <div id="app"></div>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script type="module" src="index.tsx"></script>
+    <script type="module" src="/index.tsx"></script>
+    <script>
+        // Ajouter un écouteur pour vérifier que OneSignal est chargé
+        window.addEventListener('load', function() {
+            // Vérifier si OneSignal est chargé après un délai
+            setTimeout(function() {
+                if (typeof window.OneSignal !== 'undefined') {
+                    console.log('OneSignal SDK chargé avec succès');
+                } else {
+                    console.warn('OneSignal SDK non chargé - vérification du chargement différée');
+                    // Réessayer après 2 secondes supplémentaires
+                    setTimeout(function() {
+                        if (typeof window.OneSignal !== 'undefined') {
+                            console.log('OneSignal SDK chargé avec succès (deuxième tentative)');
+                        } else {
+                            console.error('OneSignal SDK non chargé après plusieurs tentatives');
+                        }
+                    }, 2000);
+                }
+            }, 1000);
+        });
+    </script>
 </body>
 </html>

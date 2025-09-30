@@ -1,18 +1,17 @@
-// Ajout du listener 'message' au début pour éviter le warning
-self.addEventListener("message", (event) => {
-  console.log("Message reçu dans le SW OneSignal Updater :", event.data);
-  // Ajoutez ici la logique de traitement des messages si nécessaire
-});
+// OneSignal Service Worker Updater - Configuration améliorée
+// Évite les conflits avec d'autres gestionnaires de message
 
-// OneSignal Service Worker Updater avec fallback local
-(function() {
-  const CDN_URL = "https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js";
-  
-  // Tentative de chargement du SDK depuis le CDN avec gestion d'erreur
-  try {
-    importScripts(CDN_URL);
-  } catch (e) {
-    console.warn('Impossible de charger le SDK OneSignal depuis le CDN:', e);
-    // En dernier recours, on continue sans le SDK
-  }
-})();
+// Importer le SDK OneSignal
+importScripts("https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js");
+
+// Ajouter un gestionnaire d'événements pour les messages, mais uniquement si OneSignal l'a déjà ajouté
+self.addEventListener('message', function(event) {
+    // Laisser OneSignal gérer ses propres messages
+    if (event.data && event.data.onesignal) {
+        // Ne pas empêcher le comportement par défaut, OneSignal s'en occupera
+        return;
+    }
+    
+    // Gérer d'autres messages si nécessaire
+    console.log('Message reçu dans le Service Worker Updater:', event.data);
+}, false);

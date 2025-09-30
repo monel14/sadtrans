@@ -18,12 +18,38 @@ export default defineConfig(({ mode }) => {
           enabled: false
         },
         workbox: {
+          // Ignorer les URLs externes qui ne peuvent pas être mises en cache
+          globIgnores: [
+            '../node_modules/**/*',
+            '**/*.map'
+          ],
           runtimeCaching: [
             {
               urlPattern: /^https:\/\/fonts\.googleapis\.com/,
               handler: 'CacheFirst',
               options: {
                 cacheName: 'google-fonts',
+                expiration: {
+                  maxEntries: 10,
+                  maxAgeSeconds: 60 * 60 * 24 * 365 // 1 year
+                },
+                cacheableResponse: {
+                  statuses: [0, 200]
+                }
+              },
+            },
+            {
+              urlPattern: /^https:\/\/fonts\.gstatic\.com/,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'gstatic-fonts',
+                expiration: {
+                  maxEntries: 10,
+                  maxAgeSeconds: 60 * 60 * 24 * 365 // 1 year
+                },
+                cacheableResponse: {
+                  statuses: [0, 200]
+                }
               },
             },
             {
@@ -36,12 +62,57 @@ export default defineConfig(({ mode }) => {
             },
             {
               urlPattern: /^https:\/\/onesignal\.com\/sdks\/.*/,
-              handler: 'StaleWhileRevalidate',
+              handler: 'NetworkOnly',
+            },
+            {
+              urlPattern: /^https:\/\/ui-avatars\.com\/api\/.*/,
+              handler: 'CacheFirst',
               options: {
-                cacheName: 'onesignal-sdk-styles',
+                cacheName: 'ui-avatars',
+                expiration: {
+                  maxEntries: 50,
+                  maxAgeSeconds: 60 * 60 * 24 * 30 // 1 month
+                },
+                cacheableResponse: {
+                  statuses: [0, 200]
+                }
               },
             },
+            {
+              urlPattern: /^https:\/\/placehold\.co\/.*/,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'placeholder-images',
+                expiration: {
+                  maxEntries: 20,
+                  maxAgeSeconds: 60 * 60 * 24 * 7 // 1 week
+                },
+                cacheableResponse: {
+                  statuses: [0, 200]
+                }
+              },
+            },
+            {
+              urlPattern: /^https:\/\/cdnjs\.cloudflare\.com\/.*/,
+              handler: 'StaleWhileRevalidate',
+              options: {
+                cacheName: 'cdn-resources',
+                expiration: {
+                  maxEntries: 20,
+                  maxAgeSeconds: 60 * 60 * 24 * 7 // 1 week
+                }
+              },
+            }
           ],
+          // Ne pas essayer de mettre en cache les ressources externes
+          navigateFallback: null,
+          navigateFallbackDenylist: [
+            /^\/api/,
+            /^\/functions/,
+            /^\/rest/,
+            /^\/auth/,
+            /^\/storage/
+          ]
         }
       })
     ],

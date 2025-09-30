@@ -121,10 +121,10 @@ export function renderHeader(user: User): HTMLElement {
         const { OneSignalService } = await import('../services/onesignal.service');
         
         try {
-            // Utiliser la nouvelle méthode pour demander explicitement la permission
-            const permissionGranted = await OneSignalService.requestPermission();
-            if (permissionGranted) {
-                console.log('Permission accordée pour les notifications push');
+            // Utiliser la nouvelle méthode pour activer les notifications push
+            const notificationsEnabled = await OneSignalService.enablePushNotifications();
+            if (notificationsEnabled) {
+                console.log('Notifications push activées avec succès');
                 updatePushNotificationButton(true);
                 // Afficher un message de confirmation
                 document.body.dispatchEvent(new CustomEvent('showToast', {
@@ -134,14 +134,9 @@ export function renderHeader(user: User): HTMLElement {
                     }
                 }));
             } else {
-                console.log('Permission refusée pour les notifications push');
-                // Afficher un message d'information
-                document.body.dispatchEvent(new CustomEvent('showToast', {
-                    detail: {
-                        message: 'Les notifications push sont désactivées. Vous pouvez les activer dans les paramètres de votre navigateur.',
-                        type: 'info'
-                    }
-                }));
+                console.log('L\'utilisateur a refusé les notifications push ou elles sont bloquées');
+                // Le message est déjà affiché dans le service, pas besoin de le répéter ici
+                updatePushNotificationButton(false);
             }
         } catch (error) {
             console.error('Erreur lors de l\'activation des notifications push:', error);
