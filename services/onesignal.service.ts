@@ -11,31 +11,30 @@ declare global {
 const ONE_SIGNAL_APP_ID = "aa956232-9277-40b3-b0f0-44c2b67f7a7b";
 
 export class OneSignalService {
-  private static isInitialized = false;
-  private static currentUserId: string | null = null;
+    private static isInitialized = false;
+    private static currentUserId: string | null = null;
 
-  public static async init() {
-    if (this.isInitialized) {
-      return;
+    public static async init() {
+        if (this.isInitialized) {
+            return;
+        }
+
+        window.OneSignalDeferred = window.OneSignalDeferred || [];
+        window.OneSignalDeferred.push(function(OneSignal) {
+            OneSignal.init({
+                appId: ONE_SIGNAL_APP_ID,
+                serviceWorkerPath: '/OneSignalSDKWorker.js',
+                serviceWorkerUpdaterPath: '/OneSignalSDKUpdaterWorker.js',
+                allowLocalhostAsSecureOrigin: true,
+            }).then(() => {
+                // L'initialisation est terminée, nous pouvons maintenant vérifier l'état
+                OneSignalService.checkSubscription();
+            });
+        });
+        
+        this.isInitialized = true;
+        console.log("OneSignal Service Initialized.");
     }
-
-    // Utiliser OneSignalDeferred pour l'initialisation différée
-    window.OneSignalDeferred = window.OneSignalDeferred || [];
-    
-    // Configuration de OneSignal avec des paramètres plus robustes
-    window.OneSignalDeferred.push(function(OneSignal) {
-      OneSignal.init({
-        appId: ONE_SIGNAL_APP_ID,
-        // Spécifier uniquement les Service Workers requis par OneSignal
-        serviceWorkerPath: '/OneSignalSDKWorker.js',
-        serviceWorkerUpdaterPath: '/OneSignalSDKUpdaterWorker.js',
-        allowLocalhostAsSecureOrigin: true, // Autoriser localhost pour le développement
-      });
-    });
-    
-    this.isInitialized = true;
-    console.log("OneSignal Service Initialized.");
-  }
 
   public static async login() {
     const authService = AuthService.getInstance();
@@ -80,6 +79,22 @@ export class OneSignalService {
       });
     }
   }
+
+    /**
+     * Vérifie l'état de l'abonnement aux notifications push et envoie des événements en conséquence.
+     */
+    public static checkSubscription() {
+        window.OneSignalDeferred.push(function(OneSignal) {
+            const isPushEnabled = OneSignal.Notifications.permission === 'granted';
+            if (isPushEnabled) {
+                console.log('Utilisateur abonné aux notifications push.');
+                document.body.dispatchEvent(new CustomEvent('userSubscribedToPush'));
+            } else {
+                console.log('Utilisateur non abonné aux notifications push.');
+                document.body.dispatchEvent(new CustomEvent('userNotSubscribedToPush'));
+            }
+        });
+    }
 
   /**
    * Demande la permission pour les notifications push OneSignal et s'abonne l'utilisateur.
@@ -129,34 +144,51 @@ export class OneSignalService {
     return new Promise((resolve) => {
       if (typeof window.OneSignal !== 'undefined') {
         window.OneSignalDeferred.push(function(OneSignal) {
-          OneSignal.Notifications.requestPermission().then(function(permission) {
-            if (permission === 'granted') {
-              console.log('Permission OneSignal accordée');
-              // OneSignal gère automatiquement l'abonnement une fois la permission accordée
-              OneSignal.Notifications.addEventListener('click', function(event) {
-                console.log('Notification OneSignal cliquée:', event);
-                // Optionnel: naviguer vers une URL si fournie
-                if (event.url) {
-                  window.open(event.url);
-                }
-              });
-              resolve(true);
-            } else if (permission === 'denied') {
-              console.log('Permission OneSignal refusée par l\'utilisateur');
+          OneSignal.showSlidedownPrompt().then(() => {
+            OneSignal.Notifications.requestPermission().then(function(permission) {
+              if (permission === 'granted') {
+                console.log('Permission OneSignal accordée');
+                // OneSignal gère automatiquement l'abonnement une fois la permission accordée
+                OneSignal.Notifications.addEventListener('click', function(event) {
+                  console.log('Notification OneSignal cliquée:', event);
+                  // Optionnel: naviguer vers une URL si fournie
+                  if (event.url) {
+                    window.open(event.url);
+                  }
+                });
+                // Mettre à jour l'état de l'abonnement
+                OneSignalService.checkSubscription();
+                resolve(true);
+              } else if (permission === 'denied') {
+                console.log('Permission OneSignal refusée par l\'utilisateur');
+                resolve(false);
+              } else {
+                console.log('Permission OneSignal non accordée (default)');
+                resolve(false);
+              }
+            }).catch(function(error) {
+              console.error('Erreur lors de la demande de permission OneSignal:', error);
               resolve(false);
-            } else {
-              console.log('Permission OneSignal non accordée (default)');
-              resolve(false);
-            }
-          }).catch(function(error) {
-            console.error('Erreur lors de la demande de permission OneSignal:', error);
-            resolve(false);
+            });
           });
         });
       } else {
         console.error('OneSignal non chargé');
         resolve(false);
       }
+    });
+  }
+
+  public static async getSubscription(): Promise<boolean> {
+    return new Promise((resolve) => {
+        if (typeof window.OneSignal !== 'undefined') {
+            window.OneSignalDeferred.push(function(OneSignal) {
+                resolve(OneSignal.Notifications.permission === 'granted');
+            });
+        } else {
+            console.error('OneSignal non chargé');
+            resolve(false);
+        }
     });
   }
 

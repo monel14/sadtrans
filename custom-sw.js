@@ -1,7 +1,16 @@
 // Ajout du listener 'message' au début pour éviter le warning
+// Déclarer tous les addEventListener au plus haut niveau.
 self.addEventListener("message", (event) => {
   console.log("Message reçu dans le SW :", event.data);
   // Ajoutez ici la logique de traitement des messages si nécessaire
+});
+
+self.addEventListener('install', (event) => {
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', (event) => {
+  self.clients.claim();
 });
 
 // Service Worker personnalisé - version modifiée pour éviter les conflits avec OneSignal
@@ -17,101 +26,13 @@ self.addEventListener("message", (event) => {
   }
 })();
 
-const CACHE_NAME = 'sadtrans-b2b-v6';
-const URLS_TO_CACHE = [
-  '/',
-  '/index.html',
-  '/index.css',
-  '/index.tsx',
-  '/images/icon-192x192.png',
-  '/images/icon-512x512.png'
-];
+importScripts('https://storage.googleapis.com/workbox-cdn/releases/6.4.1/workbox-sw.js');
 
-self.addEventListener('install', event => {
-  event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => {
-        console.log('Opened cache');
-        // Vérifier chaque URL avant de tenter de la mettre en cache
-        const cachePromises = URLS_TO_CACHE.map(url => {
-          return fetch(url)
-            .then(response => {
-              if (response.ok) {
-                return cache.put(url, response);
-              } else {
-                console.warn(`Failed to cache ${url}: ${response.status} ${response.statusText}`);
-                return Promise.resolve();
-              }
-            })
-            .catch(error => {
-              console.warn(`Failed to fetch ${url}:`, error);
-              return Promise.resolve();
-            });
-        });
-        return Promise.all(cachePromises);
-      })
-      .then(() => self.skipWaiting())
-  );
-});
-
-self.addEventListener('activate', event => {
-  event.waitUntil(
-    caches.keys().then(cacheNames => {
-      return Promise.all(
-        cacheNames.map(cacheName => {
-          if (cacheName !== CACHE_NAME) {
-            console.log('Deleting old cache:', cacheName);
-            return caches.delete(cacheName);
-          }
-        })
-      );
-    }).then(() => self.clients.claim())
-  );
-});
-
-self.addEventListener('fetch', event => {
-  if (!event) return;
+if (workbox) {
+  console.log(`Workbox est chargé`);
   
-  const requestUrl = new URL(event.request.url);
-
-  // If the request is for the Supabase API, bypass the service worker entirely.
-  if (requestUrl.hostname.endsWith('supabase.co')) {
-    return;
-  }
-
-  // Gérer les fichiers CSS avec une stratégie network-first
-  if (requestUrl.pathname.endsWith('.css')) {
-    event.respondWith(
-      fetch(event.request)
-        .then(response => {
-          if (response.ok) {
-            const responseToCache = response.clone();
-            caches.open(CACHE_NAME).then(cache => {
-              cache.put(event.request, responseToCache);
-            });
-          }
-          return response;
-        })
-        .catch(() => caches.match(event.request))
-    );
-    return;
-  }
-
-  // For all other requests, use a cache-first strategy.
-  event.respondWith(
-    caches.match(event.request)
-      .then(response => {
-        if (response) {
-          return response;
-        }
-
-        return fetch(event.request).catch(error => {
-          console.error('Fetch failed:', error);
-          return new Response('Offline content', {
-            status: 200,
-            headers: { 'Content-Type': 'text/plain' }
-          });
-        });
-      })
-  );
-});
+  // Le manifeste de pré-cache est injecté ici par vite-plugin-pwa
+  workbox.precaching.precacheAndRoute(self.__WB_MANIFEST || []);
+} else {
+  console.log(`Workbox n'a pas pu être chargé.`);
+}

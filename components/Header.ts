@@ -86,11 +86,10 @@ export function renderHeader(user: User): HTMLElement {
     };
 
     // Vérifier l'état actuel des notifications push
-    const checkPushNotificationStatus = async () => {
+    const checkPushNotificationStatus = () => {
         console.log('Vérification de l\'état des notifications push');
-        // Vérifier si l'utilisateur a déjà accordé la permission
-        // Pour l'instant, on suppose que l'utilisateur n'est pas abonné
-        updatePushNotificationButton(false);
+        // La logique est maintenant gérée par les écouteurs d'événements
+        // userSubscribedToPush et userNotSubscribedToPush
     };
 
     // Écouter l'événement de statut des notifications push
@@ -98,7 +97,7 @@ export function renderHeader(user: User): HTMLElement {
         console.log('Événement pushNotificationStatus reçu');
         const customEvent = event as CustomEvent;
         const { subscribed } = customEvent.detail;
-        updatePushNotificationButton(!subscribed);
+        updatePushNotificationButton(subscribed);
     });
 
     // Écouter l'événement lorsque l'utilisateur n'est pas abonné aux notifications
@@ -184,7 +183,9 @@ export function renderHeader(user: User): HTMLElement {
                 }
             } catch (error) {
                 console.error('Erreur lors de la récupération des notifications:', error);
-                list.innerHTML = `<p class="p-4 text-sm text-red-500">Erreur lors du chargement des notifications.</p>`;
+                if (list) {
+                    list.innerHTML = `<p class="p-4 text-sm text-red-500">Erreur lors du chargement des notifications.</p>`;
+                }
                 return;
             }
         }
