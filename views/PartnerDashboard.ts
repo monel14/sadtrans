@@ -5,6 +5,7 @@ import { createCard } from '../components/Card';
 import { formatAmount } from '../utils/formatters';
 import { navigationLinks } from '../config/navigation';
 import { NavLink } from '../models';
+import { PartnerRequestRechargeModal } from '../components/modals/PartnerRequestRechargeModal';
 
 export async function renderPartnerDashboardView(user: User): Promise<HTMLElement> {
     const dataService = DataService.getInstance();
@@ -54,6 +55,11 @@ export async function renderPartnerDashboardView(user: User): Promise<HTMLElemen
                 <div>
                     <p class="text-sm text-slate-500">Solde Principal (Opérations)</p>
                     <p class="text-4xl font-bold text-emerald-600" id="main-balance">${formatAmount(mainBalance)}</p>
+                </div>
+                <div class="flex space-x-2 mt-4">
+                    <button id="request-recharge-btn" class="btn btn-primary flex-1">
+                        <i class="fas fa-plus-circle mr-2"></i> Demander Recharge
+                    </button>
                 </div>
                 <p class="text-xs text-slate-400 mt-2">Utilisé pour toutes les transactions de vos agents.</p>
             </div>
@@ -231,6 +237,7 @@ export async function renderPartnerDashboardView(user: User): Promise<HTMLElemen
     container.addEventListener('click', async (e) => {
         const target = e.target as HTMLElement;
         const transferBtn = target.closest('#transfer-revenue-btn');
+        const requestRechargeBtn = target.closest('#request-recharge-btn');
         const navButton = target.closest<HTMLButtonElement>('[data-nav-id]');
 
         if (transferBtn) {
@@ -242,6 +249,12 @@ export async function renderPartnerDashboardView(user: User): Promise<HTMLElemen
                 bubbles: true,
                 composed: true
             }));
+        }
+
+        if (requestRechargeBtn) {
+            // Créer et afficher le modal de demande de recharge
+            const modal = new PartnerRequestRechargeModal();
+            modal.show(fullUser);
         }
 
         if (navButton) {

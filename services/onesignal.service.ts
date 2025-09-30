@@ -43,6 +43,7 @@ export class OneSignalService {
   private static isInitialized = false;
   private static isInitializing = false;
   private static currentUserId: string | null = null;
+  private static subscriptionId: string | null = null;
   private static operationQueue: (() => Promise<void>)[] = [];
   private static oneSignalInstance: OneSignalInstance | null = null;
   private static initPromise: Promise<void> | null = null;
@@ -187,6 +188,20 @@ export class OneSignalService {
         console.log("Écouteurs OneSignal attachés");
       } else {
         console.warn("OneSignal.Notifications.addEventListener non disponible");
+      }
+
+      // Écouter les changements de souscription push
+      if (OneSignal.User?.PushSubscription?.addEventListener) {
+        OneSignal.User.PushSubscription.addEventListener(
+          "change",
+          (change: any) => {
+            console.log("Changement de souscription push:", change);
+            if (change.to?.id) {
+              this.subscriptionId = change.to.id;
+              console.log("Nouvel ID de souscription:", this.subscriptionId);
+            }
+          }
+        );
       }
     } catch (error) {
       console.error("Erreur lors de l'attachement des événements:", error);
@@ -443,7 +458,7 @@ export class OneSignalService {
         hasInstance: !!this.oneSignalInstance,
         browserPermission: "unknown",
         oneSignalPermission: "unknown",
-        subscriptionId: "unknown",
+        subscriptionId: this.subscriptionId || "unknown",
         isSubscribed: false,
       };
 
@@ -456,23 +471,13 @@ export class OneSignalService {
       if (this.oneSignalInstance.Notifications) {
         debugInfo.oneSignalPermission =
           this.oneSignalInstance.Notifications.permission;
+        debugInfo.isSubscribed = this.oneSignalInstance.Notifications.permission;
       }
 
-      // Essayer d'obtenir l'ID de souscription
-      if (
-        this.oneSignalInstance.User &&
-        this.oneSignalInstance.User.PushSubscription
-      ) {
-        try {
-          const subscription =
-            await this.oneSignalInstance.User.PushSubscription.id;
-          if (subscription) {
-            debugInfo.subscriptionId = subscription;
-            debugInfo.isSubscribed = true;
-          }
-        } catch (error) {
-          debugInfo.subscriptionError = error.message;
-        }
+      // Vérifier l'ID de souscription
+      if (this.subscriptionId) {
+        debugInfo.subscriptionId = this.subscriptionId;
+        debugInfo.isSubscribed = true;
       }
 
       return debugInfo;
@@ -506,17 +511,7 @@ export class OneSignalService {
         data: {
           url: "/",
           source: "onesignal-test",
-        },
-        actions: [
-          {
-            action: "view",
-            title: "👀 Voir",
-          },
-          {
-            action: "dismiss",
-            title: "❌ Ignorer",
-          },
-        ],
+        }
       });
 
       console.log("✅ Notification localhost envoyée directement");
@@ -564,13 +559,7 @@ export class OneSignalService {
           url: url || "/",
           source: "localhost-fallback",
           timestamp: Date.now(),
-        },
-        actions: [
-          {
-            action: "view",
-            title: "👀 Voir",
-          },
-        ],
+        }
       });
 
       console.log("✅ Notification localhost fallback envoyée:", {

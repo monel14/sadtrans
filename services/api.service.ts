@@ -641,6 +641,48 @@ export class ApiService {
         return mappedData as AgentRechargeRequest;
     }
 
+    public async createPartnerRechargeRequest(partnerId: string, montant: number, methodId: string, notes: string): Promise<AgentRechargeRequest> {
+        // Pour les partenaires, nous utilisons le même champ agent_id mais ajoutons un préfixe dans les notes
+        // pour identifier qu'il s'agit d'une demande de partenaire
+        const partnerNotes = `[PARTNER] ${notes}`;
+        
+        const { data, error } = await supabase
+            .from('agent_recharge_requests')
+            .insert({
+                agent_id: partnerId,
+                montant,
+                method_id: methodId,
+                notes: partnerNotes,
+                statut: 'En attente'
+            })
+            .select()
+            .single();
+
+        if (error) {
+            console.error('Error creating partner recharge request:', (error as Error).message || error);
+            throw error;
+        }
+
+        DataService.getInstance().invalidateAgentRechargeRequestsCache();
+
+        // Map supabase response (snake_case) to our model (camelCase)
+        const mappedData = {
+            ...data,
+            date: data.created_at,
+            agentId: data.agent_id,
+            methodId: data.method_id,
+            processedBy: data.processed_by,
+            processedAt: data.processed_at
+        };
+
+        // Trigger global event for UI updates
+        document.body.dispatchEvent(new CustomEvent('partnerRechargeCreated', {
+            detail: { requestId: data.id, partnerId, amount: montant }
+        }));
+
+        return mappedData as AgentRechargeRequest;
+    }
+
     public async updateCurrentUserProfile(data: Partial<User>): Promise<User | null> {
         const { password, ...profileData } = data;
 
