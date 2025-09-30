@@ -27,6 +27,7 @@ export class App {
     private currentUser: User | null = null;
     private mainLayout: any = null;
     private toastContainer: ToastContainer | null = null;
+    private statusCheckInterval: number | null = null;
 
     private agentRequestRechargeModal: AgentRequestRechargeModal | null = null;
     private viewProofModal: ViewProofModal | null = null;
@@ -39,32 +40,29 @@ export class App {
     private confirmationModal: ConfirmationModal | null = null;
     private adminAdjustBalanceModal: AdminAdjustBalanceModal | null = null;
 
-    private statusCheckInterval: number | null = null;
-
     constructor(rootElement: HTMLElement) {
         this.rootElement = rootElement;
     }
 
     public async init() {
-        // Initialisation des services
         RefreshService.getInstance();
         await DataService.getInstance().initialize();
 
-        // Toast container
         this.toastContainer = new ToastContainer();
         document.body.prepend(this.toastContainer.element);
 
         this.addGlobalEventListeners();
 
-        // Initialisation OneSignal avec l'ID utilisateur si disponible
         const authService = AuthService.getInstance();
         const user = await authService.getCurrentUser();
-        await OneSignalService.init(user?.id);
+
+        await OneSignalService.init(user?.id || undefined);
 
         if (user) {
             this.currentUser = user;
-            DataService.getInstance().reSubscribe();
+            await OneSignalService.login(user.id);
 
+            DataService.getInstance().reSubscribe();
             this.renderMainLayout();
             this.preFetchData();
             this.startUserStatusCheck();
@@ -106,10 +104,15 @@ export class App {
         const customEvent = event as CustomEvent;
         this.currentUser = customEvent.detail.user;
         DataService.getInstance().reSubscribe();
+
+        if (this.currentUser) {
+            await OneSignalService.login(this.currentUser.id);
+        }
+
         this.renderMainLayout();
         this.preFetchData();
-        // Le login OneSignal est maintenant géré automatiquement dans init()
-        console.log("Utilisateur connecté");
+
+        console.log("Utilisateur connecté et OneSignal mis à jour");
     }
 
     private preFetchData = async () => {
@@ -135,12 +138,15 @@ export class App {
 
     private handleLogout = async () => {
         this.stopUserStatusCheck();
-        OneSignalService.logout();
+        await OneSignalService.logout();
+
         await AuthService.getInstance().logout();
         this.currentUser = null;
         this.mainLayout = null;
         localStorage.removeItem('currentNavigation');
         this.showLoginPage();
+
+        console.log("Utilisateur déconnecté et OneSignal nettoyé");
     }
 
     private handleUpdateCurrentUser = (event: CustomEvent) => {
@@ -197,7 +203,7 @@ export class App {
 
         this.restoreNavigationState();
 
-        // Ajout bouton activation notifications
+        // Bouton pour activer les notifications
         const enablePushBtn = document.createElement('button');
         enablePushBtn.id = "enablePushBtn";
         enablePushBtn.textContent = "Activer les notifications";

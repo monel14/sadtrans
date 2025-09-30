@@ -9,6 +9,14 @@ interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
 
-interface Window {
-  OneSignalDeferred: any[];
+ 
+
+ 
+declare global {
+  interface Window {
+    OneSignal: any;
+    OneSignalDeferred: any[];
+  }
 }
+
+export {};
