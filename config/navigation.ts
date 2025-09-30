@@ -32,6 +32,7 @@ import {
 import { renderProfileView } from '../views/Profile';
 import { renderOrderListView } from '../views/OrderList';
 import { renderPartnerContractView } from "../views/PartnerContractView";
+import { renderPartnerUserRechargesView } from "../views/PartnerUserRecharges";
 import { DataService } from "../services/data.service";
 
 // Helper function to get category icons
@@ -258,6 +259,7 @@ export const navigationLinks: Record<UserRole, NavLink[]> = {
                 { label: 'Gérer mes Utilisateurs', navId: 'partner_manage_users', icon: 'fa-users-cog', viewFn: renderPartnerManageUsersViewWithRefresh },
                 { label: 'Mon Stock de Cartes', navId: 'partner_card_stock', icon: 'fa-layer-group', viewFn: renderPartnerCardStockView },
                 { label: 'Bons de Commande', navId: 'partner_orders', icon: 'fa-receipt', viewFn: renderOrderListView },
+                { label: 'Historique Recharges', navId: 'partner_recharge_history', icon: 'fa-history', viewFn: renderPartnerUserRechargesView },
             ]
         },
         { 

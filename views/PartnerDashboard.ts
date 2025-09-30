@@ -101,6 +101,10 @@ export async function renderPartnerDashboardView(user: User): Promise<HTMLElemen
             <i class="fas fa-list-ul text-xl text-slate-500 mb-2"></i>
             <span class="text-xs font-semibold text-slate-700">Opérations</span>
         </button>
+        <button data-nav-id="partner_recharge_history" class="flex flex-col items-center justify-center p-3 bg-slate-100 hover:bg-violet-100 rounded-lg transition-colors text-center">
+            <i class="fas fa-history text-xl text-slate-500 mb-2"></i>
+            <span class="text-xs font-semibold text-slate-700">Historique Recharges</span>
+        </button>
     `;
     quickAccessCard.appendChild(createCard('Accès Rapides', quickAccessContent, 'fa-rocket', ''));
     container.appendChild(quickAccessCard);
