@@ -96,6 +96,17 @@ export class OneSignalService {
             serviceWorkerPath: "OneSignalSDKWorker.js",
           });
 
+          // Configuration spéciale pour localhost
+          const isLocalhost =
+            window.location.hostname === "localhost" ||
+            window.location.hostname === "127.0.0.1";
+
+          if (isLocalhost) {
+            console.log(
+              "🔧 Mode localhost détecté - configuration spéciale OneSignal",
+            );
+          }
+
           console.log("OneSignal initialisé avec succès");
 
           // Attacher les événements (SDK moderne)
@@ -474,6 +485,106 @@ export class OneSignalService {
   }
 
   /**
+   * Test spécial localhost - Affiche une notification directe
+   */
+  public static async sendLocalhostTestNotification(): Promise<boolean> {
+    try {
+      if (!("serviceWorker" in navigator)) {
+        console.error("Service Worker non supporté");
+        return false;
+      }
+
+      const registration = await navigator.serviceWorker.ready;
+
+      // Test de notification directe pour localhost
+      await registration.showNotification("Test OneSignal Localhost", {
+        body: "Notification de test pour environnement de développement",
+        icon: "/favicon.ico",
+        badge: "/favicon.ico",
+        tag: "onesignal-localhost-test",
+        requireInteraction: true,
+        data: {
+          url: "/",
+          source: "onesignal-test",
+        },
+        actions: [
+          {
+            action: "view",
+            title: "👀 Voir",
+          },
+          {
+            action: "dismiss",
+            title: "❌ Ignorer",
+          },
+        ],
+      });
+
+      console.log("✅ Notification localhost envoyée directement");
+      return true;
+    } catch (error) {
+      console.error("❌ Erreur notification localhost:", error);
+      return false;
+    }
+  }
+
+  /**
+   * Fallback notification pour localhost - utilise les notifications directes du navigateur
+   */
+  public static async sendLocalhostFallbackNotification(
+    title: string,
+    body: string,
+    url?: string,
+  ): Promise<boolean> {
+    try {
+      // Vérifier si on est sur localhost
+      const isLocalhost =
+        window.location.hostname === "localhost" ||
+        window.location.hostname === "127.0.0.1";
+
+      if (!isLocalhost) {
+        console.log("Not localhost, skipping fallback notification");
+        return false;
+      }
+
+      if (!("serviceWorker" in navigator)) {
+        console.error("Service Worker non supporté pour fallback");
+        return false;
+      }
+
+      const registration = await navigator.serviceWorker.ready;
+
+      // Envoyer notification directe pour localhost
+      await registration.showNotification(title, {
+        body: body,
+        icon: "/favicon.ico",
+        badge: "/favicon.ico",
+        tag: `localhost-fallback-${Date.now()}`,
+        requireInteraction: false,
+        data: {
+          url: url || "/",
+          source: "localhost-fallback",
+          timestamp: Date.now(),
+        },
+        actions: [
+          {
+            action: "view",
+            title: "👀 Voir",
+          },
+        ],
+      });
+
+      console.log("✅ Notification localhost fallback envoyée:", {
+        title,
+        body,
+      });
+      return true;
+    } catch (error) {
+      console.error("❌ Erreur notification localhost fallback:", error);
+      return false;
+    }
+  }
+
+  /**
    * Test manuel - Envoie une notification de test
    */
   public static async sendTestNotification(): Promise<boolean> {
@@ -581,7 +692,7 @@ export class OneSignalService {
   }
 
   /**
-   * Vérifie si OneSignal est initialisé
+   * Retourne si OneSignal est initialisé
    */
   public static isReady(): boolean {
     return this.isInitialized;
@@ -593,4 +704,16 @@ export class OneSignalService {
   public static getInstance(): OneSignalInstance | null {
     return this.oneSignalInstance;
   }
+}
+
+// Exposer OneSignalService globalement pour le debug
+declare global {
+  interface Window {
+    OneSignalServiceDebug: typeof OneSignalService;
+  }
+}
+
+// Ajouter le service au window pour accès global
+if (typeof window !== "undefined") {
+  window.OneSignalServiceDebug = OneSignalService;
 }
