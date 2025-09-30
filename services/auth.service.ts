@@ -3,9 +3,12 @@ import { User } from '../models';
 
 export class AuthService {
     private static instance: AuthService;
+    private currentUser: User | null = null;
+    private sessionRefreshedCallback: (() => void) | null = null;
 
     private constructor() {
         // ApiService is no longer needed here.
+        this.setupAuthStateListener();
     }
 
     public static getInstance(): AuthService {
@@ -13,6 +16,49 @@ export class AuthService {
             AuthService.instance = new AuthService();
         }
         return AuthService.instance;
+    }
+
+    // Configuration de l'écouteur d'état d'authentification
+    private setupAuthStateListener() {
+        supabase.auth.onAuthStateChange((event, session) => {
+            console.log('Auth state changed:', event);
+            
+            switch (event) {
+                case 'SIGNED_IN':
+                    // La session a été établie ou rétablie
+                    console.log('User signed in or session re-established');
+                    break;
+                    
+                case 'SIGNED_OUT':
+                    // L'utilisateur s'est déconnecté
+                    console.log('User signed out');
+                    this.currentUser = null;
+                    break;
+                    
+                case 'TOKEN_REFRESHED':
+                    // Les tokens ont été rafraîchis
+                    console.log('Session tokens refreshed');
+                    if (this.sessionRefreshedCallback) {
+                        this.sessionRefreshedCallback();
+                    }
+                    break;
+                    
+                case 'USER_UPDATED':
+                    // Les informations utilisateur ont été mises à jour
+                    console.log('User profile updated');
+                    break;
+                    
+                case 'INITIAL_SESSION':
+                    // Session initiale chargée depuis le stockage
+                    console.log('Initial session loaded from storage');
+                    break;
+            }
+        });
+    }
+
+    // Définir un callback pour être notifié lorsque la session est rafraîchie
+    public setSessionRefreshedCallback(callback: () => void) {
+        this.sessionRefreshedCallback = callback;
     }
 
     public async getCurrentUser(): Promise<User | null> {
@@ -46,7 +92,7 @@ export class AuthService {
 
             // Map snake_case to camelCase to match User interface
             // FIX: Removed deprecated 'solde' and 'solde_revenus' properties. Balances are managed at the agency level.
-            return {
+            this.currentUser = {
                 id: userProfile.id,
                 name: userProfile.name,
                 firstName: userProfile.first_name,
@@ -71,6 +117,8 @@ export class AuthService {
                 address: userProfile.address,
                 idCardImageUrl: userProfile.id_card_image_url
             } as User;
+            
+            return this.currentUser;
         }
 
         return null;
@@ -112,7 +160,7 @@ export class AuthService {
             
             // Map snake_case to camelCase to match User interface
             // FIX: Removed deprecated 'solde' and 'solde_revenus' properties. Balances are managed at the agency level.
-            return {
+            this.currentUser = {
                 id: userProfile.id,
                 name: userProfile.name,
                 firstName: userProfile.first_name,
@@ -137,15 +185,44 @@ export class AuthService {
                 address: userProfile.address,
                 idCardImageUrl: userProfile.id_card_image_url
             } as User;
+            
+            return this.currentUser;
         }
         
         return null;
     }
 
     public async logout(): Promise<void> {
+        this.currentUser = null;
         const { error } = await supabase.auth.signOut();
         if (error) {
             console.error('Supabase logout error:', error);
+        }
+    }
+    
+    // Méthode pour vérifier si la session est valide
+    public async isSessionValid(): Promise<boolean> {
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            return !!session?.user;
+        } catch (error) {
+            console.error('Error checking session validity:', error);
+            return false;
+        }
+    }
+    
+    // Méthode pour rafraîchir manuellement la session si nécessaire
+    public async refreshSession(): Promise<boolean> {
+        try {
+            const { data, error } = await supabase.auth.refreshSession();
+            if (error) {
+                console.error('Error refreshing session:', error);
+                return false;
+            }
+            return !!data.session;
+        } catch (error) {
+            console.error('Error during session refresh:', error);
+            return false;
         }
     }
 }

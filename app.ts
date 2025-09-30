@@ -55,6 +55,13 @@ export class App {
     this.addGlobalEventListeners();
 
     const authService = AuthService.getInstance();
+    
+    // Configurer le callback pour les rafraîchissements de session
+    authService.setSessionRefreshedCallback(() => {
+      console.log('Session refreshed, updating application state');
+      // Ici, vous pouvez mettre à jour l'état de l'application si nécessaire
+    });
+
     const user = await authService.getCurrentUser();
 
     try {
@@ -198,9 +205,12 @@ export class App {
   private startUserStatusCheck = () => {
     this.statusCheckInterval = window.setInterval(async () => {
       const authService = AuthService.getInstance();
-      const user = await authService.getCurrentUser();
-      if (!user) this.handleLogout();
-    }, 30000);
+      // Utiliser la nouvelle méthode de vérification de session
+      const isSessionValid = await authService.isSessionValid();
+      if (!isSessionValid) {
+        this.handleLogout();
+      }
+    }, 30000); // Vérifier toutes les 30 secondes
   };
 
   private stopUserStatusCheck = () => {

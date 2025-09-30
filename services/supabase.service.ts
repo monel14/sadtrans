@@ -1,7 +1,3 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
 import { createClient } from '@supabase/supabase-js';
 
 // Using hardcoded keys as process.env is not available in this environment.
@@ -15,7 +11,16 @@ if (!supabaseUrl || !supabaseAnonKey) {
     throw new Error(errorMsg);
 }
 
+// Configuration améliorée pour la gestion automatique des sessions
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    // Activer le rafraîchissement automatique des tokens
+    autoRefreshToken: true,
+    // Persister la session dans le stockage local
+    persistSession: true,
+    // Détecter la session dans l'URL (utile pour les liens de récupération de mot de passe)
+    detectSessionInUrl: true
+  },
   realtime: {
     params: {
       eventsPerSecond: 2
