@@ -1,48 +1,90 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="fr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Maquette - Plateforme de Transfert d'Argent B2B</title>
-    <meta name="theme-color" content="#7c3aed">
-    <link rel="manifest" href="manifest.json">
-    
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <link rel="stylesheet" href="/index.css">
-<script type="importmap">
-{
-  "imports": {
-    "@supabase/supabase-js": "https://aistudiocdn.com/@supabase/supabase-js@^2.57.4"
-  }
-}
-</script>
-<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
-</head>
-<body>
-    <div id="app"></div>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script type="module" src="/index.tsx"></script>
-    <script>
-        // Ajouter un écouteur pour vérifier que OneSignal est chargé
-        window.addEventListener('load', function() {
-            // Vérifier si OneSignal est chargé après un délai
-            setTimeout(function() {
-                if (typeof window.OneSignal !== 'undefined') {
-                    console.log('OneSignal SDK chargé avec succès');
-                } else {
-                    console.warn('OneSignal SDK non chargé - vérification du chargement différée');
-                    // Réessayer après 2 secondes supplémentaires
-                    setTimeout(function() {
-                        if (typeof window.OneSignal !== 'undefined') {
-                            console.log('OneSignal SDK chargé avec succès (deuxième tentative)');
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Maquette - Plateforme de Transfert d'Argent B2B</title>
+        <meta name="theme-color" content="#7c3aed" />
+        <link rel="manifest" href="manifest.json" />
+
+        <link
+            href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+            rel="stylesheet"
+        />
+        <link
+            rel="stylesheet"
+            href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
+        />
+        <link rel="stylesheet" href="/index.css" />
+        <script type="importmap">
+            {
+                "imports": {
+                    "@supabase/supabase-js": "https://aistudiocdn.com/@supabase/supabase-js@^2.57.4"
+                }
+            }
+        </script>
+        <script>
+            // OneSignal SDK loading with enhanced error handling
+            (function () {
+                let oneSignalLoaded = false;
+                let loadingTimeout;
+
+                // Function to load OneSignal SDK
+                function loadOneSignalSDK() {
+                    return new Promise((resolve, reject) => {
+                        const script = document.createElement("script");
+                        script.src =
+                            "https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js";
+                        script.async = true;
+                        script.defer = true;
+
+                        script.onload = function () {
+                            oneSignalLoaded = true;
+                            console.log(
+                                "OneSignal SDK script loaded successfully",
+                            );
+                            resolve();
+                        };
+
+                        script.onerror = function () {
+                            console.warn(
+                                "Failed to load OneSignal SDK from CDN",
+                            );
+                            reject(new Error("OneSignal SDK failed to load"));
+                        };
+
+                        document.head.appendChild(script);
+                    });
+                }
+
+                // Initialize OneSignal loading
+                loadOneSignalSDK().catch(function (error) {
+                    console.warn(
+                        "OneSignal SDK unavailable, continuing without push notifications:",
+                        error,
+                    );
+                });
+
+                // Fallback check
+                window.addEventListener("load", function () {
+                    setTimeout(function () {
+                        if (typeof window.OneSignal !== "undefined") {
+                            console.log("OneSignal SDK available and ready");
                         } else {
-                            console.error('OneSignal SDK non chargé après plusieurs tentatives');
+                            console.warn(
+                                "OneSignal SDK not available - push notifications disabled",
+                            );
+                            // Create a mock OneSignal object to prevent errors
+                            window.OneSignal = null;
                         }
                     }, 2000);
-                }
-            }, 1000);
-        });
-    </script>
-</body>
+                });
+            })();
+        </script>
+    </head>
+    <body>
+        <div id="app"></div>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <script type="module" src="/index.tsx"></script>
+    </body>
 </html>

@@ -88,17 +88,13 @@ export function renderHeader(user: User): HTMLElement {
     // Vérifier l'état actuel des notifications push
     const checkPushNotificationStatus = () => {
         console.log('Vérification de l\'état des notifications push');
-        // La logique est maintenant gérée par les écouteurs d'événements
-        // userSubscribedToPush et userNotSubscribedToPush
+        // Importer le service OneSignal dynamiquement pour éviter les dépendances circulaires
+        import('../services/onesignal.service').then(({ OneSignalService }) => {
+            if (OneSignalService.isReady()) {
+                OneSignalService.checkSubscription();
+            }
+        });
     };
-
-    // Écouter l'événement de statut des notifications push
-    document.body.addEventListener('pushNotificationStatus', (event: Event) => {
-        console.log('Événement pushNotificationStatus reçu');
-        const customEvent = event as CustomEvent;
-        const { subscribed } = customEvent.detail;
-        updatePushNotificationButton(subscribed);
-    });
 
     // Écouter l'événement lorsque l'utilisateur n'est pas abonné aux notifications
     document.body.addEventListener('userNotSubscribedToPush', (event: Event) => {
@@ -109,7 +105,8 @@ export function renderHeader(user: User): HTMLElement {
     // Écouter l'événement lorsque l'utilisateur est abonné aux notifications
     document.body.addEventListener('userSubscribedToPush', (event: Event) => {
         console.log('Événement userSubscribedToPush reçu');
-        updatePushNotificationButton(true);
+        const customEvent = event as CustomEvent;
+        updatePushNotificationButton(customEvent.detail?.subscribed ?? true);
     });
 
     // Initial check

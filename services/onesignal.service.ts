@@ -1,8 +1,6 @@
 // Types pour OneSignal (SDK moderne)
 interface OneSignalConfig {
   appId: string;
-  serviceWorkerPath?: string;
-  serviceWorkerUpdaterPath?: string;
   allowLocalhostAsSecureOrigin?: boolean;
 }
 
@@ -19,7 +17,10 @@ interface OneSignalInstance {
     PushSubscription?: {
       optIn: () => Promise<void>;
       optOut: () => Promise<void>;
-      addEventListener: (event: string, callback: (change: any) => void) => void;
+      addEventListener: (
+        event: string,
+        callback: (change: any) => void,
+      ) => void;
     };
   };
   Notifications?: {
@@ -27,10 +28,14 @@ interface OneSignalInstance {
     permission: boolean;
     addEventListener: (event: string, callback: (event: any) => void) => void;
   };
-  isPushNotificationsEnabled?: () => Promise<boolean>;
 }
 
-// Ne pas redéclarer Window.OneSignalDeferred ici si déjà déclaré dans vite-env.d.ts
+declare global {
+  interface Window {
+    OneSignal: any;
+    OneSignalDeferred: any[];
+  }
+}
 
 const ONE_SIGNAL_APP_ID = "aa956232-9277-40b3-b0f0-44c2b67f7a7b";
 
@@ -46,19 +51,21 @@ export class OneSignalService {
    * Initialise OneSignal et associe optionnellement un userId
    */
   public static async init(userId?: string): Promise<void> {
-    // Si déjà initialisé, on login si userId fourni
     if (this.isInitialized) {
-      if (userId) {
+      console.log("OneSignal déjà initialisé");
+      if (userId && userId !== this.currentUserId) {
         await this.login(userId);
       }
       return;
     }
 
-    // Si initialisation en cours, attendre la fin
-    if (this.isInitializing && this.initPromise) {
-      await this.initPromise;
-      if (userId && this.isInitialized) {
-        await this.login(userId);
+    if (this.isInitializing) {
+      console.log("OneSignal en cours d'initialisation, attente...");
+      if (this.initPromise) {
+        await this.initPromise;
+        if (userId && userId !== this.currentUserId) {
+          await this.login(userId);
+        }
       }
       return;
     }
@@ -67,15 +74,26 @@ export class OneSignalService {
     window.OneSignalDeferred = window.OneSignalDeferred || [];
 
     this.initPromise = new Promise<void>((resolve, reject) => {
+      // Add timeout to prevent infinite waiting
+      const timeout = setTimeout(() => {
+        console.warn(
+          "OneSignal initialization timeout - continuing without push notifications",
+        );
+        this.isInitializing = false;
+        this.initPromise = null;
+        resolve();
+      }, 10000); // 10 second timeout
+
       window.OneSignalDeferred.push(async (OneSignal: any) => {
         try {
+          clearTimeout(timeout);
           this.oneSignalInstance = OneSignal;
 
           await OneSignal.init({
             appId: ONE_SIGNAL_APP_ID,
-            serviceWorkerPath: '/OneSignalSDKWorker.js',
-            serviceWorkerUpdaterPath: '/OneSignalSDKUpdaterWorker.js',
             allowLocalhostAsSecureOrigin: true,
+            serviceWorkerParam: { scope: "/" },
+            serviceWorkerPath: "OneSignalSDKWorker.js",
           });
 
           console.log("OneSignal initialisé avec succès");
@@ -88,26 +106,48 @@ export class OneSignalService {
             await this.safeLogin(OneSignal, userId);
           }
 
+          this.currentUserId = userId || null;
           this.isInitialized = true;
           this.isInitializing = false;
 
-          // Traiter la file d'attente
-          await this.processOperationQueue();
-          
-          // Vérifier l'abonnement
-          await this.checkSubscription();
+          // Traiter les opérations en file d'attente
+          this.processOperationQueue();
 
           resolve();
         } catch (error) {
+          clearTimeout(timeout);
           console.error("Erreur lors de l'init OneSignal:", error);
-          this.isInitializing = false;
-          this.initPromise = null;
-          reject(error);
+
+          // Check if it's a service worker error
+          if (
+            error instanceof Error &&
+            (error.message.includes("MIME type") ||
+              error.message.includes("ServiceWorker") ||
+              error.message.includes("importScripts"))
+          ) {
+            console.warn(
+              "Service worker error detected - continuing in fallback mode",
+            );
+            this.isInitialized = false; // Keep as false to prevent further attempts
+            this.isInitializing = false;
+            this.initPromise = null;
+            resolve(); // Don't reject, just continue without push notifications
+          } else {
+            this.isInitializing = false;
+            this.initPromise = null;
+            reject(error);
+          }
         }
       });
     });
 
-    return this.initPromise;
+    // Attendre l'initialisation
+    try {
+      await this.initPromise;
+    } catch (error) {
+      console.error("Failed to initialize OneSignal:", error);
+      // Continue execution even if OneSignal fails to initialize
+    }
   }
 
   /**
@@ -117,15 +157,25 @@ export class OneSignalService {
     try {
       // SDK moderne : utiliser Notifications.addEventListener
       if (OneSignal.Notifications?.addEventListener) {
-        OneSignal.Notifications.addEventListener('click', (event: any) => {
-          console.log('Notification OneSignal cliquée:', event);
+        OneSignal.Notifications.addEventListener("click", (event: any) => {
+          console.log("Notification OneSignal cliquée:", event);
           if (event?.notification?.url) {
-            window.open(event.notification.url, '_blank');
+            window.open(event.notification.url, "_blank");
           }
         });
-        console.log('Écouteur de clic OneSignal attaché');
+
+        // Écouter les changements de permission
+        OneSignal.Notifications.addEventListener(
+          "permissionChange",
+          (permission: boolean) => {
+            console.log("Permission de notification changée:", permission);
+            this.dispatchSubscriptionEvent(permission);
+          },
+        );
+
+        console.log("Écouteurs OneSignal attachés");
       } else {
-        console.warn('OneSignal.Notifications.addEventListener non disponible');
+        console.warn("OneSignal.Notifications.addEventListener non disponible");
       }
     } catch (error) {
       console.error("Erreur lors de l'attachement des événements:", error);
@@ -137,10 +187,10 @@ export class OneSignalService {
    */
   private static async safeLogin(
     OneSignal: OneSignalInstance,
-    userId: string
+    userId: string,
   ): Promise<boolean> {
     try {
-      if (typeof OneSignal.login === 'function') {
+      if (typeof OneSignal.login === "function") {
         await OneSignal.login(userId);
         this.currentUserId = userId;
         console.log(`OneSignal user logged in : ${userId}`);
@@ -166,7 +216,10 @@ export class OneSignalService {
       try {
         await operation();
       } catch (error) {
-        console.error("Erreur lors de l'exécution d'une opération en attente:", error);
+        console.error(
+          "Erreur lors de l'exécution d'une opération en attente:",
+          error,
+        );
       }
     }
   }
@@ -194,7 +247,9 @@ export class OneSignalService {
     };
 
     if (!this.isInitialized) {
-      console.log("OneSignal pas encore initialisé, mise en file d'attente de login");
+      console.log(
+        "OneSignal pas encore initialisé, mise en file d'attente de login",
+      );
       return new Promise<void>((resolve) => {
         this.operationQueue.push(async () => {
           await executeLogin();
@@ -212,7 +267,10 @@ export class OneSignalService {
   public static async logout(): Promise<void> {
     const executeLogout = async () => {
       try {
-        if (this.oneSignalInstance && typeof this.oneSignalInstance.logout === 'function') {
+        if (
+          this.oneSignalInstance &&
+          typeof this.oneSignalInstance.logout === "function"
+        ) {
           await this.oneSignalInstance.logout();
           console.log("OneSignal user logged out");
         } else {
@@ -221,13 +279,15 @@ export class OneSignalService {
       } catch (error) {
         console.error("Erreur lors du logout OneSignal :", error);
       }
-      
+
       this.currentUserId = null;
       console.log("OneSignal user state effacé.");
     };
 
     if (!this.isInitialized) {
-      console.log("OneSignal pas encore initialisé, mise en file d'attente de logout");
+      console.log(
+        "OneSignal pas encore initialisé, mise en file d'attente de logout",
+      );
       return new Promise<void>((resolve) => {
         this.operationQueue.push(async () => {
           await executeLogout();
@@ -246,7 +306,7 @@ export class OneSignalService {
     const executeCheck = async () => {
       try {
         if (!this.oneSignalInstance) {
-          console.error('OneSignal instance non disponible');
+          console.error("OneSignal instance non disponible");
           this.dispatchSubscriptionEvent(false);
           return;
         }
@@ -254,17 +314,12 @@ export class OneSignalService {
         // SDK moderne : vérifier via Notifications.permission
         if (this.oneSignalInstance.Notifications) {
           const isEnabled = this.oneSignalInstance.Notifications.permission;
-          console.log(`Statut des notifications: ${isEnabled ? 'activées' : 'désactivées'}`);
+          console.log(
+            `Statut des notifications: ${isEnabled ? "activées" : "désactivées"}`,
+          );
           this.dispatchSubscriptionEvent(isEnabled);
-        } 
-        // Fallback pour anciennes versions
-        else if (typeof this.oneSignalInstance.isPushNotificationsEnabled === 'function') {
-          const isEnabled = await this.oneSignalInstance.isPushNotificationsEnabled();
-          console.log(`Statut des notifications: ${isEnabled ? 'activées' : 'désactivées'}`);
-          this.dispatchSubscriptionEvent(isEnabled);
-        } 
-        else {
-          console.warn('Impossible de vérifier le statut des notifications');
+        } else {
+          console.warn("Impossible de vérifier le statut des notifications");
           this.dispatchSubscriptionEvent(false);
         }
       } catch (error) {
@@ -274,7 +329,9 @@ export class OneSignalService {
     };
 
     if (!this.isInitialized) {
-      console.log("OneSignal pas encore initialisé, mise en file d'attente de checkSubscription");
+      console.log(
+        "OneSignal pas encore initialisé, mise en file d'attente de checkSubscription",
+      );
       this.operationQueue.push(executeCheck);
       return;
     }
@@ -286,8 +343,12 @@ export class OneSignalService {
    * Envoie un événement personnalisé sur le statut d'abonnement
    */
   private static dispatchSubscriptionEvent(isSubscribed: boolean): void {
-    const eventName = isSubscribed ? 'userSubscribedToPush' : 'userNotSubscribedToPush';
-    document.body.dispatchEvent(new CustomEvent(eventName));
+    const eventName = isSubscribed
+      ? "userSubscribedToPush"
+      : "userNotSubscribedToPush";
+    document.body.dispatchEvent(
+      new CustomEvent(eventName, { detail: { subscribed: isSubscribed } }),
+    );
   }
 
   /**
@@ -297,34 +358,34 @@ export class OneSignalService {
     const executeRequest = async (): Promise<boolean> => {
       try {
         if (!this.oneSignalInstance) {
-          console.error('OneSignal instance non disponible');
+          console.error("OneSignal instance non disponible");
           return false;
         }
 
         // SDK moderne : utiliser Notifications.requestPermission
         if (this.oneSignalInstance.Notifications?.requestPermission) {
-          const result = await this.oneSignalInstance.Notifications.requestPermission();
+          const result =
+            await this.oneSignalInstance.Notifications.requestPermission();
           console.log(`Permission demandée, résultat: ${result}`);
+          // Vérifier l'état après la demande
+          await this.checkSubscription();
           return result;
-        } 
-        // Fallback : utiliser User.PushSubscription.optIn
-        else if (this.oneSignalInstance.User?.PushSubscription?.optIn) {
-          await this.oneSignalInstance.User.PushSubscription.optIn();
-          console.log('Push notifications opt-in réussi');
-          return true;
-        } 
-        else {
-          console.error('Aucune méthode disponible pour demander la permission');
+        } else {
+          console.error(
+            "Aucune méthode disponible pour demander la permission",
+          );
           return false;
         }
       } catch (error) {
-        console.error('Erreur lors de la demande de permission:', error);
+        console.error("Erreur lors de la demande de permission:", error);
         return false;
       }
     };
 
     if (!this.isInitialized) {
-      console.log("OneSignal pas encore initialisé, mise en file d'attente de requestPermission");
+      console.log(
+        "OneSignal pas encore initialisé, mise en file d'attente de requestPermission",
+      );
       return new Promise<boolean>((resolve) => {
         this.operationQueue.push(async () => {
           const result = await executeRequest();
@@ -347,28 +408,168 @@ export class OneSignalService {
       }
       return granted;
     } catch (error) {
-      console.error('Erreur lors de l\'activation des notifications:', error);
+      console.error("Erreur lors de l'activation des notifications:", error);
       return false;
     }
   }
 
   /**
-   * Désactive les notifications push (SDK moderne)
+   * Debug: Obtient des informations détaillées sur l'abonnement OneSignal
    */
-  public static async disablePushNotifications(): Promise<boolean> {
+  public static async getSubscriptionDebugInfo(): Promise<any> {
     try {
-      if (!this.oneSignalInstance?.User?.PushSubscription?.optOut) {
-        console.error('optOut non disponible');
+      if (!this.isInitialized || !this.oneSignalInstance) {
+        return {
+          error: "OneSignal not initialized",
+          isInitialized: this.isInitialized,
+          hasInstance: !!this.oneSignalInstance,
+        };
+      }
+
+      const debugInfo: any = {
+        isInitialized: this.isInitialized,
+        currentUserId: this.currentUserId,
+        hasInstance: !!this.oneSignalInstance,
+        browserPermission: "unknown",
+        oneSignalPermission: "unknown",
+        subscriptionId: "unknown",
+        isSubscribed: false,
+      };
+
+      // Vérifier les permissions du navigateur
+      if ("Notification" in window) {
+        debugInfo.browserPermission = Notification.permission;
+      }
+
+      // Vérifier les permissions OneSignal
+      if (this.oneSignalInstance.Notifications) {
+        debugInfo.oneSignalPermission =
+          this.oneSignalInstance.Notifications.permission;
+      }
+
+      // Essayer d'obtenir l'ID de souscription
+      if (
+        this.oneSignalInstance.User &&
+        this.oneSignalInstance.User.PushSubscription
+      ) {
+        try {
+          const subscription =
+            await this.oneSignalInstance.User.PushSubscription.id;
+          if (subscription) {
+            debugInfo.subscriptionId = subscription;
+            debugInfo.isSubscribed = true;
+          }
+        } catch (error) {
+          debugInfo.subscriptionError = error.message;
+        }
+      }
+
+      return debugInfo;
+    } catch (error) {
+      return {
+        error: "Failed to get debug info",
+        message: error.message,
+      };
+    }
+  }
+
+  /**
+   * Test manuel - Envoie une notification de test
+   */
+  public static async sendTestNotification(): Promise<boolean> {
+    try {
+      if (!this.isInitialized || !this.oneSignalInstance) {
+        console.error("OneSignal not initialized for test notification");
         return false;
       }
 
-      await this.oneSignalInstance.User.PushSubscription.optOut();
-      console.log('Push notifications opt-out réussi');
-      await this.checkSubscription();
-      return true;
-    } catch (error) {
-      console.error('Erreur lors de la désactivation des notifications:', error);
+      // Vérifier si l'utilisateur est abonné
+      const debugInfo = await this.getSubscriptionDebugInfo();
+      console.log("🧪 Debug info avant test:", debugInfo);
+
+      if (!debugInfo.isSubscribed) {
+        console.warn("User not subscribed to notifications");
+        return false;
+      }
+
+      // Utiliser l'API OneSignal pour envoyer une notification de test
+      if (this.oneSignalInstance.Notifications) {
+        try {
+          // Méthode alternative: utiliser l'API REST OneSignal
+          const testData = {
+            app_id: "aa956232-9277-40b3-b0f0-44c2b67f7a7b",
+            contents: { en: "Ceci est une notification de test!" },
+            headings: { en: "Test OneSignal" },
+            include_external_user_ids: [this.currentUserId],
+          };
+
+          console.log("🚀 Envoi de notification de test:", testData);
+
+          const response = await fetch(
+            "https://onesignal.com/api/v1/notifications",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: "Basic YOUR_REST_API_KEY", // Note: devrait être configuré côté serveur
+              },
+              body: JSON.stringify(testData),
+            },
+          );
+
+          if (response.ok) {
+            const result = await response.json();
+            console.log("✅ Notification de test envoyée:", result);
+            return true;
+          } else {
+            console.error(
+              "❌ Échec envoi notification de test:",
+              await response.text(),
+            );
+            return false;
+          }
+        } catch (error) {
+          console.error(
+            "Erreur lors de l'envoi de la notification de test:",
+            error,
+          );
+          return false;
+        }
+      }
+
       return false;
+    } catch (error) {
+      console.error("Erreur dans sendTestNotification:", error);
+      return false;
+    }
+  }
+
+  /**
+   * Force une vérification complète de l'état de OneSignal
+   */
+  public static async forcePermissionCheck(): Promise<void> {
+    try {
+      console.log("🔄 Vérification forcée des permissions...");
+
+      // 1. Vérifier les permissions du navigateur
+      if ("Notification" in window) {
+        console.log("📱 Permission navigateur:", Notification.permission);
+
+        if (Notification.permission === "default") {
+          console.log("⚠️  Permission non demandée, demande en cours...");
+          const permission = await Notification.requestPermission();
+          console.log("✅ Nouvelle permission:", permission);
+        }
+      }
+
+      // 2. Vérifier l'état OneSignal
+      await this.checkSubscription();
+
+      // 3. Afficher les informations de debug
+      const debugInfo = await this.getSubscriptionDebugInfo();
+      console.log("🔍 État complet OneSignal:", debugInfo);
+    } catch (error) {
+      console.error("Erreur lors de la vérification forcée:", error);
     }
   }
 
