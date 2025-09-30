@@ -4,33 +4,29 @@ import { renderSidebar } from './components/Sidebar';
 import { ToastContainer, ToastType } from './components/ToastContainer';
 import { AuthService } from './services/auth.service';
 import { DataService } from './services/data.service';
-import { AgentRequestRechargeModal } from './components/modals/AgentRequestRechargeModal';
-import { ViewProofModal } from './components/modals/ViewProofModal';
-import { AssignToSubAdminModal } from './components/modals/AssignToSubAdminModal';
-import { PartnerEditAgentModal } from './components/modals/PartnerEditAgentModal';
-import { AdminEditUserModal } from './components/modals/AdminEditUserModal';
-import { AdminEditPartnerModal } from './components/modals/AdminEditPartnerModal';
-import { AdminRejectRechargeModal } from './components/modals/AdminRejectRechargeModal';
-import { PartnerTransferRevenueModal } from './components/modals/PartnerTransferRevenueModal';
-import { ConfirmationModal } from './components/modals/ConfirmationModal';
-import { AdminAdjustBalanceModal } from './components/modals/AdminAdjustBalanceModal';
 import { RefreshService } from './services/refresh.service';
 import { OneSignalService } from './services/onesignal.service';
 import { renderHeader } from './components/Header';
 import { renderFooter } from './components/Footer';
 import { navigationLinks } from './config/navigation';
+import {
+    AgentRequestRechargeModal,
+    ViewProofModal,
+    AssignToSubAdminModal,
+    PartnerEditAgentModal,
+    AdminEditUserModal,
+    AdminEditPartnerModal,
+    AdminRejectRechargeModal,
+    PartnerTransferRevenueModal,
+    ConfirmationModal,
+    AdminAdjustBalanceModal
+} from './components/modals';
 
 export class App {
     private rootElement: HTMLElement;
     private currentUser: User | null = null;
-    private mainLayout: {
-        appContainer: HTMLElement,
-        mainContentArea: HTMLElement,
-        pageContent: HTMLElement,
-        sidebar: HTMLElement,
-        header: HTMLElement,
-        footer: HTMLElement,
-    } | null = null;
+    private mainLayout: any = null;
+    private toastContainer: ToastContainer | null = null;
 
     private agentRequestRechargeModal: AgentRequestRechargeModal | null = null;
     private viewProofModal: ViewProofModal | null = null;
@@ -42,36 +38,50 @@ export class App {
     private partnerTransferRevenueModal: PartnerTransferRevenueModal | null = null;
     private confirmationModal: ConfirmationModal | null = null;
     private adminAdjustBalanceModal: AdminAdjustBalanceModal | null = null;
-    private toastContainer: ToastContainer | null = null;
+
+    private statusCheckInterval: number | null = null;
 
     constructor(rootElement: HTMLElement) {
         this.rootElement = rootElement;
     }
 
     public async init() {
-        // Initialize OneSignal
-        OneSignalService.init();
-
-        // Initialize refresh service
+        // Initialisation des services
         RefreshService.getInstance();
-        
-        // Initialize DataService to ensure all partners have contracts
-        const dataService = DataService.getInstance();
-        await dataService.initialize();
-        
-        // Create and append the toast container
+        await DataService.getInstance().initialize();
+
+        // Toast container
         this.toastContainer = new ToastContainer();
         document.body.prepend(this.toastContainer.element);
 
-        // Events dispatched from within the #app container
+        this.addGlobalEventListeners();
+
+        // Initialisation OneSignal avec l'ID utilisateur si disponible
+        const authService = AuthService.getInstance();
+        const user = await authService.getCurrentUser();
+        await OneSignalService.init(user?.id);
+
+        if (user) {
+            this.currentUser = user;
+            DataService.getInstance().reSubscribe();
+
+            this.renderMainLayout();
+            this.preFetchData();
+            this.startUserStatusCheck();
+
+            console.log("OneSignal initialisé et utilisateur connecté");
+        } else {
+            this.showLoginPage();
+        }
+    }
+
+    private addGlobalEventListeners() {
         this.rootElement.addEventListener('loginSuccess', this.handleLoginSuccess as EventListener);
-        // FIX: Added 'as EventListener' for consistency and type safety.
         this.rootElement.addEventListener('logout', this.handleLogout as EventListener);
         this.rootElement.addEventListener('navigateTo', this.navigateTo as EventListener);
         this.rootElement.addEventListener('updateActiveNav', this.updateActiveNav as EventListener);
         this.rootElement.addEventListener('updateCurrentUser', this.handleUpdateCurrentUser as EventListener);
 
-        // Global events that can be dispatched from anywhere, including modals attached to document.body
         document.body.addEventListener('openAgentRechargeModal', this.handleOpenAgentRechargeModal as EventListener);
         document.body.addEventListener('openAssignModal', this.handleOpenAssignModal as EventListener);
         document.body.addEventListener('openViewProofModal', this.handleOpenViewProofModal as EventListener);
@@ -83,162 +93,7 @@ export class App {
         document.body.addEventListener('openConfirmationModal', this.handleOpenConfirmationModal as EventListener);
         document.body.addEventListener('openAdminAdjustBalanceModal', this.handleOpenAdminAdjustBalanceModal as EventListener);
         document.body.addEventListener('showToast', this.handleShowToast as EventListener);
-        // Ajout du gestionnaire pour l'événement servicesLoaded
         document.body.addEventListener('servicesLoaded', this.handleServicesLoaded as EventListener);
-        
-        // Check for an active session on startup
-        const authService = AuthService.getInstance();
-        const user = await authService.getCurrentUser();
-        
-        if (user) {
-            this.currentUser = user;
-            
-            // Re-subscribe to realtime channels with authenticated session
-            const dataService = DataService.getInstance();
-            dataService.reSubscribe();
-            
-            this.renderMainLayout();
-            // FIX: Corrected invalid method name 'pre-fetchData' to 'preFetchData'.
-            this.preFetchData(); // Pre-fetch data to warm up cache
-            this.startUserStatusCheck();
-            
-            // Login to OneSignal with the existing session
-            OneSignalService.login();
-            
-            // NE PAS demander automatiquement la permission au démarrage
-            // La permission sera demandée via le bouton d'activation des notifications
-            console.log('OneSignal initialisé, en attente d\'action utilisateur pour les notifications');
-        } else {
-            this.showLoginPage();
-        }
-
-        // this.registerServiceWorker(); // Disabled to avoid conflict with OneSignal Service Worker
-    }
-
-    /*
-    private registerServiceWorker() {
-        if ('serviceWorker' in navigator) {
-            // Enregistrement immédiat pour éviter le délai 'load'
-            navigator.serviceWorker.register('/custom-sw.js', { scope: '/' })
-                .then(registration => {
-                    console.log('ServiceWorker registration successful with scope: ', registration.scope);
-                    console.log('ServiceWorker state:', registration.active?.state || 'no active');
-                    
-                    // Vérifier si une mise à jour est disponible
-                    registration.addEventListener('updatefound', () => {
-                        const installingWorker = registration.installing;
-                        if (installingWorker) {
-                            installingWorker.addEventListener('statechange', () => {
-                                if (installingWorker.state === 'installed') {
-                                    if (navigator.serviceWorker.controller) {
-                                        // Nouvelle mise à jour disponible
-                                        console.log('New content is available; please refresh.');
-                                        // Optionnellement, afficher une notification à l'utilisateur
-                                        // pour qu'il rafraîchisse la page
-                                        this.notifyUserOfUpdate();
-                                    } else {
-                                        // Première installation
-                                        console.log('Content is cached for offline use.');
-                                    }
-                                } else if (installingWorker.state === 'activated') {
-                                    console.log('New ServiceWorker is activated and ready for push!');
-                                    // Attendre un peu pour s'assurer que tout est prêt
-                                    // setTimeout(() => subscribeToPushNotifications(), 1000); // Remplacé par OneSignal
-                                }
-                            });
-                        }
-                    });
-                    
-                    // Vérifier périodiquement les mises à jour (toutes les 10 minutes)
-                    setInterval(() => {
-                        registration.update();
-                    }, 1000 * 60 * 10);
-                    
-                    // Si le SW est déjà actif
-                    if (registration.active) {
-                        // Vérifier si c'est un nouveau SW qui vient de prendre le contrôle
-                        if (navigator.serviceWorker.controller) {
-                            console.log('ServiceWorker is already active and controlling the page');
-                            // Attendre un peu pour s'assurer que tout est prêt
-                            // setTimeout(() => subscribeToPushNotifications(), 1000); // Remplacé par OneSignal
-                        }
-                    }
-                })
-                .catch(error => {
-                    console.error('ServiceWorker registration failed: ', error);
-                });
-    
-            // Écouter les changements d'état pour debugging
-            // Suppression du rechargement automatique qui causait des rechargements infinis
-            // navigator.serviceWorker.addEventListener('controllerchange', () => {
-            //     console.log('New Service Worker took over!');
-            //     // Recharger la page quand un nouveau service worker prend le contrôle
-            //     window.location.reload();
-            // });
-        } else {
-            console.log('Service Workers non supportés dans ce navigateur.');
-        }
-    }
-    */
-
-    // Méthode pour envoyer un message au Service Worker en attendant qu'il soit prêt
-    private sendMessageToServiceWorker(message: any): Promise<void> {
-        return new Promise((resolve, reject) => {
-            if ('serviceWorker' in navigator) {
-                // Attendre que le service worker soit prêt
-                navigator.serviceWorker.ready.then((registration) => {
-                    if (registration.active) {
-                        registration.active.postMessage(message);
-                        resolve();
-                    } else {
-                        reject(new Error('Service Worker is not active'));
-                    }
-                }).catch((error) => {
-                    reject(error);
-                });
-            } else {
-                reject(new Error('Service Workers not supported'));
-            }
-        });
-    }
-
-    // Méthode pour notifier l'utilisateur d'une mise à jour disponible
-    private notifyUserOfUpdate() {
-        // Créer une notification discrète en haut de la page
-        const notification = document.createElement('div');
-        notification.style.cssText = `
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            background: #4f46e5;
-            color: white;
-            padding: 12px;
-            text-align: center;
-            z-index: 9999;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-        `;
-        notification.innerHTML = `
-            Une nouvelle version est disponible. 
-            <button onclick="location.reload()" style="
-                background: white;
-                color: #4f46e5;
-                border: none;
-                padding: 4px 8px;
-                border-radius: 4px;
-                margin-left: 8px;
-                cursor: pointer;
-                font-weight: bold;
-            ">Recharger</button>
-        `;
-        document.body.appendChild(notification);
-        
-        // Supprimer la notification après 10 secondes
-        setTimeout(() => {
-            if (notification.parentNode) {
-                notification.parentNode.removeChild(notification);
-            }
-        }, 10000);
     }
 
     private showLoginPage() {
@@ -247,321 +102,57 @@ export class App {
         this.rootElement.appendChild(loginPage);
     }
 
-    // FIX: Converted to arrow function to correctly bind `this` and handle CustomEvent details.
     private handleLoginSuccess = async (event: Event) => {
         const customEvent = event as CustomEvent;
         this.currentUser = customEvent.detail.user;
-        
-        // Re-subscribe to realtime channels with authenticated session
-        const dataService = DataService.getInstance();
-        dataService.reSubscribe();
-        
-        // Login to OneSignal
-        OneSignalService.login();
-        
-        // NE PAS demander automatiquement la permission lors de la connexion
-        // La permission sera demandée via le bouton d'activation des notifications
-        console.log('Utilisateur connecté, OneSignal initialisé, en attente d\'action utilisateur pour les notifications');
-        
+        DataService.getInstance().reSubscribe();
         this.renderMainLayout();
-        // FIX: Corrected invalid method name 'pre-fetchData' to 'preFetchData'.
-        this.preFetchData(); // Pre-fetch data to warm up cache
+        this.preFetchData();
+        // Le login OneSignal est maintenant géré automatiquement dans init()
+        console.log("Utilisateur connecté");
     }
 
-    // FIX: Corrected invalid method name 'pre-fetchData' to 'preFetchData'.
     private preFetchData = async () => {
-        // This is a "fire and forget" call to warm up the cache.
-        // We don't await the result here to avoid blocking the UI.
-        // The DataService will cache the results for later use.
         const dataService = DataService.getInstance();
-        console.log("Pre-fetching data to warm up cache...");
         dataService.getAllOperationTypes();
         dataService.getCardTypes();
         dataService.getUsers();
         dataService.getPartners();
-        // Commission profiles preloading removed - commissions are now configured directly in contracts
         dataService.getContracts();
     }
 
-    private statusCheckInterval: number | null = null;
-
     private startUserStatusCheck = () => {
-        // Check user status every 30 seconds
         this.statusCheckInterval = window.setInterval(async () => {
             const authService = AuthService.getInstance();
             const user = await authService.getCurrentUser();
-            
-            if (!user) {
-                // User was logged out (probably due to suspended status)
-                this.handleLogout();
-            }
-        }, 30000); // 30 seconds
+            if (!user) this.handleLogout();
+        }, 30000);
     }
 
     private stopUserStatusCheck = () => {
-        if (this.statusCheckInterval) {
-            clearInterval(this.statusCheckInterval);
-            this.statusCheckInterval = null;
-        }
+        if (this.statusCheckInterval) clearInterval(this.statusCheckInterval);
     }
 
-    // FIX: Converted to arrow function to correctly bind `this`.
     private handleLogout = async () => {
         this.stopUserStatusCheck();
-        OneSignalService.logout(); // Logout from OneSignal
+        OneSignalService.logout();
         await AuthService.getInstance().logout();
         this.currentUser = null;
         this.mainLayout = null;
-        
-        // Clear saved navigation state on logout
         localStorage.removeItem('currentNavigation');
-        
         this.showLoginPage();
     }
-    
-    // FIX: Converted to arrow function and added type safety for event.
-    private handleUpdateCurrentUser = (event: Event) => {
-        const customEvent = event as CustomEvent;
-        if (customEvent.detail.user && this.currentUser && customEvent.detail.user.id === this.currentUser.id) {
-            this.currentUser = customEvent.detail.user;
-        }
-    }
 
-    // Gestionnaire pour l'événement servicesLoaded
-    private handleServicesLoaded = () => {
-        // Rafraîchir l'affichage de la navigation si l'interface est déjà rendue
-        if (this.mainLayout && this.currentUser) {
-            // Mettre à jour la barre latérale avec les nouveaux services
-            const newSidebar = renderSidebar(this.currentUser);
-            this.mainLayout.appContainer.replaceChild(newSidebar, this.mainLayout.sidebar);
-            this.mainLayout.sidebar = newSidebar;
-            
-            // Réattacher les gestionnaires d'événements
-            const menuToggle = this.mainLayout.header.querySelector('#menuToggle');
-            menuToggle?.addEventListener('click', () => {
-                this.mainLayout!.sidebar.classList.toggle('-translate-x-full');
-            });
-        }
-    }
-
-    // FIX: Converted to arrow function and added type safety for event.
-    private updateActiveNav = (event: Event) => {
-        if (!this.mainLayout) return;
-        const customEvent = event as CustomEvent;
-        const { navId } = customEvent.detail;
-
-        const sidebarLinks = this.mainLayout.sidebar.querySelectorAll('#appNavigation a');
-        sidebarLinks.forEach(link => {
-            const linkElement = link as HTMLElement;
-            const isActive = linkElement.dataset.navId === navId;
-            linkElement.classList.toggle('active', isActive);
-            
-            // Open parent <details> if active link is inside
-            if (isActive) {
-                const parentDetails = linkElement.closest('details');
-                if (parentDetails && !parentDetails.open) {
-                    parentDetails.open = true;
-                }
-            }
-        });
-    }
-
-    // FIX: Converted to arrow function and added type safety for event.
-    private navigateTo = async (event: Event) => {
-        if (!this.mainLayout || !this.currentUser) return;
-        const customEvent = event as CustomEvent;
-        const { viewFn, label, action, navId, operationTypeId } = customEvent.detail;
-        
-        if (action) {
-            action();
-            return;
-        }
-
-        if (viewFn) {
-            // Save current navigation state to localStorage
-            const navigationState = {
-                navId,
-                label,
-                operationTypeId,
-                userRole: this.currentUser.role
-            };
-            localStorage.setItem('currentNavigation', JSON.stringify(navigationState));
-
-            // Update page title
-            const pageTitleEl = this.mainLayout.header.querySelector('#pageTitle') as HTMLElement;
-            if (pageTitleEl) pageTitleEl.textContent = label;
-            
-            // Update active sidebar link
-            this.updateActiveNav({ detail: { navId } } as CustomEvent);
-
-            // Clean up previous view if it has a cleanup function
-            const currentPageContent = this.mainLayout.pageContent;
-            if (currentPageContent.firstChild && (currentPageContent.firstChild as any).cleanup) {
-                (currentPageContent.firstChild as any).cleanup();
-            }
-
-            // Render view content
-            this.mainLayout.pageContent.innerHTML = '<div class="text-center p-8"><i class="fas fa-spinner fa-spin text-3xl text-indigo-500"></i></div>';
-            try {
-                const viewContent = await viewFn(this.currentUser, operationTypeId);
-                this.mainLayout.pageContent.innerHTML = '';
-                this.mainLayout.pageContent.appendChild(viewContent);
-            } catch (error) {
-                console.error("Error rendering view:", error);
-                this.mainLayout.pageContent.innerHTML = '<div class="text-center p-8 text-red-500">Erreur lors du chargement de la page.</div>';
-            }
-        }
-        
-        // Close sidebar on navigation on mobile
-        if (window.innerWidth < 768) {
-            this.mainLayout.sidebar.classList.add('-translate-x-full');
-        }
-    }
-
-    // FIX: Converted to arrow function and added type safety for event.
-    private handleShowToast = (event: Event) => {
-        const customEvent = event as CustomEvent;
-        const { message, type } = customEvent.detail as { message: string, type: ToastType };
-        if (this.toastContainer) {
-            this.toastContainer.showToast(message, type);
-        }
-    }
-
-    private initializeModals = async () => {
-        if (this.agentRequestRechargeModal) return; // Already initialized
-
-        this.agentRequestRechargeModal = new AgentRequestRechargeModal();
-        this.viewProofModal = new ViewProofModal();
-        this.partnerEditAgentModal = new PartnerEditAgentModal();
-        this.adminEditUserModal = new AdminEditUserModal();
-        this.adminEditPartnerModal = new AdminEditPartnerModal();
-        this.adminRejectRechargeModal = new AdminRejectRechargeModal();
-        this.partnerTransferRevenueModal = new PartnerTransferRevenueModal();
-        this.confirmationModal = new ConfirmationModal();
-        this.adminAdjustBalanceModal = new AdminAdjustBalanceModal();
-
-        const dataService = DataService.getInstance();
-        const allUsers = await dataService.getUsers();
-        const subAdmins = allUsers.filter(u => u.role === 'sous_admin');
-        this.assignToSubAdminModal = new AssignToSubAdminModal(subAdmins);
-
-        const reloadCurrentView = () => {
-             const activeLink = this.mainLayout?.sidebar.querySelector<HTMLElement>('#appNavigation a.active');
-            if (activeLink) {
-                activeLink.click();
-            }
-        };
-
-        // Events dispatched from modals are on document.body
-        document.body.addEventListener('taskAssigned', reloadCurrentView);
-        document.body.addEventListener('agentUpdated', reloadCurrentView);
-        document.body.addEventListener('userUpdated', reloadCurrentView);
-        document.body.addEventListener('partnerUpdated', reloadCurrentView);
-        document.body.addEventListener('operationTypeUpdated', reloadCurrentView);
-        document.body.addEventListener('rechargeRequestUpdated', reloadCurrentView);
-        document.body.addEventListener('agencyBalanceUpdated', reloadCurrentView);
-        document.body.addEventListener('revenueTransferred', (event: Event) => {
-            const customEvent = event as CustomEvent;
-            this.rootElement.dispatchEvent(new CustomEvent('updateCurrentUser', {
-                detail: { user: customEvent.detail.user },
-                bubbles: true,
-                composed: true
-            }));
-            reloadCurrentView();
-        });
-    }
-
-    // FIX: Converted to arrow function to correctly bind `this`.
-    private handleOpenAgentRechargeModal = () => {
-        if (this.agentRequestRechargeModal && this.currentUser) {
-            this.agentRequestRechargeModal.show(this.currentUser);
-        }
-    }
-    
-    // FIX: Converted to arrow function and added type safety for event.
-    private handleOpenPartnerEditAgentModal = (event: Event) => {
-        const customEvent = event as CustomEvent;
-        const { agent, partnerId, agencyId } = customEvent.detail;
-        if (this.partnerEditAgentModal) {
-            this.partnerEditAgentModal.show(agent, partnerId, agencyId);
-        }
-    }
-
-    // FIX: Converted to arrow function and added type safety for event.
-    private handleOpenAdminEditUserModal = (event: Event) => {
-        const customEvent = event as CustomEvent;
-        const { user, roleToCreate } = customEvent.detail;
-        if (this.adminEditUserModal) {
-            this.adminEditUserModal.show(user, roleToCreate);
-        }
-    }
-
-    // FIX: Converted to arrow function and added type safety for event.
-    private handleOpenAdminEditPartnerModal = (event: Event) => {
-        const customEvent = event as CustomEvent;
-        const { partner } = customEvent.detail;
-        if (this.adminEditPartnerModal) {
-            this.adminEditPartnerModal.show(partner);
-        }
-    }
-    
-    // FIX: Converted to arrow function and added type safety for event.
-    private handleOpenAdminRejectRechargeModal = (event: Event) => {
-        const customEvent = event as CustomEvent;
-        const { requestId } = customEvent.detail;
-        if (this.adminRejectRechargeModal) {
-            this.adminRejectRechargeModal.show(requestId);
-        }
-    }
-    
-    private handleOpenAdminAdjustBalanceModal = (event: Event) => {
-        const customEvent = event as CustomEvent;
-        const { agency } = customEvent.detail;
-        if (this.adminAdjustBalanceModal) {
-            this.adminAdjustBalanceModal.show(agency);
-        }
-    }
-
-    // FIX: Converted to arrow function and added type safety for event.
-    private handleOpenPartnerTransferRevenueModal = (event: Event) => {
-        const customEvent = event as CustomEvent;
-        const { userId, amount } = customEvent.detail;
-        if (this.partnerTransferRevenueModal && this.currentUser) {
-            this.partnerTransferRevenueModal.show(userId, amount);
-        }
-    }
-
-    // FIX: Converted to arrow function and added type safety for event.
-    private handleOpenConfirmationModal = (event: Event) => {
-        const customEvent = event as CustomEvent;
-        const { title, message, onConfirm, options } = customEvent.detail;
-        if (this.confirmationModal) {
-            this.confirmationModal.show(title, message, onConfirm, options);
-        }
-    }
-
-    // FIX: Converted to arrow function and added type safety for event.
-    private handleOpenAssignModal = (event: Event) => {
-        const customEvent = event as CustomEvent;
-        const { taskId } = customEvent.detail;
-        if (this.assignToSubAdminModal) {
-            this.assignToSubAdminModal.show(taskId);
-        }
-    }
-
-    // FIX: Converted to arrow function and added type safety for event.
-    private handleOpenViewProofModal = (event: Event) => {
-        const customEvent = event as CustomEvent;
-        const { imageUrl } = customEvent.detail;
-        if (this.viewProofModal && imageUrl) {
-            this.viewProofModal.show(imageUrl);
+    private handleUpdateCurrentUser = (event: CustomEvent) => {
+        if (event.detail.user && this.currentUser && event.detail.user.id === this.currentUser.id) {
+            this.currentUser = event.detail.user;
         }
     }
 
     private renderMainLayout = () => {
         if (!this.currentUser) return;
-        this.rootElement.innerHTML = '';
 
+        this.rootElement.innerHTML = '';
         const appContainer = document.createElement('div');
         appContainer.id = 'appContainer';
         appContainer.className = 'flex flex-col min-h-screen';
@@ -586,7 +177,6 @@ export class App {
         contentWrapper.appendChild(mainContentArea);
         appContainer.appendChild(contentWrapper);
         appContainer.appendChild(footer);
-        
         this.rootElement.appendChild(appContainer);
 
         this.mainLayout = {
@@ -595,49 +185,46 @@ export class App {
             pageContent,
             sidebar,
             header,
-            footer,
+            footer
         };
-        
+
         this.initializeModals();
 
-        // Mobile menu toggle logic
         const menuToggle = header.querySelector('#menuToggle');
         menuToggle?.addEventListener('click', () => {
             sidebar.classList.toggle('-translate-x-full');
         });
 
-        // Restore previous navigation state or load default view
         this.restoreNavigationState();
+
+        // Ajout bouton activation notifications
+        const enablePushBtn = document.createElement('button');
+        enablePushBtn.id = "enablePushBtn";
+        enablePushBtn.textContent = "Activer les notifications";
+        enablePushBtn.className = "btn-notifications";
+        header.appendChild(enablePushBtn);
+
+        enablePushBtn.addEventListener("click", () => {
+            if (this.currentUser) {
+                OneSignalService.enablePushNotifications();
+            }
+        });
     }
 
     private restoreNavigationState = () => {
         if (!this.currentUser) return;
-
-        try {
-            const savedState = localStorage.getItem('currentNavigation');
-            if (savedState) {
-                const navigationState = JSON.parse(savedState);
-                
-                // Only restore if the saved state is for the same user role
-                if (navigationState.userRole === this.currentUser.role) {
-                    // Find the navigation item that matches the saved state
-                    const navItem = this.findNavigationItem(navigationLinks[this.currentUser.role], navigationState.navId);
-                    if (navItem) {
-                        // Restore the navigation with the saved operationTypeId if it exists
-                        const detail = { ...navItem };
-                        if (navigationState.operationTypeId) {
-                            detail.operationTypeId = navigationState.operationTypeId;
-                        }
-                        this.rootElement.dispatchEvent(new CustomEvent('navigateTo', { detail }));
-                        return;
-                    }
+        const savedState = localStorage.getItem('currentNavigation');
+        if (savedState) {
+            const navigationState = JSON.parse(savedState);
+            if (navigationState.userRole === this.currentUser.role) {
+                const navItem = this.findNavigationItem(navigationLinks[this.currentUser.role], navigationState.navId);
+                if (navItem) {
+                    const detail = { ...navItem, operationTypeId: navigationState.operationTypeId };
+                    this.rootElement.dispatchEvent(new CustomEvent('navigateTo', { detail }));
+                    return;
                 }
             }
-        } catch (error) {
-            console.error('Error restoring navigation state:', error);
         }
-
-        // Fallback to default view if restoration fails
         const defaultNav = navigationLinks[this.currentUser.role][0];
         if (defaultNav) {
             this.rootElement.dispatchEvent(new CustomEvent('navigateTo', { detail: defaultNav }));
@@ -646,9 +233,7 @@ export class App {
 
     private findNavigationItem = (navItems: any[], targetNavId: string): any | null => {
         for (const item of navItems) {
-            if (item.navId === targetNavId) {
-                return item;
-            }
+            if (item.navId === targetNavId) return item;
             if (item.children) {
                 const found = this.findNavigationItem(item.children, targetNavId);
                 if (found) return found;
@@ -656,4 +241,84 @@ export class App {
         }
         return null;
     }
+
+    private updateActiveNav = (event: CustomEvent) => {
+        if (!this.mainLayout) return;
+        const { navId } = event.detail;
+        const sidebarLinks = this.mainLayout.sidebar.querySelectorAll('#appNavigation a');
+        sidebarLinks.forEach(link => {
+            const linkElement = link as HTMLElement;
+            const isActive = linkElement.dataset.navId === navId;
+            linkElement.classList.toggle('active', isActive);
+            if (isActive) {
+                const parentDetails = linkElement.closest('details');
+                if (parentDetails && !parentDetails.open) parentDetails.open = true;
+            }
+        });
+    }
+
+    private navigateTo = async (event: Event) => {
+        const customEvent = event as CustomEvent;
+        if (!this.mainLayout || !this.currentUser) return;
+        const { viewFn, label, action, navId, operationTypeId } = customEvent.detail;
+        if (action) return action();
+
+        if (viewFn) {
+            localStorage.setItem('currentNavigation', JSON.stringify({ navId, label, operationTypeId, userRole: this.currentUser.role }));
+            const pageTitleEl = this.mainLayout.header.querySelector('#pageTitle') as HTMLElement;
+            if (pageTitleEl) pageTitleEl.textContent = label;
+            this.updateActiveNav({ detail: { navId } } as CustomEvent);
+            const currentPageContent = this.mainLayout.pageContent;
+            currentPageContent.innerHTML = '<div class="text-center p-8"><i class="fas fa-spinner fa-spin text-3xl text-indigo-500"></i></div>';
+            try {
+                const viewContent = await viewFn(this.currentUser, operationTypeId);
+                currentPageContent.innerHTML = '';
+                currentPageContent.appendChild(viewContent);
+            } catch {
+                currentPageContent.innerHTML = '<div class="text-center p-8 text-red-500">Erreur lors du chargement de la page.</div>';
+            }
+        }
+        if (window.innerWidth < 768) this.mainLayout.sidebar.classList.add('-translate-x-full');
+    }
+
+    private handleShowToast = (event: CustomEvent) => {
+        const { message, type } = event.detail as { message: string, type: ToastType };
+        if (this.toastContainer) this.toastContainer.showToast(message, type);
+    }
+
+    private handleServicesLoaded = () => {
+        if (this.mainLayout && this.currentUser) {
+            const newSidebar = renderSidebar(this.currentUser);
+            this.mainLayout.appContainer.replaceChild(newSidebar, this.mainLayout.sidebar);
+            this.mainLayout.sidebar = newSidebar;
+        }
+    }
+
+    private initializeModals = async () => {
+        if (this.agentRequestRechargeModal) return;
+        this.agentRequestRechargeModal = new AgentRequestRechargeModal();
+        this.viewProofModal = new ViewProofModal();
+        this.partnerEditAgentModal = new PartnerEditAgentModal();
+        this.adminEditUserModal = new AdminEditUserModal();
+        this.adminEditPartnerModal = new AdminEditPartnerModal();
+        this.adminRejectRechargeModal = new AdminRejectRechargeModal();
+        this.partnerTransferRevenueModal = new PartnerTransferRevenueModal();
+        this.confirmationModal = new ConfirmationModal();
+        this.adminAdjustBalanceModal = new AdminAdjustBalanceModal();
+
+        const allUsers = await DataService.getInstance().getUsers();
+        const subAdmins = allUsers.filter(u => u.role === 'sous_admin');
+        this.assignToSubAdminModal = new AssignToSubAdminModal(subAdmins);
+    }
+
+    private handleOpenAgentRechargeModal = () => { this.agentRequestRechargeModal?.show(this.currentUser!); }
+    private handleOpenPartnerEditAgentModal = (event: CustomEvent) => this.partnerEditAgentModal?.show(event.detail.agent, event.detail.partnerId, event.detail.agencyId);
+    private handleOpenAdminEditUserModal = (event: CustomEvent) => this.adminEditUserModal?.show(event.detail.user, event.detail.roleToCreate);
+    private handleOpenAdminEditPartnerModal = (event: CustomEvent) => this.adminEditPartnerModal?.show(event.detail.partner);
+    private handleOpenAdminRejectRechargeModal = (event: CustomEvent) => this.adminRejectRechargeModal?.show(event.detail.requestId);
+    private handleOpenAdminAdjustBalanceModal = (event: CustomEvent) => this.adminAdjustBalanceModal?.show(event.detail.agency);
+    private handleOpenPartnerTransferRevenueModal = (event: CustomEvent) => this.partnerTransferRevenueModal?.show(event.detail.userId, event.detail.amount);
+    private handleOpenConfirmationModal = (event: CustomEvent) => this.confirmationModal?.show(event.detail.title, event.detail.message, event.detail.onConfirm, event.detail.options);
+    private handleOpenAssignModal = (event: CustomEvent) => this.assignToSubAdminModal?.show(event.detail.taskId);
+    private handleOpenViewProofModal = (event: CustomEvent) => this.viewProofModal?.show(event.detail.imageUrl);
 }
