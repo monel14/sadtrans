@@ -105,13 +105,9 @@ export class App {
             // Login to OneSignal with the existing session
             OneSignalService.login();
             
-            // Request push notification permission via OneSignal
-            const subscribed = await OneSignalService.subscribeToNotifications();
-            if (subscribed) {
-              console.log('User subscribed to OneSignal push notifications on session restore');
-            } else {
-              console.log('User not subscribed to push notifications on session restore');
-            }
+            // NE PAS demander automatiquement la permission au démarrage
+            // La permission sera demandée via le bouton d'activation des notifications
+            console.log('OneSignal initialisé, en attente d\'action utilisateur pour les notifications');
         } else {
             this.showLoginPage();
         }
@@ -242,13 +238,9 @@ export class App {
         // Login to OneSignal
         OneSignalService.login();
         
-        // Request push notification permission via OneSignal
-        const subscribed = await OneSignalService.subscribeToNotifications();
-        if (subscribed) {
-          console.log('User subscribed to OneSignal push notifications');
-        } else {
-          console.log('User not subscribed to push notifications');
-        }
+        // NE PAS demander automatiquement la permission lors de la connexion
+        // La permission sera demandée via le bouton d'activation des notifications
+        console.log('Utilisateur connecté, OneSignal initialisé, en attente d\'action utilisateur pour les notifications');
         
         this.renderMainLayout();
         // FIX: Corrected invalid method name 'pre-fetchData' to 'preFetchData'.

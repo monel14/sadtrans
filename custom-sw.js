@@ -1,3 +1,9 @@
+// Ajout du listener 'message' au début pour éviter le warning
+self.addEventListener("message", (event) => {
+  console.log("Message reçu dans le SW :", event.data);
+  // Ajoutez ici la logique de traitement des messages si nécessaire
+});
+
 // Service Worker personnalisé - version modifiée pour éviter les conflits avec OneSignal
 (function() {
   const CDN_URL = 'https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js';
@@ -26,11 +32,23 @@ self.addEventListener('install', event => {
     caches.open(CACHE_NAME)
       .then(cache => {
         console.log('Opened cache');
-        return cache.addAll(URLS_TO_CACHE)
-          .catch(error => {
-            console.error('Failed to cache some URLs:', error);
-            return Promise.resolve();
-          });
+        // Vérifier chaque URL avant de tenter de la mettre en cache
+        const cachePromises = URLS_TO_CACHE.map(url => {
+          return fetch(url)
+            .then(response => {
+              if (response.ok) {
+                return cache.put(url, response);
+              } else {
+                console.warn(`Failed to cache ${url}: ${response.status} ${response.statusText}`);
+                return Promise.resolve();
+              }
+            })
+            .catch(error => {
+              console.warn(`Failed to fetch ${url}:`, error);
+              return Promise.resolve();
+            });
+        });
+        return Promise.all(cachePromises);
       })
       .then(() => self.skipWaiting())
   );

@@ -89,6 +89,46 @@ export class OneSignalService {
     return new Promise((resolve) => {
       if (typeof window.OneSignal !== 'undefined') {
         window.OneSignalDeferred.push(function(OneSignal) {
+          // Ne pas demander automatiquement la permission ici
+          // La permission doit être demandée via une action utilisateur
+          // Vérifions simplement si la permission est déjà accordée
+          OneSignal.Notifications.addEventListener('click', function(event) {
+            console.log('Notification OneSignal cliquée:', event);
+            // Optionnel: naviguer vers une URL si fournie
+            if (event.url) {
+              window.open(event.url);
+            }
+          });
+          
+          // Vérifier l'état actuel de la permission
+          const permission = OneSignal.Notifications.permission;
+          if (permission === 'granted') {
+            console.log('Permission OneSignal déjà accordée');
+            resolve(true);
+          } else if (permission === 'denied') {
+            console.log('Permission OneSignal refusée par l\'utilisateur');
+            resolve(false);
+          } else {
+            console.log('Permission OneSignal non demandée (default)');
+            resolve(false);
+          }
+        });
+      } else {
+        console.error('OneSignal non chargé');
+        resolve(false);
+      }
+    });
+  }
+
+  /**
+   * Demande explicitement la permission pour les notifications push OneSignal.
+   * Cette méthode doit être appelée uniquement après une action utilisateur.
+   * @returns {Promise<boolean>} true si la permission est accordée, false sinon.
+   */
+  public static async requestPermission(): Promise<boolean> {
+    return new Promise((resolve) => {
+      if (typeof window.OneSignal !== 'undefined') {
+        window.OneSignalDeferred.push(function(OneSignal) {
           OneSignal.Notifications.requestPermission().then(function(permission) {
             if (permission === 'granted') {
               console.log('Permission OneSignal accordée');

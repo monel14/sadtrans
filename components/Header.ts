@@ -23,6 +23,10 @@ export function renderHeader(user: User): HTMLElement {
             <h2 id="pageTitle" class="text-xl sm:text-2xl font-semibold text-slate-800">Tableau de Bord</h2>
         </div>
         <div class="flex items-center space-x-4">
+            <!-- Bouton pour activer les notifications push -->
+            <button id="enablePushNotifications" class="text-slate-500 hover:text-slate-700 focus:outline-none" aria-label="Activer les notifications" title="Activer les notifications push">
+                <i class="fas fa-bell-slash text-xl"></i>
+            </button>
             <div class="relative" id="notificationsContainer">
                 <button class="text-slate-500 hover:text-slate-700 focus:outline-none" aria-label="Notifications">
                     <i class="fas fa-bell text-xl"></i>
@@ -52,6 +56,8 @@ export function renderHeader(user: User): HTMLElement {
     const dropdown = $('#notificationsDropdown', header);
     const badge = $('#notificationBadge', header);
     const list = $('#notificationsList', header);
+    // Bouton pour activer les notifications push
+    const enablePushBtn = $('#enablePushNotifications', header);
 
     let notifications: Notification[] = [];
     let unreadCount = 0;
@@ -59,6 +65,96 @@ export function renderHeader(user: User): HTMLElement {
     let receivedNotificationIds = new Set<number | string>();
     // Ajout d'un Map pour suivre les messages de notification et éviter les doublons
     let recentNotificationMessages = new Map<string, number>(); // message -> timestamp
+
+    // Fonction pour mettre à jour l'état du bouton de notifications push
+    const updatePushNotificationButton = (isSubscribed: boolean) => {
+        console.log('Mise à jour du bouton de notifications push, isSubscribed:', isSubscribed);
+        if (enablePushBtn) {
+            console.log('Bouton enablePushBtn trouvé:', enablePushBtn);
+            if (isSubscribed) {
+                console.log('Masquage du bouton de notifications push');
+                enablePushBtn.classList.add('hidden');
+                enablePushBtn.innerHTML = '<i class="fas fa-bell text-xl"></i>';
+            } else {
+                console.log('Affichage du bouton de notifications push');
+                enablePushBtn.classList.remove('hidden');
+                enablePushBtn.innerHTML = '<i class="fas fa-bell-slash text-xl"></i>';
+            }
+        } else {
+            console.log('Bouton enablePushBtn non trouvé');
+        }
+    };
+
+    // Vérifier l'état actuel des notifications push
+    const checkPushNotificationStatus = async () => {
+        console.log('Vérification de l\'état des notifications push');
+        // Vérifier si l'utilisateur a déjà accordé la permission
+        // Pour l'instant, on suppose que l'utilisateur n'est pas abonné
+        updatePushNotificationButton(false);
+    };
+
+    // Écouter l'événement de statut des notifications push
+    document.body.addEventListener('pushNotificationStatus', (event: Event) => {
+        console.log('Événement pushNotificationStatus reçu');
+        const customEvent = event as CustomEvent;
+        const { subscribed } = customEvent.detail;
+        updatePushNotificationButton(!subscribed);
+    });
+
+    // Écouter l'événement lorsque l'utilisateur n'est pas abonné aux notifications
+    document.body.addEventListener('userNotSubscribedToPush', (event: Event) => {
+        console.log('Événement userNotSubscribedToPush reçu');
+        updatePushNotificationButton(false);
+    });
+
+    // Écouter l'événement lorsque l'utilisateur est abonné aux notifications
+    document.body.addEventListener('userSubscribedToPush', (event: Event) => {
+        console.log('Événement userSubscribedToPush reçu');
+        updatePushNotificationButton(true);
+    });
+
+    // Initial check
+    checkPushNotificationStatus();
+
+    // Gestionnaire d'événement pour le bouton d'activation des notifications push
+    enablePushBtn?.addEventListener('click', async () => {
+        // Importer le service OneSignal dynamiquement pour éviter les dépendances circulaires
+        const { OneSignalService } = await import('../services/onesignal.service');
+        
+        try {
+            // Utiliser la nouvelle méthode pour demander explicitement la permission
+            const permissionGranted = await OneSignalService.requestPermission();
+            if (permissionGranted) {
+                console.log('Permission accordée pour les notifications push');
+                updatePushNotificationButton(true);
+                // Afficher un message de confirmation
+                document.body.dispatchEvent(new CustomEvent('showToast', {
+                    detail: {
+                        message: 'Notifications push activées avec succès',
+                        type: 'success'
+                    }
+                }));
+            } else {
+                console.log('Permission refusée pour les notifications push');
+                // Afficher un message d'information
+                document.body.dispatchEvent(new CustomEvent('showToast', {
+                    detail: {
+                        message: 'Les notifications push sont désactivées. Vous pouvez les activer dans les paramètres de votre navigateur.',
+                        type: 'info'
+                    }
+                }));
+            }
+        } catch (error) {
+            console.error('Erreur lors de l\'activation des notifications push:', error);
+            // Afficher un message d'erreur
+            document.body.dispatchEvent(new CustomEvent('showToast', {
+                detail: {
+                    message: 'Erreur lors de l\'activation des notifications push',
+                    type: 'error'
+                }
+            }));
+        }
+    });
 
     const updateNotifications = async (refreshFromServer = false) => {
         console.log('Mise à jour des notifications, refreshFromServer:', refreshFromServer);
