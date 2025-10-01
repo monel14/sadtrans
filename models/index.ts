@@ -209,7 +209,7 @@ export interface Order {
     id: string;
     partnerId: string;
     date: string; // ISO 8601
-    status: 'livré' | 'en attente';
+    status: 'pending' | 'delivered';
     deliveredBy: string;
     items: OrderItem[];
     totalAmount: number;

@@ -18,20 +18,48 @@ export async function renderAgentDashboardView(user: User): Promise<HTMLElement>
     // FIX: Property 'solde' does not exist on type 'User'. Balances are managed at the agency level.
     const mainBalance = agency?.solde_principal ?? 0;
 
-    const [agentTransactions, opTypes, userMap] = await Promise.all([
+    // Récupérer les cartes de l'agence
+    const [agentTransactions, opTypes, userMap, agencyCards] = await Promise.all([
         dataService.getTransactions({ agentId: user.id, limit: 3 }),
         dataService.getAllOperationTypes(),
-        dataService.getUserMap()
+        dataService.getUserMap(),
+        dataService.getCards({ partnerId: user.partnerId })
     ]);
 
     container.innerHTML = `
         <div class="grid grid-cols-1 gap-6 mb-6"></div>
         <div class="mb-6"></div>
         <div class="mb-6"></div>
+        <div class="mb-6"></div>
     `;
 
     const gridContainer = container.querySelector('.grid') as HTMLElement;
     gridContainer.appendChild(createCard('Solde Partagé Agence', `<p class="text-3xl font-bold text-emerald-600">${formatAmount(mainBalance)}</p>`, 'fa-wallet', ''));
+    
+    // Ajout d'une carte pour afficher le stock de cartes de l'agence
+    const availableCards = agencyCards.filter(card => card.status === 'Assigné').length;
+    const pendingActivationCards = agencyCards.filter(card => card.status === 'En attente d\'activation').length;
+    
+    const cardStockContent = document.createElement('div');
+    cardStockContent.innerHTML = `
+        <div class="grid grid-cols-2 gap-4">
+            <div class="text-center p-3 bg-blue-50 rounded-lg">
+                <p class="text-2xl font-bold text-blue-600">${availableCards}</p>
+                <p class="text-sm text-blue-800">Cartes disponibles</p>
+            </div>
+            <div class="text-center p-3 bg-amber-50 rounded-lg">
+                <p class="text-2xl font-bold text-amber-600">${pendingActivationCards}</p>
+                <p class="text-sm text-amber-800">En attente d'activation</p>
+            </div>
+        </div>
+        <div class="mt-4 text-center">
+            <button id="view-card-stock" class="btn btn-primary w-full">
+                <i class="fas fa-layer-group mr-2"></i>Voir le stock détaillé
+            </button>
+        </div>
+    `;
+    const cardStockCard = createCard('Stock de Cartes Agence', cardStockContent, 'fa-credit-card', '');
+    container.children[1].appendChild(cardStockCard);
     
     const quickAccessContent = document.createElement('div');
     quickAccessContent.className = 'grid grid-cols-2 gap-3';
@@ -54,7 +82,7 @@ export async function renderAgentDashboardView(user: User): Promise<HTMLElement>
         </button>
     `;
     const quickAccessCard = createCard('Accès Rapides', quickAccessContent, 'fa-rocket', '');
-    container.children[1].appendChild(quickAccessCard);
+    container.children[2].appendChild(quickAccessCard);
 
     // --- New list for latest operations ---
     const latestOpsContent = document.createElement('div');
@@ -92,7 +120,7 @@ export async function renderAgentDashboardView(user: User): Promise<HTMLElement>
     latestOpsContent.appendChild(seeAllLink);
 
     const latestOpsCard = createCard('Dernières Opérations', latestOpsContent, 'fa-receipt', '');
-    container.children[2].appendChild(latestOpsCard);
+    container.children[3].appendChild(latestOpsCard);
     
     // --- Realtime Balance Update Listener ---
     const handleBalanceUpdate = (event: CustomEvent) => {
@@ -146,6 +174,19 @@ export async function renderAgentDashboardView(user: User): Promise<HTMLElement>
             } else if (navAction === 'profile') {
                 container.dispatchEvent(new CustomEvent('navigateTo', {
                     detail: { viewFn: renderProfileView, label: 'Mon Profil', navId: 'agent_profile' },
+                    bubbles: true, composed: true
+                }));
+            } else if (button.id === 'view-card-stock') {
+                // Naviguer vers la vue de stock de cartes du partenaire
+                container.dispatchEvent(new CustomEvent('navigateTo', {
+                    detail: { 
+                        viewFn: async (user: User) => {
+                            const { renderPartnerCardStockView } = await import('./PartnerCardStock');
+                            return renderPartnerCardStockView(user);
+                        }, 
+                        label: 'Stock de Cartes', 
+                        navId: 'partner_card_stock' 
+                    },
                     bubbles: true, composed: true
                 }));
             }

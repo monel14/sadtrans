@@ -921,7 +921,7 @@ export class ApiService {
         return null;
     }
 
-    public async updateOrderStatus(orderId: string, status: 'delivered' | 'pending' | 'shipped'): Promise<boolean> {
+    public async updateOrderStatus(orderId: string, status: 'delivered' | 'pending'): Promise<boolean> {
         const { error } = await supabase.from('orders').update({ status }).eq('id', orderId);
         if (error) { console.error('Error updating order status:', error); return false; }
         await this.logAction('UPDATE_ORDER_STATUS', { entity_id: orderId, status });

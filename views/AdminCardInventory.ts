@@ -130,11 +130,11 @@ async function renderOrdersTabContent(container: HTMLElement, api: ApiService, d
                     <p class="text-sm text-slate-500">Total: <strong>${formatAmount(order.totalAmount)}</strong></p>
                 </div>
                 <div class="flex items-center gap-2 justify-self-end">
-                    <span class="badge ${order.status === 'livré' ? 'badge-success' : 'badge-warning'}">${order.status}</span>
+                    <span class="badge ${order.status === 'delivered' ? 'badge-success' : 'badge-warning'}">${order.status === 'pending' ? 'En attente' : 'Livrée'}</span>
                     <button class="btn btn-xs btn-outline-secondary" data-action="toggle-details" data-order-id="${order.id}">
                         Détails <i class="fas fa-chevron-down ml-1 text-xs transition-transform"></i>
                     </button>
-                    <button class="btn btn-xs btn-outline-secondary" title="Marquer comme livré" data-action="mark-delivered" data-order-id="${order.id}" ${order.status === 'livré' ? 'disabled' : ''}>
+                    <button class="btn btn-xs btn-outline-secondary" title="Marquer comme livré" data-action="mark-delivered" data-order-id="${order.id}" ${order.status === 'delivered' ? 'disabled' : ''}>
                         <i class="fas fa-check"></i>
                     </button>
                 </div>
