@@ -42,7 +42,7 @@ function showDetailsModal(transaction: Transaction) {
     let dataFields = '';
     opType.fields.forEach(field => {
         if (field.obsolete) return;
-        const value = transaction.data[field.name];
+        const value = transaction.form_data[field.name];
         dataFields += `
             <div class="py-2 grid grid-cols-3 gap-4">
                 <dt class="text-sm font-medium text-slate-500">${field.label}</dt>
