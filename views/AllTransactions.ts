@@ -171,6 +171,8 @@ function exportTransactionsToCSV(transactions: Transaction[]) {
 
 // Helper function to render the list of transactions
 function renderTransactionList(container: HTMLElement, transactions: Transaction[]) {
+    console.log('DEBUG: renderTransactionList appelée. Page actuelle:', currentPage, 'Transactions à afficher:', transactions.length);
+    
     const listElement = $('#transactions-list', container);
     if (!listElement) return;
 
@@ -193,10 +195,10 @@ function renderTransactionList(container: HTMLElement, transactions: Transaction
         const opType = opTypeMap.get(t.opTypeId);
         
         const formattedStatus = formatTransactionStatus(t, userMap);
-        const statusClass = t.statut === 'Validé' 
-            ? 'badge-success' 
-            : (t.statut.includes('En attente') || t.statut.includes('Assignée') 
-                ? 'badge-warning' 
+        const statusClass = t.statut === 'Validé'
+            ? 'badge-success'
+            : (t.statut.includes('En attente') || t.statut.includes('Assignée')
+                ? 'badge-warning'
                 : 'badge-danger');
 
         const li = document.createElement('li');
@@ -231,6 +233,11 @@ function renderTransactionList(container: HTMLElement, transactions: Transaction
         listElement.appendChild(li);
     });
 
+    // Nettoyer les anciennes paginations avant d'en ajouter une nouvelle
+    const existingPaginations = container.querySelectorAll('div.flex.justify-center.mt-6');
+    console.log('DEBUG: Paginations existantes avant nettoyage:', existingPaginations.length);
+    existingPaginations.forEach(el => el.remove());
+
     // Ajouter la pagination
     const paginationElement = document.createElement('div');
     paginationElement.className = 'flex justify-center mt-6';
@@ -254,6 +261,7 @@ function renderTransactionList(container: HTMLElement, transactions: Transaction
         </nav>
     `;
     
+    console.log('DEBUG: Insertion de nouvelle pagination. Total après insertion devrait être 1.');
     listElement.parentNode?.insertBefore(paginationElement, listElement.nextSibling);
 
     // Attacher les événements de pagination
@@ -261,6 +269,7 @@ function renderTransactionList(container: HTMLElement, transactions: Transaction
     const nextButton = $('#next-page', container);
     
     prevButton?.addEventListener('click', () => {
+        console.log('DEBUG: Clic sur bouton précédent. Page actuelle:', currentPage);
         if (currentPage > 1) {
             currentPage--;
             renderTransactionList(container, transactions);
@@ -268,15 +277,19 @@ function renderTransactionList(container: HTMLElement, transactions: Transaction
     });
     
     nextButton?.addEventListener('click', () => {
+        console.log('DEBUG: Clic sur bouton suivant. Page actuelle:', currentPage);
         if (currentPage < totalPages) {
             currentPage++;
             renderTransactionList(container, transactions);
         }
     });
+    
+    console.log('DEBUG: Événements de pagination attachés.');
 }
 
 // Helper function to apply filters and re-render the list
 function applyFilters(container: HTMLElement) {
+    console.log('DEBUG: applyFilters appelée.');
     const form = $('#transaction-filters-form', container);
     if (!form) return;
 
@@ -319,6 +332,7 @@ function applyFilters(container: HTMLElement) {
     }
 
     filteredTransactions = filtered; // Update the shared state for the export function
+    console.log('DEBUG: Appel de renderTransactionList depuis applyFilters avec', filtered.length, 'transactions filtrées.');
     renderTransactionList(container, filteredTransactions);
 }
 
