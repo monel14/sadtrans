@@ -1,4 +1,3 @@
-
 import { User, Transaction, OperationType, Partner } from '../models';
 import { DataService } from '../services/data.service';
 import { createCard } from '../components/Card';
@@ -15,6 +14,10 @@ let userMap: Map<string, User> = new Map();
 let partnerMap: Map<string, Partner> = new Map();
 let opTypeMap: Map<string, OperationType> = new Map();
 let lastLoadTime: number = 0;
+
+// Variables pour la pagination
+const ITEMS_PER_PAGE = 20;
+let currentPage = 1;
 
 // Helper function to show a details modal for a transaction
 function showDetailsModal(transaction: Transaction) {
@@ -171,6 +174,12 @@ function renderTransactionList(container: HTMLElement, transactions: Transaction
     const listElement = $('#transactions-list', container);
     if (!listElement) return;
 
+    // Calculer les éléments à afficher pour la page courante
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    const endIndex = startIndex + ITEMS_PER_PAGE;
+    const transactionsToDisplay = transactions.slice(startIndex, endIndex);
+    const totalPages = Math.ceil(transactions.length / ITEMS_PER_PAGE);
+
     listElement.innerHTML = '';
 
     if (transactions.length === 0) {
@@ -178,7 +187,7 @@ function renderTransactionList(container: HTMLElement, transactions: Transaction
         return;
     }
 
-    transactions.forEach(t => {
+    transactionsToDisplay.forEach(t => {
         const agent = userMap.get(t.agentId);
         const partner = agent ? partnerMap.get(agent.partnerId!) : null;
         const opType = opTypeMap.get(t.opTypeId);
@@ -221,12 +230,58 @@ function renderTransactionList(container: HTMLElement, transactions: Transaction
         `;
         listElement.appendChild(li);
     });
+
+    // Ajouter la pagination
+    const paginationElement = document.createElement('div');
+    paginationElement.className = 'flex justify-center mt-6';
+    paginationElement.innerHTML = `
+        <nav class="flex items-center gap-2">
+            <button id="prev-page" class="btn btn-sm btn-secondary ${currentPage === 1 ? 'opacity-50 cursor-not-allowed' : ''}" ${currentPage === 1 ? 'disabled' : ''}>
+                <i class="fas fa-chevron-left"></i>
+            </button>
+            
+            <span class="text-sm text-slate-600 mx-2">
+                Page ${currentPage} sur ${totalPages}
+            </span>
+            
+            <button id="next-page" class="btn btn-sm btn-secondary ${currentPage === totalPages ? 'opacity-50 cursor-not-allowed' : ''}" ${currentPage === totalPages ? 'disabled' : ''}>
+                <i class="fas fa-chevron-right"></i>
+            </button>
+            
+            <span class="text-sm text-slate-600 mx-4">
+                ${transactions.length} transactions au total
+            </span>
+        </nav>
+    `;
+    
+    listElement.parentNode?.insertBefore(paginationElement, listElement.nextSibling);
+
+    // Attacher les événements de pagination
+    const prevButton = $('#prev-page', container);
+    const nextButton = $('#next-page', container);
+    
+    prevButton?.addEventListener('click', () => {
+        if (currentPage > 1) {
+            currentPage--;
+            renderTransactionList(container, transactions);
+        }
+    });
+    
+    nextButton?.addEventListener('click', () => {
+        if (currentPage < totalPages) {
+            currentPage++;
+            renderTransactionList(container, transactions);
+        }
+    });
 }
 
 // Helper function to apply filters and re-render the list
 function applyFilters(container: HTMLElement) {
     const form = $('#transaction-filters-form', container);
     if (!form) return;
+
+    // Réinitialiser la page courante lorsqu'on applique des filtres
+    currentPage = 1;
 
     const filters = {
         dateFrom: (form.querySelector('[name="date_from"]') as HTMLInputElement).value,
@@ -292,6 +347,9 @@ async function reloadAllData(): Promise<void> {
 // Main render function for the view
 export async function renderAllTransactionsView(user: User): Promise<HTMLElement> {
     const dataService = DataService.getInstance();
+    
+    // Réinitialiser la page courante lors du chargement initial
+    currentPage = 1;
     
     // Check if we need to reload data (if it's been more than 30 seconds or first load)
     const now = Date.now();

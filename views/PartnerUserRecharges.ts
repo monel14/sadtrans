@@ -27,13 +27,12 @@ export async function renderPartnerUserRechargesView(user: User): Promise<HTMLEl
     ]);
 
     // Filtrer pour n'afficher que les demandes de recharge de l'agence
-    // Les demandes partenaires sont identifiées par la note contenant "[PARTNER]"
-    // et l'agentId doit correspondre à un utilisateur de la même agence
+    // Toutes les demandes des membres de l'agence sont incluses
     const agencyUsers = allUsers.filter(u => u.partnerId === fullUser.partnerId);
     const agencyUserIds = new Set(agencyUsers.map(u => u.id));
     
     const rechargeRequests = allRechargeRequests.filter(req => 
-        agencyUserIds.has(req.agentId) && req.notes?.includes('[PARTNER]')
+        agencyUserIds.has(req.agentId)
     );
 
     const container = document.createElement('div');
