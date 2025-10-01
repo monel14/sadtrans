@@ -148,6 +148,7 @@ export interface Transaction {
     agentId: string;
     opTypeId: string;
     data: { [key: string]: any }; // Form data for the operation
+    form_data?: any; // Direct mapping from database for backward compatibility
     montant_principal: number;
     frais: number;
     montant_total: number;
