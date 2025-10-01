@@ -257,7 +257,6 @@ export const navigationLinks: Record<UserRole, NavLink[]> = {
             icon: 'fa-briefcase',
             children: [
                 { label: 'Gérer mes Utilisateurs', navId: 'partner_manage_users', icon: 'fa-users-cog', viewFn: renderPartnerManageUsersViewWithRefresh },
-                { label: 'Mon Stock de Cartes', navId: 'partner_card_stock', icon: 'fa-layer-group', viewFn: renderPartnerCardStockView },
                 { label: 'Bons de Commande', navId: 'partner_orders', icon: 'fa-receipt', viewFn: renderOrderListView },
                 { label: 'Historique Recharges', navId: 'partner_recharge_history', icon: 'fa-history', viewFn: renderPartnerUserRechargesView },
             ]

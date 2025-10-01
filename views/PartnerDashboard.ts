@@ -89,10 +89,6 @@ export async function renderPartnerDashboardView(user: User): Promise<HTMLElemen
             <i class="fas fa-users-cog text-xl text-slate-500 mb-2"></i>
             <span class="text-xs font-semibold text-slate-700">Gérer Utilisateurs</span>
         </button>
-        <button data-nav-id="partner_card_stock" class="flex flex-col items-center justify-center p-3 bg-slate-100 hover:bg-violet-100 rounded-lg transition-colors text-center">
-            <i class="fas fa-layer-group text-xl text-slate-500 mb-2"></i>
-            <span class="text-xs font-semibold text-slate-700">Stock de Cartes</span>
-        </button>
          <button data-nav-id="partner_contract" class="flex flex-col items-center justify-center p-3 bg-slate-100 hover:bg-violet-100 rounded-lg transition-colors text-center">
             <i class="fas fa-file-signature text-xl text-slate-500 mb-2"></i>
             <span class="text-xs font-semibold text-slate-700">Mon Contrat</span>
