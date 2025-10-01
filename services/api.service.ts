@@ -196,7 +196,7 @@ export class ApiService {
     }
 
     public async getOrders(): Promise<Order[]> {
-        const { data, error } = await supabase.from('orders').select('*');
+        const { data, error } = await supabase.from('orders').select('*, items:order_items(*)');
         if (error) { console.error('Error fetching orders:', error); throw error; }
         return (data || []).map(item => ({
             id: item.id,
@@ -205,8 +205,12 @@ export class ApiService {
             status: item.status,
             deliveredBy: '', // Pas de colonne delivered_by dans la DB
             totalAmount: item.total_amount,
-            totalCards: 0, // Calculé à partir des order_items
-            items: [] // À charger séparément si nécessaire
+            totalCards: item.items ? item.items.reduce((sum, i) => sum + (i.quantity || 0), 0) : 0,
+            items: item.items ? item.items.map(i => ({
+                cardTypeId: i.card_type_id,
+                quantity: i.quantity,
+                unitPrice: i.unit_price
+            })) : []
         }));
     }
 
