@@ -90,12 +90,35 @@ export class OneSignalService {
           clearTimeout(timeout);
           this.oneSignalInstance = OneSignal;
 
-          await OneSignal.init({
+          // Configuration pour éviter les conflits de service workers
+          const config: any = {
             appId: ONE_SIGNAL_APP_ID,
             allowLocalhostAsSecureOrigin: true,
-            serviceWorkerParam: { scope: "/" },
-            serviceWorkerPath: "OneSignalSDKWorker.js",
-          });
+          };
+
+          // Vérifier s'il y a déjà un service worker (Workbox)
+          if ('serviceWorker' in navigator) {
+            try {
+              const registration = await navigator.serviceWorker.getRegistration();
+              if (registration && registration.active) {
+                console.log("🔧 Service worker existant détecté, configuration OneSignal adaptée");
+                // Utiliser un scope différent pour éviter les conflits
+                config.serviceWorkerParam = { scope: "/onesignal/" };
+                config.serviceWorkerPath = "OneSignalSDKWorker.js";
+              } else {
+                // Pas de service worker existant, configuration normale
+                config.serviceWorkerParam = { scope: "/" };
+                config.serviceWorkerPath = "OneSignalSDKWorker.js";
+              }
+            } catch (error) {
+              console.warn("Impossible de vérifier les service workers existants:", error);
+              // Configuration par défaut en cas d'erreur
+              config.serviceWorkerParam = { scope: "/" };
+              config.serviceWorkerPath = "OneSignalSDKWorker.js";
+            }
+          }
+
+          await OneSignal.init(config);
 
           // Configuration spéciale pour localhost
           const isLocalhost =
@@ -129,6 +152,38 @@ export class OneSignalService {
         } catch (error) {
           clearTimeout(timeout);
           console.error("Erreur lors de l'init OneSignal:", error);
+
+          // Check if it's a domain restriction error
+          if (
+            error instanceof Error &&
+            error.message.includes("Can only be used on:")
+          ) {
+            console.error("🚫 OneSignal Domain Restriction Error");
+            console.error("Cette app OneSignal est configurée pour un domaine spécifique");
+
+            // Extraire le domaine autorisé du message d'erreur
+            const allowedDomainMatch = error.message.match(/Can only be used on: (.+)/);
+            if (allowedDomainMatch) {
+              const allowedDomain = allowedDomainMatch[1];
+              console.error(`✅ Domaine autorisé: ${allowedDomain}`);
+              console.error(`❌ Domaine actuel: ${window.location.origin}`);
+
+              console.group("💡 Solutions:");
+              console.log("1. 🌐 Utilisez le domaine autorisé:", allowedDomain);
+              console.log("2. ⚙️ Configurez OneSignal pour autoriser ce domaine:");
+              console.log("   - Allez sur onesignal.com");
+              console.log("   - Settings → Platforms → Web Push");
+              console.log(`   - Ajoutez: ${window.location.origin}`);
+              console.log("3. 🔧 Créez une app OneSignal séparée pour le développement");
+              console.groupEnd();
+            }
+
+            this.isInitialized = false;
+            this.isInitializing = false;
+            this.initPromise = null;
+            resolve(); // Continue without OneSignal
+            return;
+          }
 
           // Check if it's a service worker error
           if (
@@ -190,7 +245,7 @@ export class OneSignalService {
         console.warn("OneSignal.Notifications.addEventListener non disponible");
       }
 
-      // Écouter les changements de souscription push
+      // Écouter les changements de souscription push avec gestion d'erreur améliorée
       if (OneSignal.User?.PushSubscription?.addEventListener) {
         OneSignal.User.PushSubscription.addEventListener(
           "change",
@@ -200,12 +255,40 @@ export class OneSignalService {
               this.subscriptionId = change.to.id;
               console.log("Nouvel ID de souscription:", this.subscriptionId);
             }
+
+            // Vérifier s'il y a des erreurs de service worker
+            if (change.error) {
+              console.warn("Erreur dans le changement de souscription:", change.error);
+              this.handleServiceWorkerError(change.error);
+            }
           }
         );
       }
     } catch (error) {
       console.error("Erreur lors de l'attachement des événements:", error);
+      this.handleServiceWorkerError(error);
     }
+  }
+
+  /**
+   * Gère les erreurs de service worker
+   */
+  private static handleServiceWorkerError(error: any): void {
+    console.group("🚨 Erreur Service Worker OneSignal");
+    console.error("Détails de l'erreur:", error);
+
+    if (error && typeof error === 'object') {
+      if (error.message && error.message.includes('postMessage')) {
+        console.warn("💡 Problème de communication entre service workers détecté");
+        console.warn("Cela peut être causé par un conflit avec Workbox ou un autre SW");
+        console.warn("Solutions:");
+        console.warn("1. Redémarrer le navigateur");
+        console.warn("2. Vider le cache et les données du site");
+        console.warn("3. Utiliser un service worker unifié");
+      }
+    }
+
+    console.groupEnd();
   }
 
   /**
@@ -674,6 +757,131 @@ export class OneSignalService {
   }
 
   /**
+   * Diagnostic des service workers
+   */
+  public static async diagnoseServiceWorkers(): Promise<void> {
+    console.group("🔧 Diagnostic Service Workers");
+
+    if (!('serviceWorker' in navigator)) {
+      console.error("❌ Service Workers non supportés");
+      console.groupEnd();
+      return;
+    }
+
+    try {
+      // Lister tous les service workers
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      console.log(`📋 ${registrations.length} service worker(s) trouvé(s):`);
+
+      registrations.forEach((reg, index) => {
+        console.log(`SW ${index + 1}:`, {
+          scope: reg.scope,
+          state: reg.active?.state,
+          scriptURL: reg.active?.scriptURL,
+          hasUpdateHandler: !!reg.onupdatefound
+        });
+      });
+
+      // Vérifier le service worker actuel
+      const currentReg = await navigator.serviceWorker.getRegistration();
+      if (currentReg) {
+        console.log("🎯 Service Worker actuel:", {
+          scope: currentReg.scope,
+          scriptURL: currentReg.active?.scriptURL,
+          isOneSignal: currentReg.active?.scriptURL?.includes('OneSignal') || false,
+          isWorkbox: currentReg.active?.scriptURL?.includes('workbox') || currentReg.active?.scriptURL?.includes('sw') || false
+        });
+      }
+
+      // Suggestions
+      if (registrations.length > 1) {
+        console.warn("⚠️ Plusieurs service workers détectés - risque de conflit");
+        console.warn("💡 Considérez utiliser un service worker unifié");
+      }
+
+    } catch (error) {
+      console.error("❌ Erreur lors du diagnostic SW:", error);
+    }
+
+    console.groupEnd();
+  }
+
+  /**
+   * Diagnostic complet de OneSignal
+   */
+  public static async runFullDiagnostic(): Promise<void> {
+    console.group("🔍 Diagnostic OneSignal Complet");
+
+    // 1. Environnement
+    console.log("🌐 Environnement:", {
+      url: window.location.href,
+      protocol: window.location.protocol,
+      hostname: window.location.hostname,
+      port: window.location.port
+    });
+
+    // 2. Support navigateur
+    console.log("📱 Support navigateur:", {
+      serviceWorker: "serviceWorker" in navigator,
+      notifications: "Notification" in window,
+      notificationPermission: "Notification" in window ? Notification.permission : "non supporté"
+    });
+
+    // 3. État OneSignal
+    console.log("🔔 État OneSignal:", {
+      isInitialized: this.isInitialized,
+      isInitializing: this.isInitializing,
+      currentUserId: this.currentUserId,
+      hasInstance: !!this.oneSignalInstance,
+      operationQueueLength: this.operationQueue.length
+    });
+
+    // 4. Vérification domaine
+    const domainCheck = this.checkDomainCompatibility();
+    console.log("🌐 Compatibilité domaine:", domainCheck);
+
+    // 5. Diagnostic service workers
+    await this.diagnoseServiceWorkers();
+
+    console.groupEnd();
+  }
+
+  /**
+   * Vérifie si le domaine actuel est probablement autorisé pour OneSignal
+   */
+  public static checkDomainCompatibility(): {
+    isLikelyAllowed: boolean;
+    currentDomain: string;
+    suggestions: string[];
+  } {
+    const currentDomain = window.location.origin;
+    const hostname = window.location.hostname;
+    const suggestions: string[] = [];
+
+    // Domaines probablement autorisés pour cette app OneSignal
+    const isLikelyAllowed =
+      hostname === 'sadtrans.netlify.app' ||
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname.includes('.ngrok.io') ||
+      hostname.includes('.ngrok-free.app') ||
+      hostname.includes('.ngrok.app');
+
+    if (!isLikelyAllowed) {
+      suggestions.push("🌐 Utilisez https://sadtrans.netlify.app (domaine configuré)");
+      suggestions.push("⚙️ Configurez OneSignal pour autoriser ce domaine");
+      suggestions.push("🚀 Utilisez ngrok pour un tunnel HTTPS");
+      suggestions.push("🔧 Créez une app OneSignal de développement");
+    }
+
+    return {
+      isLikelyAllowed,
+      currentDomain,
+      suggestions
+    };
+  }
+
+  /**
    * Retourne l'userId actuellement associé
    */
   public static getCurrentUserId(): string | null {
@@ -705,4 +913,35 @@ declare global {
 // Ajouter le service au window pour accès global
 if (typeof window !== "undefined") {
   window.OneSignalServiceDebug = OneSignalService;
+
+  // Ajouter des raccourcis de diagnostic
+  (window as any).osDebug = () => OneSignalService.runFullDiagnostic();
+  (window as any).osSW = () => OneSignalService.diagnoseServiceWorkers();
+  (window as any).osDomain = () => {
+    const check = OneSignalService.checkDomainCompatibility();
+    console.group("🌐 Vérification domaine OneSignal");
+    console.log("Domaine actuel:", check.currentDomain);
+    console.log("Probablement autorisé:", check.isLikelyAllowed ? "✅ Oui" : "❌ Non");
+    if (check.suggestions.length > 0) {
+      console.log("Suggestions:");
+      check.suggestions.forEach(s => console.log(`  - ${s}`));
+    }
+    console.groupEnd();
+    return check;
+  };
+
+  // Raccourci pour nettoyer les service workers
+  (window as any).osCleanSW = async () => {
+    console.log("🧹 Nettoyage des service workers...");
+    try {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      for (const registration of registrations) {
+        await registration.unregister();
+        console.log("✅ Service worker supprimé:", registration.scope);
+      }
+      console.log("🔄 Rechargez la page pour réinitialiser OneSignal");
+    } catch (error) {
+      console.error("❌ Erreur lors du nettoyage:", error);
+    }
+  };
 }
