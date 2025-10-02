@@ -4,6 +4,11 @@ import { DataService } from '../services/data.service';
 import { createCard } from '../components/Card';
 import { formatAmount, formatDate, formatTransactionStatus } from '../utils/formatters';
 import { $ } from '../utils/dom';
+import { createPaginationElement, getPaginatedItems, createResultsCounter } from '../utils/pagination';
+
+// Variables pour la pagination
+let ITEMS_PER_PAGE = 15;
+let currentPage = 1;
 
 // Helper for category icons
 const categoryIcons: { [key: string]: string } = {
@@ -81,6 +86,8 @@ function renderTransactionList(
 ): HTMLElement {
     const { userMap, partnerMap, opTypeMap } = data;
     
+    const container = document.createElement('div');
+    
     if (items.length === 0) {
         const p = document.createElement('p');
         p.className = 'text-center text-slate-500 p-4';
@@ -88,10 +95,17 @@ function renderTransactionList(
         return p;
     }
 
+    // Ajouter le compteur de résultats
+    const counter = createResultsCounter(items.length, undefined, 'fa-tasks');
+    container.appendChild(counter);
+
+    // Calculer les éléments à afficher pour la page courante
+    const itemsToDisplay = getPaginatedItems(items, currentPage, ITEMS_PER_PAGE);
+
     const list = document.createElement('ul');
     list.className = 'divide-y divide-slate-100';
 
-    items.forEach(item => {
+    itemsToDisplay.forEach(item => {
         const agent = userMap.get(item.agentId);
         const partner = agent ? partnerMap.get(agent.partnerId!) : null;
         const opType = opTypeMap.get(item.opTypeId);
@@ -177,7 +191,39 @@ function renderTransactionList(
         list.appendChild(li);
     });
 
-    return list;
+    container.appendChild(list);
+
+    // Ajouter la pagination si nécessaire
+    if (items.length > ITEMS_PER_PAGE) {
+        const pagination = createPaginationElement(
+            {
+                currentPage,
+                totalItems: items.length,
+                itemsPerPage: ITEMS_PER_PAGE,
+                showFirstLast: true,
+                showItemsPerPageSelector: true,
+                itemsPerPageOptions: [10, 15, 25, 50]
+            },
+            {
+                onPageChange: (page) => {
+                    currentPage = page;
+                    // Re-rendre la vue complète
+                    const event = new CustomEvent('refreshTransactionValidation');
+                    document.body.dispatchEvent(event);
+                },
+                onItemsPerPageChange: (itemsPerPage) => {
+                    ITEMS_PER_PAGE = itemsPerPage;
+                    currentPage = 1;
+                    // Re-rendre la vue complète
+                    const event = new CustomEvent('refreshTransactionValidation');
+                    document.body.dispatchEvent(event);
+                }
+            }
+        );
+        container.appendChild(pagination);
+    }
+
+    return container;
 }
 
 
@@ -344,9 +390,19 @@ export async function renderAdminTransactionValidationView(user: User, defaultFi
             card.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
             target.classList.add('active');
             const tabName = target.dataset.tab;
+            currentPage = 1; // Réinitialiser la pagination lors du changement d'onglet
             if (tabName) renderContentForTab(tabName);
         }
     });
+
+    // Gestionnaire pour le rafraîchissement de la pagination
+    const refreshHandler = () => {
+        const activeTab = card.querySelector('.tabs button.active') as HTMLButtonElement;
+        if (activeTab) {
+            renderContentForTab(activeTab.dataset.tab!);
+        }
+    };
+    document.body.addEventListener('refreshTransactionValidation', refreshHandler);
 
     // Listen for realtime transaction changes
     const handleTransactionUpdate = async () => {

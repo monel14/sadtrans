@@ -7,6 +7,10 @@ import { formatAmount, formatDate } from '../utils/formatters';
 import { $ } from '../utils/dom';
 import { createRefreshableView, addRefreshButton, invalidateCaches } from '../utils/refreshable-view';
 
+// Variables pour la pagination
+let ITEMS_PER_PAGE = 15;
+let currentPage = 1;
+
 function renderRequestItem(
     req: AgentRechargeRequest,
     data: { userMap: Map<string, User>, partnerMap: Map<string, Partner>, methodMap: Map<string, RechargePaymentMethod>, allRecharges: AgentRechargeRequest[], allUsers: User[] }
@@ -147,21 +151,131 @@ function renderContent(): void {
 
 function renderList(tab: 'pending' | 'history', listContainer: HTMLElement): void {
     const pendingRecharges = allRecharges.filter(r => r.statut === 'En attente');
-    const historyRecharges = allRecharges.filter(r => r.statut !== 'En attente').slice(0, 20);
+    const historyRecharges = allRecharges.filter(r => r.statut !== 'En attente');
     const itemsToRender = tab === 'pending' ? pendingRecharges : historyRecharges;
 
+    // Calculer les éléments à afficher pour la page courante
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    const endIndex = startIndex + ITEMS_PER_PAGE;
+    const itemsToDisplay = itemsToRender.slice(startIndex, endIndex);
+    const totalPages = Math.ceil(itemsToRender.length / ITEMS_PER_PAGE);
+
+    // Supprimer l'ancien contenu
     listContainer.innerHTML = '';
-    if (itemsToRender.length === 0) {
-        listContainer.innerHTML = `<p class="text-center text-slate-500 p-8">Aucune demande dans cette catégorie.</p>`;
+
+    // Ajouter le compteur de résultats
+    const counter = document.createElement('div');
+    counter.className = 'results-counter text-sm text-slate-600 mb-3 px-4';
+    counter.innerHTML = `<i class="fas fa-list mr-2"></i>${itemsToRender.length} demande(s) au total`;
+    listContainer.appendChild(counter);
+
+    if (itemsToDisplay.length === 0) {
+        const noResults = document.createElement('p');
+        noResults.className = 'text-center text-slate-500 p-8';
+        noResults.textContent = currentPage === 1 ? 'Aucune demande dans cette catégorie.' : 'Aucune demande sur cette page.';
+        listContainer.appendChild(noResults);
         return;
     }
 
+    // Créer la liste des demandes
     const list = document.createElement('ul');
     list.className = 'space-y-4';
-    itemsToRender.forEach(req => {
+    itemsToDisplay.forEach(req => {
         list.appendChild(renderRequestItem(req, { userMap, partnerMap, methodMap, allRecharges, allUsers }));
     });
     listContainer.appendChild(list);
+
+    // Ajouter la pagination si nécessaire
+    if (totalPages > 1) {
+        const paginationContainer = document.createElement('div');
+        paginationContainer.className = 'pagination-container flex justify-between items-center mt-6 p-4 bg-slate-50 rounded-md';
+        
+        paginationContainer.innerHTML = `
+            <div class="flex items-center gap-4">
+                <div class="text-sm text-slate-600">
+                    Affichage de ${startIndex + 1} à ${Math.min(endIndex, itemsToRender.length)} sur ${itemsToRender.length} demandes
+                </div>
+                <div class="flex items-center gap-2">
+                    <label class="text-xs text-slate-500">Par page:</label>
+                    <select id="items-per-page" class="form-select form-select-xs">
+                        <option value="10" ${ITEMS_PER_PAGE === 10 ? 'selected' : ''}>10</option>
+                        <option value="15" ${ITEMS_PER_PAGE === 15 ? 'selected' : ''}>15</option>
+                        <option value="25" ${ITEMS_PER_PAGE === 25 ? 'selected' : ''}>25</option>
+                        <option value="50" ${ITEMS_PER_PAGE === 50 ? 'selected' : ''}>50</option>
+                    </select>
+                </div>
+            </div>
+            <nav class="flex items-center gap-2">
+                ${totalPages > 3 ? `<button id="first-page" class="btn btn-sm btn-outline-secondary ${currentPage === 1 ? 'opacity-50 cursor-not-allowed' : ''}" ${currentPage === 1 ? 'disabled' : ''} title="Première page">
+                    <i class="fas fa-angle-double-left"></i>
+                </button>` : ''}
+                
+                <button id="prev-page" class="btn btn-sm btn-secondary ${currentPage === 1 ? 'opacity-50 cursor-not-allowed' : ''}" ${currentPage === 1 ? 'disabled' : ''}>
+                    <i class="fas fa-chevron-left mr-1"></i>Précédent
+                </button>
+                
+                <span class="text-sm text-slate-600 mx-3">
+                    Page ${currentPage} sur ${totalPages}
+                </span>
+                
+                <button id="next-page" class="btn btn-sm btn-secondary ${currentPage === totalPages ? 'opacity-50 cursor-not-allowed' : ''}" ${currentPage === totalPages ? 'disabled' : ''}>
+                    Suivant<i class="fas fa-chevron-right ml-1"></i>
+                </button>
+                
+                ${totalPages > 3 ? `<button id="last-page" class="btn btn-sm btn-outline-secondary ${currentPage === totalPages ? 'opacity-50 cursor-not-allowed' : ''}" ${currentPage === totalPages ? 'disabled' : ''} title="Dernière page">
+                    <i class="fas fa-angle-double-right"></i>
+                </button>` : ''}
+            </nav>
+        `;
+        
+        listContainer.appendChild(paginationContainer);
+
+        // Attacher les événements de pagination
+        const firstButton = $('#first-page', listContainer);
+        const prevButton = $('#prev-page', listContainer);
+        const nextButton = $('#next-page', listContainer);
+        const lastButton = $('#last-page', listContainer);
+        const itemsPerPageSelect = $('#items-per-page', listContainer) as HTMLSelectElement;
+        
+        firstButton?.addEventListener('click', () => {
+            if (currentPage > 1) {
+                currentPage = 1;
+                renderList(tab, listContainer);
+                listContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        });
+        
+        prevButton?.addEventListener('click', () => {
+            if (currentPage > 1) {
+                currentPage--;
+                renderList(tab, listContainer);
+                listContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        });
+        
+        nextButton?.addEventListener('click', () => {
+            if (currentPage < totalPages) {
+                currentPage++;
+                renderList(tab, listContainer);
+                listContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        });
+        
+        lastButton?.addEventListener('click', () => {
+            if (currentPage < totalPages) {
+                currentPage = totalPages;
+                renderList(tab, listContainer);
+                listContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        });
+        
+        itemsPerPageSelect?.addEventListener('change', () => {
+            ITEMS_PER_PAGE = parseInt(itemsPerPageSelect.value);
+            currentPage = 1; // Réinitialiser à la première page
+            renderList(tab, listContainer);
+            listContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+    }
 }
 
 export async function renderAdminAgentRechargesView(): Promise<HTMLElement> {
@@ -209,6 +323,7 @@ export async function renderAdminAgentRechargesView(): Promise<HTMLElement> {
         if (tabButton) {
             const tab = tabButton.dataset.tab as 'pending' | 'history';
             currentTab = tab;
+            currentPage = 1; // Réinitialiser la pagination lors du changement d'onglet
             
             // Mettre à jour les onglets actifs
             card.querySelectorAll('[data-tab]').forEach(btn => btn.classList.remove('active'));
@@ -252,6 +367,10 @@ export async function renderAdminAgentRechargesView(): Promise<HTMLElement> {
             actionButton.innerHTML = `<i class="fas fa-spinner fa-spin"></i>`;
             const success = await api.updateAgentRechargeRequestStatus(requestId, 'Approuvée');
             if (success) {
+                // Recharger les données et réinitialiser la pagination
+                await loadData();
+                currentPage = 1;
+                renderContent();
                 document.body.dispatchEvent(new CustomEvent('rechargeRequestUpdated'));
                 document.body.dispatchEvent(new CustomEvent('showToast', { detail: { message: "Demande approuvée.", type: 'success' } }));
             } else {

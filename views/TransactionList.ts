@@ -3,6 +3,7 @@ import { ApiService } from '../services/api.service';
 import { createCard } from '../components/Card';
 import { formatAmount, formatDate, formatTransactionStatus } from '../utils/formatters';
 import { DataService } from '../services/data.service';
+import { createPaginationElement, getPaginatedItems, createResultsCounter } from '../utils/pagination';
 
 export interface TransactionListViewFilters {
     title: string;
@@ -31,10 +32,18 @@ export function renderTransactionListView(filters: TransactionListViewFilters): 
         if (filteredTransactions.length === 0) {
             container.innerHTML = `<p class="text-center text-slate-500 p-4">Aucune transaction de ce type trouvée.</p>`;
         } else {
+            // Ajouter le compteur de résultats
+            const counter = createResultsCounter(filteredTransactions.length, undefined, 'fa-receipt');
+            container.appendChild(counter);
+
+            // Pagination simple (première page seulement pour cette vue)
+            const ITEMS_PER_PAGE = 20;
+            const transactionsToDisplay = getPaginatedItems(filteredTransactions, 1, ITEMS_PER_PAGE);
+
             const list = document.createElement('ul');
             list.className = 'space-y-3';
             
-            filteredTransactions.forEach(t => {
+            transactionsToDisplay.forEach(t => {
                 const initiator = allUsers.find(u => u.id === t.agentId);
                 const partner = partners.find(p => p.id === initiator?.partnerId)
                 const opType = opTypes.find(ot => ot.id === t.opTypeId);

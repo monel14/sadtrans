@@ -181,6 +181,9 @@ export interface RechargePaymentMethod {
     status: 'active' | 'inactive';
 }
 
+// --- PAGINATION ---
+export * from './pagination';
+
 // --- CARDS & ORDERS ---
 
 export interface CardType {

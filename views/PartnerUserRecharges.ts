@@ -7,6 +7,7 @@ import { User } from '../models';
 import { DataService } from '../services/data.service';
 import { createCard } from '../components/Card';
 import { formatAmount, formatDate } from '../utils/formatters';
+import { createPaginationElement, getPaginatedItems, createResultsCounter } from '../utils/pagination';
 
 export async function renderPartnerUserRechargesView(user: User): Promise<HTMLElement> {
     const dataService = DataService.getInstance();
@@ -40,10 +41,18 @@ export async function renderPartnerUserRechargesView(user: User): Promise<HTMLEl
     if (rechargeRequests.length === 0) {
         container.innerHTML = `<p class="text-center text-slate-500 p-4">Aucune demande de recharge pour l'agence pour le moment.</p>`;
     } else {
+        // Ajouter le compteur de résultats
+        const counter = createResultsCounter(rechargeRequests.length, undefined, 'fa-wallet');
+        container.appendChild(counter);
+
+        // Pagination simple
+        const ITEMS_PER_PAGE = 15;
+        const requestsToDisplay = getPaginatedItems(rechargeRequests, 1, ITEMS_PER_PAGE);
+
         const list = document.createElement('ul');
         list.className = 'space-y-3';
 
-        rechargeRequests.forEach(req => {
+        requestsToDisplay.forEach(req => {
             const method = methodMap.get(req.methodId);
             const isApproved = req.statut === 'Approuvée';
             const isRejected = req.statut === 'Rejetée';
