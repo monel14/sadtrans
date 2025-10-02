@@ -278,8 +278,7 @@ export class AdminEditContractModal extends BaseModal {
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Type de cible</label>
                     <select name="exception_${exceptionIndex}_targetType" 
-                            class="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 exception-target-type" 
-                            required>
+                            class="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 exception-target-type">
                         <option value="">-- Sélectionner --</option>
                         <option value="category" ${exceptionData?.targetType === 'category' ? 'selected' : ''}>Catégorie complète</option>
                         <option value="service" ${exceptionData?.targetType === 'service' ? 'selected' : ''}>Service spécifique</option>
@@ -288,8 +287,7 @@ export class AdminEditContractModal extends BaseModal {
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Cible</label>
                     <select name="exception_${exceptionIndex}_targetId" 
-                            class="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 exception-target-id" 
-                            required>
+                            class="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 exception-target-id">
                         <option value="">-- Sélectionner d'abord le type --</option>
                     </select>
                 </div>
@@ -312,12 +310,18 @@ export class AdminEditContractModal extends BaseModal {
         const commissionTypeSelect = exceptionDiv.querySelector('.exception-commission-type') as HTMLSelectElement;
         
         targetTypeSelect.addEventListener('change', () => {
+            // Reset target ID selection
+            targetIdSelect.value = '';
+            
             if (targetTypeSelect.value === 'category') {
                 targetIdSelect.innerHTML = '<option value="">-- Sélectionner une catégorie --</option>' + categoryOptions;
+                targetIdSelect.disabled = false;
             } else if (targetTypeSelect.value === 'service') {
                 targetIdSelect.innerHTML = '<option value="">-- Sélectionner un service --</option>' + serviceOptions;
+                targetIdSelect.disabled = false;
             } else {
                 targetIdSelect.innerHTML = '<option value="">-- Sélectionner d\'abord le type --</option>';
+                targetIdSelect.disabled = true;
             }
             
             // Set the value if we're editing
@@ -503,6 +507,15 @@ export class AdminEditContractModal extends BaseModal {
                 return;
             }
             
+            // Validation personnalisée des exceptions
+            const exceptionValidation = this.validateExceptions(formData);
+            if (!exceptionValidation.isValid) {
+                document.body.dispatchEvent(new CustomEvent('showToast', {
+                    detail: { message: exceptionValidation.message, type: 'error' }
+                }));
+                return;
+            }
+            
             // Build contract object avec des valeurs par défaut appropriées
             const contract: Contract = {
                 id: contractId || `contract_${Date.now()}`,
@@ -540,6 +553,40 @@ export class AdminEditContractModal extends BaseModal {
                 detail: { message: 'Erreur lors de la préparation des données du contrat.', type: 'error' }
             }));
         }
+    }
+
+    private validateExceptions(formData: FormData): { isValid: boolean; message: string } {
+        const exceptionEntries = Array.from(formData.entries()).filter(([key]) => key.startsWith('exception_'));
+        const exceptionIndices = new Set<string>();
+        
+        // Collecter tous les indices d'exception
+        exceptionEntries.forEach(([key]) => {
+            const match = key.match(/^exception_(\d+)_/);
+            if (match) {
+                exceptionIndices.add(match[1]);
+            }
+        });
+        
+        // Valider chaque exception
+        for (const index of exceptionIndices) {
+            const name = formData.get(`exception_${index}_name`) as string;
+            const targetType = formData.get(`exception_${index}_targetType`) as string;
+            const targetId = formData.get(`exception_${index}_targetId`) as string;
+            
+            if (!name || !name.trim()) {
+                return { isValid: false, message: `Le nom de l'exception ${parseInt(index) + 1} est requis.` };
+            }
+            
+            if (!targetType) {
+                return { isValid: false, message: `Le type de cible de l'exception ${parseInt(index) + 1} est requis.` };
+            }
+            
+            if (!targetId) {
+                return { isValid: false, message: `La cible de l'exception ${parseInt(index) + 1} est requise.` };
+            }
+        }
+        
+        return { isValid: true, message: '' };
     }
 
     private async saveContract(contract: Contract): Promise<void> {

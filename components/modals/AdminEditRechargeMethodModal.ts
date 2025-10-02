@@ -96,7 +96,7 @@ export class AdminEditRechargeMethodModal extends BaseModal {
             e.preventDefault();
             const formData = new FormData(this.form);
             const data: Partial<RechargePaymentMethod> = {
-                id: formData.get('id') as string,
+                id: formData.get('id') as string || '', // Empty string for new items
                 name: formData.get('name') as string,
                 status: formData.get('status') as 'active' | 'inactive',
                 feeType: formData.get('feeType') as 'none' | 'fixed' | 'percentage',

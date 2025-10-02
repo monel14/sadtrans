@@ -286,9 +286,9 @@ export class ApiService {
         console.log('getNotifications appelé pour userId:', userId);
         try {
             const { data, error } = await supabase.from('notifications').select('*').or(`user_id.eq.${userId},user_id.eq.all`);
-            if (error) { 
-                console.error('Error fetching notifications:', error); 
-                return []; 
+            if (error) {
+                console.error('Error fetching notifications:', error);
+                return [];
             }
             console.log('Données de notifications récupérées:', data);
             const notifications = (data || []).map((item): Notification => ({
@@ -524,23 +524,23 @@ export class ApiService {
     }
 
     public async updateOperationType(opType: OperationType): Promise<OperationType> {
-        const supabaseOpType = { 
-            ...opType, 
-            impacts_balance: opType.impactsBalance, 
-            fee_application: opType.feeApplication, 
-            commission_config: opType.commissionConfig 
+        const supabaseOpType = {
+            ...opType,
+            impacts_balance: opType.impactsBalance,
+            fee_application: opType.feeApplication,
+            commission_config: opType.commissionConfig
         };
-        
+
         // Remove camelCase properties that don't exist in database
         delete supabaseOpType.impactsBalance;
         delete supabaseOpType.feeApplication;
         delete supabaseOpType.commissionConfig;
-        
+
         // If id is empty string, remove it so database can generate a new UUID
         if (supabaseOpType.id === '') {
             delete supabaseOpType.id;
         }
-        
+
         const { data, error } = await supabase.from('operation_types').upsert(supabaseOpType).select().single();
         if (error) { console.error('Error updating operation type:', error); throw error; }
         await this.logAction('UPDATE_OPERATION_TYPE', { entity_id: data.id });
@@ -671,7 +671,7 @@ export class ApiService {
         // Pour les partenaires, nous utilisons le même champ agent_id mais ajoutons un préfixe dans les notes
         // pour identifier qu'il s'agit d'une demande de partenaire
         const partnerNotes = `[PARTNER] ${notes}`;
-        
+
         const { data, error } = await supabase
             .from('agent_recharge_requests')
             .insert({
@@ -796,7 +796,7 @@ export class ApiService {
 
     public async updateAllContractsDefaultCommission(newConfig: CommissionConfig): Promise<{ message: string }> {
         console.log('updateAllContractsDefaultCommission called with config:', newConfig);
-        
+
         // Call the Edge Function to update the default commission template and all contracts
         const { data, error } = await supabase.functions.invoke('update-all-contracts-commission', {
             body: { defaultCommissionConfig: newConfig }
@@ -813,10 +813,10 @@ export class ApiService {
         }
 
         console.log('Successfully updated default commission template and all contracts, response data:', data);
-        
+
         await this.logAction('UPDATE_ALL_CONTRACTS_DEFAULT_COMMISSION', { details: 'Updated default commission for all contracts' });
         DataService.getInstance().invalidateContractsCache();
-        
+
         return { message: data.message || "Configuration par défaut mise à jour avec succès." };
     }
 
@@ -905,9 +905,9 @@ export class ApiService {
 
         // Dispatch a custom event to notify UI about the balance transfer
         document.body.dispatchEvent(new CustomEvent('balanceTransferCompleted', {
-            detail: { 
-                agencyId: agencyId, 
-                userId: userId, 
+            detail: {
+                agencyId: agencyId,
+                userId: userId,
                 amountTransferred: amountToTransfer,
                 newPrincipalBalance: newPrincipalBalance,
                 newRevenueBalance: 0
@@ -916,7 +916,7 @@ export class ApiService {
 
         // Dispatch the agencyBalanceChanged event to trigger realtime UI updates
         document.body.dispatchEvent(new CustomEvent('agencyBalanceChanged', {
-            detail: { 
+            detail: {
                 change: {
                     schema: 'public',
                     table: 'agencies',
@@ -951,13 +951,22 @@ export class ApiService {
     }
 
     public async updateRechargePaymentMethod(method: RechargePaymentMethod): Promise<RechargePaymentMethod> {
-        const { data, error } = await supabase.from('recharge_payment_methods').upsert({
-            ...method,
+        const supabaseMethod = {
+            id: method.id,
+            name: method.name,
+            status: method.status,
             config: {
                 feeType: method.feeType,
                 feeValue: method.feeValue
             }
-        }).select().single();
+        };
+
+        // If id is empty string, remove it so database can generate a new UUID
+        if (supabaseMethod.id === '') {
+            delete supabaseMethod.id;
+        }
+
+        const { data, error } = await supabase.from('recharge_payment_methods').upsert(supabaseMethod).select().single();
         if (error) throw error;
         return {
             ...data,
@@ -1109,12 +1118,12 @@ export class ApiService {
         console.log('Sending contract data to Supabase:', contractData);
 
         const { data, error } = await supabase.from('contracts').upsert(contractData).select().single();
-        
+
         if (error) {
             console.error('Error updating contract in Supabase:', error);
             throw error;
         }
-        
+
         // Mapper les données retournées par Supabase vers notre modèle Contract
         return {
             ...data,
@@ -1280,7 +1289,7 @@ export class ApiService {
 
                 // Log action
                 await this.logAction('CREATE_USER', { entity_id: data.user.id, password_changed: true });
-                
+
                 // Retourner l'utilisateur créé
                 return data.user;
             } catch (error) {
@@ -1450,7 +1459,7 @@ export class ApiService {
         // For now, it's handled on the client side when rendering.
         return true;
     }
-    
+
     // Méthode pour marquer toutes les notifications comme lues
     public async markAllAsRead(userId: string): Promise<boolean> {
         console.log(`Marking all notifications as read for user ${userId}`);
@@ -1460,12 +1469,12 @@ export class ApiService {
                 .update({ read: true })
                 .eq('user_id', userId)
                 .eq('read', false);
-                
+
             if (error) {
                 console.error('Error marking all notifications as read:', error);
                 return false;
             }
-            
+
             // Déclencher un événement pour mettre à jour l'interface
             document.body.dispatchEvent(new CustomEvent('notificationUpdated'));
             return true;
