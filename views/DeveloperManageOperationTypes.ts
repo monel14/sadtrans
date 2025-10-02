@@ -25,6 +25,7 @@ let selectedOpType: OperationType | null = null;
 let detailView: HTMLElement | null = null;
 let masterList: HTMLElement | null = null;
 let tierCounter = 0;
+let cardTypes: any[] = [];
 
 
 /**
@@ -76,7 +77,8 @@ function renderDetailView() {
                     </div>
                     <div>
                         <label class="form-label">Catégorie</label>
-                        <input type="text" name="category" class="form-input" value="${opTypeForEditing.category}" required>
+                        <input type="text" name="category" id="category-input" class="form-input" value="${opTypeForEditing.category}" required>
+                        <small class="text-xs text-slate-500">Utilisez "Cartes VISA" pour auto-configurer les champs de type de carte</small>
                     </div>
                 </div>
                 <div>
@@ -101,14 +103,48 @@ function renderDetailView() {
                 </div>
             </form>
         `;
+        
+        // Add event listener for category changes
+        const categoryInput = tabContent.querySelector('#category-input') as HTMLInputElement;
+        if (categoryInput) {
+            categoryInput.addEventListener('blur', () => {
+                const newCategory = categoryInput.value.trim();
+                if (newCategory === 'Cartes VISA' && opTypeForEditing.category !== 'Cartes VISA') {
+                    // Category changed to Cartes VISA, add card type field if not exists
+                    const hasCardTypeField = opTypeForEditing.fields.some(f => f.name === 'card_type');
+                    if (!hasCardTypeField && cardTypes.length > 0) {
+                        opTypeForEditing.fields.unshift({
+                            id: 'f_card_type_' + Date.now(),
+                            name: 'card_type',
+                            type: 'select',
+                            label: 'Type de carte',
+                            options: cardTypes.map(ct => ct.name),
+                            required: true,
+                            readonly: false,
+                            obsolete: false
+                        });
+                        document.body.dispatchEvent(new CustomEvent('showToast', { 
+                            detail: { message: 'Champ "Type de carte" ajouté automatiquement', type: 'info' } 
+                        }));
+                    }
+                }
+                opTypeForEditing.category = newCategory;
+            });
+        }
     };
 
     const renderFormTab = () => {
+        const isCartesVisa = opTypeForEditing.category === 'Cartes VISA';
+        const hasCardTypeField = opTypeForEditing.fields.some(f => f.name === 'card_type');
+        
         tabContent.innerHTML = `
             <div class="p-4 border rounded-b-lg">
                 <p class="text-sm text-slate-500 mb-4">Définissez les champs que l'agent devra remplir. Utilisez les flèches pour réorganiser.</p>
                 <div id="fields-list-container" class="space-y-2"></div>
-                <button id="add-field-btn" class="btn btn-sm btn-outline-secondary mt-4"><i class="fas fa-plus mr-2"></i>Ajouter un champ</button>
+                <div class="flex gap-2 mt-4">
+                    <button id="add-field-btn" class="btn btn-sm btn-outline-secondary"><i class="fas fa-plus mr-2"></i>Ajouter un champ</button>
+                    ${isCartesVisa && !hasCardTypeField ? `<button id="add-card-type-btn" class="btn btn-sm btn-outline-primary"><i class="fas fa-credit-card mr-2"></i>Ajouter Type de carte</button>` : ''}
+                </div>
             </div>
         `;
         const fieldsContainer = $('#fields-list-container', tabContent) as HTMLElement;
@@ -176,6 +212,16 @@ function createFieldEditor(field: OperationTypeField, index: number, total: numb
     const editor = document.createElement('div');
     editor.className = 'field-editor p-2 border rounded-md bg-slate-50';
     editor.dataset.id = field.id;
+    
+    // Check if this is a card type field and auto-populate options
+    const isCardTypeField = field.name === 'card_type' || field.label?.toLowerCase().includes('type de carte');
+    let optionsValue = getOptionsDisplayValue(field.options);
+    
+    // If it's a card type field in Cartes VISA category, auto-populate with card types
+    if (isCardTypeField && selectedOpType?.category === 'Cartes VISA' && cardTypes.length > 0) {
+        optionsValue = cardTypes.map(ct => ct.name).join(',');
+    }
+    
     editor.innerHTML = `
          <div class="flex justify-between items-center">
             <div class="flex items-center flex-grow">
@@ -197,10 +243,14 @@ function createFieldEditor(field: OperationTypeField, index: number, total: numb
                         <option value="number" ${field.type === 'number' ? 'selected' : ''}>Nombre</option>
                         <option value="tel" ${field.type === 'tel' ? 'selected' : ''}>Téléphone</option>
                         <option value="date" ${field.type === 'date' ? 'selected' : ''}>Date</option>
-                        <option value="select" ${field.type === 'select' ? 'selected' : ''}>Liste</option>
+                        <option value="select" ${field.type === 'select' || isCardTypeField ? 'selected' : ''}>Liste</option>
                     </select>
                 </div>
-                <div><label class="form-label form-label-sm">Options (séparées par ,)</label><input type="text" class="form-input form-input-sm" data-prop="options" value="${getOptionsDisplayValue(field.options)}"></div>
+                <div>
+                    <label class="form-label form-label-sm">Options (séparées par ,)</label>
+                    <input type="text" class="form-input form-input-sm" data-prop="options" value="${optionsValue}" ${isCardTypeField ? 'readonly title="Options automatiquement générées depuis les types de cartes"' : ''}>
+                    ${isCardTypeField ? '<small class="text-xs text-blue-600">🔗 Synchronisé avec les types de cartes</small>' : ''}
+                </div>
             </div>
             <div class="flex gap-4 mt-3">
                 <div class="flex items-center"><input type="checkbox" data-prop="required" class="mr-2" ${field.required ? 'checked' : ''}><label class="form-label form-label-sm">Requis</label></div>
@@ -281,7 +331,11 @@ function renderMasterList() {
 
 export async function renderDeveloperManageOperationTypesView(user: User): Promise<HTMLElement> {
     const dataService = DataService.getInstance();
+    const apiService = ApiService.getInstance();
+    
+    // Load operation types and card types
     allOpTypes = await dataService.getAllOperationTypes();
+    cardTypes = await apiService.getAllCardTypes();
     selectedOpType = null;
 
     const viewContainer = document.createElement('div');
@@ -365,11 +419,23 @@ export async function renderDeveloperManageOperationTypesView(user: User): Promi
                     id: '', // Empty ID for new items - will be generated by the database
                     name: 'Nouveau Service',
                     description: 'Description du nouveau service',
-                    category: 'Général',
+                    category: 'Cartes VISA',
                     status: 'active',
                     impactsBalance: true,
                     feeApplication: 'additive',
-                    fields: [],
+                    fields: [
+                        // Auto-add card type field for Cartes VISA category
+                        {
+                            id: 'f_card_type_' + Date.now(),
+                            name: 'card_type',
+                            type: 'select',
+                            label: 'Type de carte',
+                            options: cardTypes.map(ct => ct.name),
+                            required: true,
+                            readonly: false,
+                            obsolete: false
+                        }
+                    ],
                     commissionConfig: {
                         type: 'tiers',
                         partageSociete: 40,
@@ -403,6 +469,27 @@ export async function renderDeveloperManageOperationTypesView(user: User): Promi
             } catch (error) {
                 console.error('Error in create new button handler:', error);
             }
+        }
+
+        // Add card type field button
+        const addCardTypeBtn = target.closest('#add-card-type-btn');
+        if (addCardTypeBtn && selectedOpType && cardTypes.length > 0) {
+            const newCardTypeField: OperationTypeField = {
+                id: 'f_card_type_' + Date.now(),
+                name: 'card_type',
+                type: 'select',
+                label: 'Type de carte',
+                options: cardTypes.map(ct => ct.name),
+                required: true,
+                readonly: false,
+                obsolete: false
+            };
+            selectedOpType.fields.unshift(newCardTypeField);
+            renderDetailView(); // Re-render to show the new field
+            document.body.dispatchEvent(new CustomEvent('showToast', { 
+                detail: { message: 'Champ "Type de carte" ajouté', type: 'success' } 
+            }));
+            return;
         }
 
         // Master list item selection
@@ -573,7 +660,7 @@ export async function renderDeveloperManageOperationTypesView(user: User): Promi
                     allOpTypes.push(savedOp);
                 } else {
                     // This was an existing operation type, update it
-                    const index = allOpTypes.findIndex(op => op.id === selectedOpType.id);
+                    const index = allOpTypes.findIndex(op => op.id === selectedOpType!.id);
                     if (index > -1) {
                         allOpTypes[index] = savedOp;
                     }

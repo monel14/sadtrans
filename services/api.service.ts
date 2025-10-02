@@ -149,6 +149,12 @@ export class ApiService {
         return (data || []).map(item => ({ ...item, impactsBalance: item.impacts_balance, feeApplication: item.fee_application, commissionConfig: item.commission_config }));
     }
 
+    public async getAllCardTypes(): Promise<any[]> {
+        const { data, error } = await supabase.from('card_types').select('*').eq('status', 'active').order('name');
+        if (error) { console.error('Error fetching card types:', error); throw error; }
+        return data || [];
+    }
+
     public async getTransactions(filters: any = {}): Promise<Transaction[]> {
         const { data, error } = await supabase.functions.invoke('get-transactions');
 
