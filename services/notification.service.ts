@@ -31,9 +31,10 @@ export class NotificationService {
   ): Promise<NotificationState> {
     console.log("Récupération des notifications pour l'utilisateur:", userId);
     try {
-      const notifications = await this.api.getNotifications(userId);
-      console.log("Notifications récupérées de l'API:", notifications);
-      const sortedNotifications = notifications.sort((a, b) => {
+      const response = await this.api.getNotifications(userId);
+      console.log("Notifications récupérées de l'API:", response);
+      const notificationsList = response.notifications || [];
+      const sortedNotifications = notificationsList.sort((a, b) => {
         // Trier par date de création (les plus récentes en premier)
         return new Date(b.time).getTime() - new Date(a.time).getTime();
       });
