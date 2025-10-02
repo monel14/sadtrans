@@ -13,9 +13,14 @@ let currentPage = 1;
 
 function renderRequestItem(
     req: AgentRechargeRequest,
-    data: { userMap: Map<string, User>, partnerMap: Map<string, Partner>, methodMap: Map<string, RechargePaymentMethod>, allRecharges: AgentRechargeRequest[], allUsers: User[] }
+    data: { userMap: Map<string, User>, partnerMap: Map<string, Partner>, methodMap: Map<string, RechargePaymentMethod>, allUsers: User[] }
 ): HTMLElement {
-    const { userMap, partnerMap, methodMap, allRecharges, allUsers } = data;
+    const { userMap, partnerMap, methodMap, allUsers } = data;
+    
+    // Utiliser les données enrichies de la pagination côté serveur
+    const agentName = (req as any).agentName || userMap.get(req.agentId)?.name || 'N/A';
+    const methodName = (req as any).methodName || methodMap.get(req.methodId)?.name || 'Inconnu';
+    
     const agent = userMap.get(req.agentId);
     const partner = agent ? partnerMap.get(agent.partnerId!) : null;
     const method = methodMap.get(req.methodId);
@@ -24,10 +29,8 @@ function renderRequestItem(
     const fullAgent = allUsers.find(u => u.id === req.agentId);
     const agencyBalance = (fullAgent as any)?.agency?.solde_principal;
 
-
-    // Calculate historical context
-    const agentRecharges = allRecharges.filter(r => r.agentId === req.agentId);
-    const rechargeCountText = agentRecharges.length > 1 ? `${agentRecharges.length}ème demande` : '1ère demande';
+    // Pour le contexte historique, on utilise une approche simplifiée
+    const rechargeCountText = 'Demande de recharge';
 
     // Calculate fees
     let feeInfoText = '(Aucun)';
@@ -60,7 +63,7 @@ function renderRequestItem(
             <!-- Agent & Context -->
             <div class="md:col-span-1 md:border-r md:pr-4">
                 <p class="text-sm text-slate-500">Agent</p>
-                <p class="font-bold text-lg text-slate-800">${agent?.name || 'N/A'}</p>
+                <p class="font-bold text-lg text-slate-800">${agentName}</p>
                 <p class="text-sm text-slate-600">${partner?.name || 'N/A'}</p>
                 <p class="text-sm text-slate-500 mt-1"><i class="fas fa-phone-alt fa-xs mr-1"></i> ${agent?.phone || 'N/A'}</p>
                 <hr class="my-2">
@@ -73,7 +76,7 @@ function renderRequestItem(
             <div class="md:col-span-1">
                  <p class="text-sm text-slate-500">Montant du dépôt</p>
                  <p class="font-bold text-3xl text-violet-600">${formatAmount(req.montant)}</p>
-                 <p class="text-sm font-semibold text-slate-700 mt-2">${method?.name || 'Inconnu'}</p>
+                 <p class="text-sm font-semibold text-slate-700 mt-2">${methodName}</p>
                  ${referenceDisplay}
                  <hr class="my-3">
                  
@@ -107,7 +110,8 @@ function renderRequestItem(
 
 
 // Variables globales pour les données
-let allRecharges: AgentRechargeRequest[] = [];
+let paginatedRecharges: AgentRechargeRequest[] = [];
+let totalCount = 0;
 let userMap: Map<string, User> = new Map();
 let partnerMap: Map<string, Partner> = new Map();
 let methodMap: Map<string, RechargePaymentMethod> = new Map();
@@ -115,29 +119,43 @@ let allUsers: User[] = [];
 let cardContent: HTMLElement;
 let currentTab: 'pending' | 'history' = 'pending';
 
-async function loadData(): Promise<void> {
+async function loadPaginatedData(status?: string): Promise<void> {
+    const api = ApiService.getInstance();
     const dataService = DataService.getInstance();
     
-    [allRecharges, userMap, partnerMap, methodMap, allUsers] = await Promise.all([
-        dataService.getAgentRechargeRequests(),
+    // Charger les données de référence (maps)
+    [userMap, partnerMap, methodMap, allUsers] = await Promise.all([
         dataService.getUserMap(),
         dataService.getPartnerMap(),
         dataService.getMethodMap(),
         dataService.getUsers(),
     ]);
+
+    // Charger les demandes paginées
+    const result = await api.getAgentRechargeRequestsPaginated({
+        status: status,
+        page: currentPage,
+        limit: ITEMS_PER_PAGE
+    });
+    
+    paginatedRecharges = result.requests;
+    totalCount = result.totalCount;
 }
 
-function renderContent(): void {
+async function renderContent(): Promise<void> {
     if (!cardContent) return;
     
-    const pendingRecharges = allRecharges.filter(r => r.statut === 'En attente');
-    const historyRecharges = allRecharges.filter(r => r.statut !== 'En attente').slice(0, 20);
+    // Charger les données pour les deux onglets pour obtenir les compteurs
+    const [pendingResult, historyResult] = await Promise.all([
+        ApiService.getInstance().getAgentRechargeRequestsPaginated({ status: 'En attente', page: 1, limit: 1 }),
+        ApiService.getInstance().getAgentRechargeRequestsPaginated({ status: currentTab === 'history' ? undefined : 'processed', page: 1, limit: 1 })
+    ]);
 
     cardContent.innerHTML = `
         <div class="flex justify-between items-center mb-4">
             <div class="tabs">
-                <button data-tab="pending" class="${currentTab === 'pending' ? 'active' : ''}">En attente (${pendingRecharges.length})</button>
-                <button data-tab="history" class="${currentTab === 'history' ? 'active' : ''}">Historique récent (${historyRecharges.length})</button>
+                <button data-tab="pending" class="${currentTab === 'pending' ? 'active' : ''}">En attente (${pendingResult.totalCount})</button>
+                <button data-tab="history" class="${currentTab === 'history' ? 'active' : ''}">Historique récent</button>
             </div>
         </div>
         <div id="recharge-list-container" class="tab-content mt-4">
@@ -146,19 +164,17 @@ function renderContent(): void {
     `;
 
     const listContainer = $('#recharge-list-container', cardContent) as HTMLElement;
-    renderList(currentTab, listContainer);
+    await renderList(currentTab, listContainer);
 }
 
-function renderList(tab: 'pending' | 'history', listContainer: HTMLElement): void {
-    const pendingRecharges = allRecharges.filter(r => r.statut === 'En attente');
-    const historyRecharges = allRecharges.filter(r => r.statut !== 'En attente');
-    const itemsToRender = tab === 'pending' ? pendingRecharges : historyRecharges;
+async function renderList(tab: 'pending' | 'history', listContainer: HTMLElement): Promise<void> {
+    // Charger les données paginées selon l'onglet
+    const status = tab === 'pending' ? 'En attente' : undefined;
+    await loadPaginatedData(status);
 
-    // Calculer les éléments à afficher pour la page courante
+    const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    const endIndex = startIndex + ITEMS_PER_PAGE;
-    const itemsToDisplay = itemsToRender.slice(startIndex, endIndex);
-    const totalPages = Math.ceil(itemsToRender.length / ITEMS_PER_PAGE);
+    const endIndex = Math.min(startIndex + ITEMS_PER_PAGE, totalCount);
 
     // Supprimer l'ancien contenu
     listContainer.innerHTML = '';
@@ -166,10 +182,10 @@ function renderList(tab: 'pending' | 'history', listContainer: HTMLElement): voi
     // Ajouter le compteur de résultats
     const counter = document.createElement('div');
     counter.className = 'results-counter text-sm text-slate-600 mb-3 px-4';
-    counter.innerHTML = `<i class="fas fa-list mr-2"></i>${itemsToRender.length} demande(s) au total`;
+    counter.innerHTML = `<i class="fas fa-list mr-2"></i>${totalCount} demande(s) au total`;
     listContainer.appendChild(counter);
 
-    if (itemsToDisplay.length === 0) {
+    if (paginatedRecharges.length === 0) {
         const noResults = document.createElement('p');
         noResults.className = 'text-center text-slate-500 p-8';
         noResults.textContent = currentPage === 1 ? 'Aucune demande dans cette catégorie.' : 'Aucune demande sur cette page.';
@@ -180,8 +196,8 @@ function renderList(tab: 'pending' | 'history', listContainer: HTMLElement): voi
     // Créer la liste des demandes
     const list = document.createElement('ul');
     list.className = 'space-y-4';
-    itemsToDisplay.forEach(req => {
-        list.appendChild(renderRequestItem(req, { userMap, partnerMap, methodMap, allRecharges, allUsers }));
+    paginatedRecharges.forEach(req => {
+        list.appendChild(renderRequestItem(req, { userMap, partnerMap, methodMap, allUsers }));
     });
     listContainer.appendChild(list);
 
@@ -193,7 +209,7 @@ function renderList(tab: 'pending' | 'history', listContainer: HTMLElement): voi
         paginationContainer.innerHTML = `
             <div class="flex items-center gap-4">
                 <div class="text-sm text-slate-600">
-                    Affichage de ${startIndex + 1} à ${Math.min(endIndex, itemsToRender.length)} sur ${itemsToRender.length} demandes
+                    Affichage de ${startIndex + 1} à ${endIndex} sur ${totalCount} demandes
                 </div>
                 <div class="flex items-center gap-2">
                     <label class="text-xs text-slate-500">Par page:</label>
@@ -237,42 +253,42 @@ function renderList(tab: 'pending' | 'history', listContainer: HTMLElement): voi
         const lastButton = $('#last-page', listContainer);
         const itemsPerPageSelect = $('#items-per-page', listContainer) as HTMLSelectElement;
         
-        firstButton?.addEventListener('click', () => {
+        firstButton?.addEventListener('click', async () => {
             if (currentPage > 1) {
                 currentPage = 1;
-                renderList(tab, listContainer);
+                await renderList(tab, listContainer);
                 listContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
         });
         
-        prevButton?.addEventListener('click', () => {
+        prevButton?.addEventListener('click', async () => {
             if (currentPage > 1) {
                 currentPage--;
-                renderList(tab, listContainer);
+                await renderList(tab, listContainer);
                 listContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
         });
         
-        nextButton?.addEventListener('click', () => {
+        nextButton?.addEventListener('click', async () => {
             if (currentPage < totalPages) {
                 currentPage++;
-                renderList(tab, listContainer);
+                await renderList(tab, listContainer);
                 listContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
         });
         
-        lastButton?.addEventListener('click', () => {
+        lastButton?.addEventListener('click', async () => {
             if (currentPage < totalPages) {
                 currentPage = totalPages;
-                renderList(tab, listContainer);
+                await renderList(tab, listContainer);
                 listContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
         });
         
-        itemsPerPageSelect?.addEventListener('change', () => {
+        itemsPerPageSelect?.addEventListener('change', async () => {
             ITEMS_PER_PAGE = parseInt(itemsPerPageSelect.value);
             currentPage = 1; // Réinitialiser à la première page
-            renderList(tab, listContainer);
+            await renderList(tab, listContainer);
             listContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
         });
     }
@@ -285,24 +301,24 @@ export async function renderAdminAgentRechargesView(): Promise<HTMLElement> {
     cardContent = document.createElement('div');
     
     // Charger les données initiales
-    await loadData();
+    await loadPaginatedData();
     
     // Créer la vue rafraîchissable
     const refreshableView = createRefreshableView({
         viewId: 'admin-agent-recharges',
         refreshData: async () => {
             invalidateCaches(['recharges', 'users']);
-            await loadData();
+            currentPage = 1; // Réinitialiser la pagination
+            await loadPaginatedData(currentTab === 'pending' ? 'En attente' : undefined);
         },
-        renderContent: () => {
-            renderContent();
-            return Promise.resolve();
+        renderContent: async () => {
+            await renderContent();
         },
         dataTypes: ['recharges', 'users']
     });
     
     // Rendu initial
-    renderContent();
+    await renderContent();
 
     const card = createCard('Demandes de Recharge des Agents', cardContent, 'fa-wallet');
     
@@ -348,7 +364,7 @@ export async function renderAdminAgentRechargesView(): Promise<HTMLElement> {
             tabButton.classList.add('active');
             const listContainer = $('#recharge-list-container', card) as HTMLElement;
             if (listContainer) {
-                renderList(tabButton.dataset.tab as 'pending' | 'history', listContainer);
+                await renderList(tabButton.dataset.tab as 'pending' | 'history', listContainer);
             }
             return;
         }
@@ -368,9 +384,8 @@ export async function renderAdminAgentRechargesView(): Promise<HTMLElement> {
             const success = await api.updateAgentRechargeRequestStatus(requestId, 'Approuvée');
             if (success) {
                 // Recharger les données et réinitialiser la pagination
-                await loadData();
                 currentPage = 1;
-                renderContent();
+                await renderContent();
                 document.body.dispatchEvent(new CustomEvent('rechargeRequestUpdated'));
                 document.body.dispatchEvent(new CustomEvent('showToast', { detail: { message: "Demande approuvée.", type: 'success' } }));
             } else {
@@ -389,7 +404,7 @@ export async function renderAdminAgentRechargesView(): Promise<HTMLElement> {
 
     const initialListContainer = $('#recharge-list-container', card) as HTMLElement;
     if (initialListContainer) {
-        renderList('pending', initialListContainer);
+        await renderList('pending', initialListContainer);
     }
     return card;
 }

@@ -24,14 +24,34 @@ export async function renderPartnerManageUsersView(partnerUser: User): Promise<H
     // --- 1. DATA FETCHING ---
     // Invalidate cache to get fresh data
     dataService.invalidateUsersCache();
-    const [allUsers, allTransactions] = await Promise.all([
-        dataService.getUsers(),
-        dataService.getTransactions()
-    ]);
+    
+    // Pour les statistiques, nous avons encore besoin de toutes les transactions
+    const allTransactions = await dataService.getTransactions();
 
-    // Reliably get agents for the current partner's agency
-    const myAgents = allUsers.filter(u => u.role === 'agent' && u.agencyId === partnerUser.agencyId);
-    const myAgentIds = myAgents.map(a => a.id);
+    // Utiliser la pagination côté serveur pour les utilisateurs
+    let paginatedUsers: User[] = [];
+    let totalUsersCount = 0;
+    let myAgentIds: string[] = [];
+
+    async function loadPaginatedUsers(searchTerm = '', statusFilter = 'all') {
+        const result = await api.getUsersPaginated({
+            role: 'agent',
+            partnerId: partnerUser.partnerId,
+            status: statusFilter === 'all' ? undefined : statusFilter,
+            search: searchTerm || undefined,
+            page: currentPage,
+            limit: ITEMS_PER_PAGE
+        });
+        
+        paginatedUsers = result.users;
+        totalUsersCount = result.totalCount;
+        myAgentIds = paginatedUsers.map(a => a.id);
+        
+        return result;
+    }
+
+    // Chargement initial
+    await loadPaginatedUsers();
 
     // --- 2. STATS CALCULATION ---
     const now = new Date();
@@ -44,30 +64,47 @@ export async function renderPartnerManageUsersView(partnerUser: User): Promise<H
         lastActivity: null
     }]));
 
-    // Calculate stats per agent
-    allTransactions.forEach(tx => {
-        if (myAgentIds.includes(tx.agentId)) {
-            const txDate = new Date(tx.date);
-            const stats = agentStats.get(tx.agentId)!;
+    function calculateStats() {
+        // Reset stats for current page users
+        const currentAgentStats: Map<string, AgentStats> = new Map(myAgentIds.map(id => [id, {
+            volume: 0,
+            commissions: 0,
+            transactionCount: 0,
+            lastActivity: null
+        }]));
 
-            // Update last activity
-            if (!stats.lastActivity || txDate > new Date(stats.lastActivity)) {
-                stats.lastActivity = tx.date;
-            }
+        // Calculate stats per agent for current page
+        allTransactions.forEach(tx => {
+            if (myAgentIds.includes(tx.agentId)) {
+                const txDate = new Date(tx.date);
+                const stats = currentAgentStats.get(tx.agentId)!;
 
-            // Aggregate stats for last 30 days
-            if (txDate >= thirtyDaysAgo && tx.statut === 'Validé') {
-                stats.volume += tx.montant_principal;
-                stats.commissions += tx.commission_partenaire;
-                stats.transactionCount++;
+                // Update last activity
+                if (!stats.lastActivity || txDate > new Date(stats.lastActivity)) {
+                    stats.lastActivity = tx.date;
+                }
+
+                // Aggregate stats for last 30 days
+                if (txDate >= thirtyDaysAgo && tx.statut === 'Validé') {
+                    stats.volume += tx.montant_principal;
+                    stats.commissions += tx.commission_partenaire;
+                    stats.transactionCount++;
+                }
             }
-        }
+        });
+
+        return currentAgentStats;
+    }
+
+    // Calculate overall agency KPIs for the last 30 days (pour tous les agents de l'agence)
+    const allAgencyTransactions = allTransactions.filter(tx => {
+        const txDate = new Date(tx.date);
+        return txDate >= thirtyDaysAgo && tx.statut === 'Validé';
     });
-
-    // Calculate overall agency KPIs for the last 30 days
-    const totalVolume30d = Array.from(agentStats.values()).reduce((sum, s) => sum + s.volume, 0);
-    const totalCommissions30d = Array.from(agentStats.values()).reduce((sum, s) => sum + s.commissions, 0);
-    const activeAgents = myAgents.filter(a => a.status === 'active').length;
+    
+    const totalVolume30d = allAgencyTransactions.reduce((sum, tx) => sum + tx.montant_principal, 0);
+    const totalCommissions30d = allAgencyTransactions.reduce((sum, tx) => sum + tx.commission_partenaire, 0);
+    const activeAgents = totalUsersCount; // Approximation basée sur le total paginé
 
     // --- 3. UI RENDERING ---
     const container = document.createElement('div');
@@ -83,8 +120,8 @@ export async function renderPartnerManageUsersView(partnerUser: User): Promise<H
         <!-- KPIs -->
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             <div class="card p-4">
-                <p class="text-sm text-slate-500">Agents Actifs</p>
-                <p class="text-3xl font-bold text-slate-800">${activeAgents} <span class="text-lg font-normal text-slate-500">/ ${myAgents.length}</span></p>
+                <p class="text-sm text-slate-500">Total Agents</p>
+                <p class="text-3xl font-bold text-slate-800">${totalUsersCount}</p>
             </div>
             <div class="card p-4">
                 <p class="text-sm text-slate-500">Volume d'Affaires (30j)</p>
@@ -116,23 +153,26 @@ export async function renderPartnerManageUsersView(partnerUser: User): Promise<H
 
     const userListContainer = $('#user-list-container', container) as HTMLUListElement;
 
-    function renderUserList(agentsToRender: User[]) {
-        // Calculer les éléments à afficher pour la page courante
-        const sortedAgents = agentsToRender.sort((a, b) => a.name.localeCompare(b.name));
+    async function renderUserList(searchTerm = '', statusFilter = 'all') {
+        // Charger les données paginées
+        await loadPaginatedUsers(searchTerm, statusFilter);
+        
+        // Calculer les statistiques pour les utilisateurs de la page courante
+        const agentStats = calculateStats();
+        
+        const totalPages = Math.ceil(totalUsersCount / ITEMS_PER_PAGE);
         const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-        const endIndex = startIndex + ITEMS_PER_PAGE;
-        const agentsToDisplay = sortedAgents.slice(startIndex, endIndex);
-        const totalPages = Math.ceil(sortedAgents.length / ITEMS_PER_PAGE);
+        const endIndex = Math.min(startIndex + ITEMS_PER_PAGE, totalUsersCount);
 
         userListContainer.innerHTML = '';
 
         // Ajouter le compteur de résultats
         const counter = document.createElement('div');
         counter.className = 'results-counter text-sm text-slate-600 mb-3 px-4';
-        counter.innerHTML = `<i class="fas fa-users mr-2"></i>${sortedAgents.length} utilisateur(s) trouvé(s)`;
+        counter.innerHTML = `<i class="fas fa-users mr-2"></i>${totalUsersCount} utilisateur(s) trouvé(s)`;
         userListContainer.appendChild(counter);
 
-        if (agentsToDisplay.length === 0) {
+        if (paginatedUsers.length === 0) {
             const noResults = document.createElement('li');
             noResults.className = 'card text-center text-slate-500 p-8';
             noResults.textContent = currentPage === 1 ? 'Aucun utilisateur ne correspond à vos critères.' : 'Aucun utilisateur sur cette page.';
@@ -140,7 +180,7 @@ export async function renderPartnerManageUsersView(partnerUser: User): Promise<H
             return;
         }
 
-        agentsToDisplay.forEach(agent => {
+        paginatedUsers.forEach(agent => {
             const stats = agentStats.get(agent.id) || { volume: 0, commissions: 0, transactionCount: 0, lastActivity: null };
             const statusBadge = agent.status === 'active'
                 ? `<span class="badge badge-success">Actif</span>`
@@ -205,7 +245,7 @@ export async function renderPartnerManageUsersView(partnerUser: User): Promise<H
             paginationContainer.innerHTML = `
                 <div class="flex items-center gap-4">
                     <div class="text-sm text-slate-600">
-                        Affichage de ${startIndex + 1} à ${Math.min(endIndex, sortedAgents.length)} sur ${sortedAgents.length} utilisateurs
+                        Affichage de ${startIndex + 1} à ${endIndex} sur ${totalUsersCount} utilisateurs
                     </div>
                     <div class="flex items-center gap-2">
                         <label class="text-xs text-slate-500">Par page:</label>
@@ -248,42 +288,42 @@ export async function renderPartnerManageUsersView(partnerUser: User): Promise<H
             const lastButton = $('#last-page', userListContainer);
             const itemsPerPageSelect = $('#items-per-page', userListContainer) as HTMLSelectElement;
             
-            firstButton?.addEventListener('click', () => {
+            firstButton?.addEventListener('click', async () => {
                 if (currentPage > 1) {
                     currentPage = 1;
-                    renderUserList(agentsToRender);
+                    await renderUserList(currentSearchTerm, currentStatusFilter);
                     userListContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }
             });
             
-            prevButton?.addEventListener('click', () => {
+            prevButton?.addEventListener('click', async () => {
                 if (currentPage > 1) {
                     currentPage--;
-                    renderUserList(agentsToRender);
+                    await renderUserList(currentSearchTerm, currentStatusFilter);
                     userListContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }
             });
             
-            nextButton?.addEventListener('click', () => {
+            nextButton?.addEventListener('click', async () => {
                 if (currentPage < totalPages) {
                     currentPage++;
-                    renderUserList(agentsToRender);
+                    await renderUserList(currentSearchTerm, currentStatusFilter);
                     userListContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }
             });
             
-            lastButton?.addEventListener('click', () => {
+            lastButton?.addEventListener('click', async () => {
                 if (currentPage < totalPages) {
                     currentPage = totalPages;
-                    renderUserList(agentsToRender);
+                    await renderUserList(currentSearchTerm, currentStatusFilter);
                     userListContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }
             });
             
-            itemsPerPageSelect?.addEventListener('change', () => {
+            itemsPerPageSelect?.addEventListener('change', async () => {
                 ITEMS_PER_PAGE = parseInt(itemsPerPageSelect.value);
                 currentPage = 1; // Réinitialiser à la première page
-                renderUserList(agentsToRender);
+                await renderUserList(currentSearchTerm, currentStatusFilter);
                 userListContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
             });
         }
@@ -293,39 +333,24 @@ export async function renderPartnerManageUsersView(partnerUser: User): Promise<H
     let currentSearchTerm = '';
     let currentStatusFilter = 'all';
 
-    function filterAndRender() {
-        let filteredAgents = myAgents;
-
-        // Apply status filter
-        if (currentStatusFilter !== 'all') {
-            filteredAgents = filteredAgents.filter(agent => agent.status === currentStatusFilter);
-        }
-
-        // Apply search filter
-        if (currentSearchTerm) {
-            filteredAgents = filteredAgents.filter(agent =>
-                agent.name.toLowerCase().includes(currentSearchTerm) ||
-                agent.email.toLowerCase().includes(currentSearchTerm)
-            );
-        }
-
+    async function filterAndRender() {
         // Réinitialiser la pagination lors du filtrage
         currentPage = 1;
-        renderUserList(filteredAgents);
+        await renderUserList(currentSearchTerm, currentStatusFilter);
     }
 
     // Initial render
-    renderUserList(myAgents);
+    await renderUserList();
 
     // Filter Listeners
     const searchInput = $('#user-search-input', container) as HTMLInputElement;
-    searchInput.addEventListener('input', () => {
+    searchInput.addEventListener('input', async () => {
         currentSearchTerm = searchInput.value.toLowerCase();
-        filterAndRender();
+        await filterAndRender();
     });
 
     const filterButtonsContainer = $('#status-filter-buttons', container);
-    filterButtonsContainer?.addEventListener('click', (e) => {
+    filterButtonsContainer?.addEventListener('click', async (e) => {
         const target = e.target as HTMLElement;
         const button = target.closest<HTMLButtonElement>('[data-status]');
         if (button) {
@@ -339,7 +364,7 @@ export async function renderPartnerManageUsersView(partnerUser: User): Promise<H
             button.classList.add('btn-secondary');
             button.classList.remove('btn-outline-secondary');
 
-            filterAndRender();
+            await filterAndRender();
         }
     });
 
@@ -364,7 +389,7 @@ export async function renderPartnerManageUsersView(partnerUser: User): Promise<H
 
         // Edit button
         if (action === 'edit-agent') {
-            const agent = myAgents.find(a => a.id === agentId);
+            const agent = paginatedUsers.find(a => a.id === agentId);
             if (agent) {
                 document.body.dispatchEvent(new CustomEvent('openPartnerEditAgentModal', {
                     bubbles: true, composed: true,

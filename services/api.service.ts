@@ -131,6 +131,69 @@ export class ApiService {
         return (data || []).map(this.mapSupabaseToUser);
     }
 
+    public async getUsersPaginated(filters: {
+        role?: string,
+        partnerId?: string,
+        status?: string,
+        page?: number,
+        limit?: number,
+        search?: string
+    } = {}): Promise<{ users: User[], totalCount: number }> {
+        const { page = 1, limit = 20, role, partnerId, status, search } = filters;
+        const offset = (page - 1) * limit;
+
+        try {
+            // Utiliser la fonction de pagination côté serveur
+            const { data, error } = await supabase.rpc('get_users_paginated', {
+                p_limit: limit,
+                p_offset: offset,
+                p_role: role,
+                p_partner_id: partnerId,
+                p_status: status,
+                p_search: search
+            });
+
+            if (error) {
+                console.error('Error fetching paginated users:', error);
+                throw error;
+            }
+
+            if (!data || data.length === 0) {
+                return { users: [], totalCount: 0 };
+            }
+
+            const totalCount = data[0]?.total_count || 0;
+            const users = data.map(item => ({
+                id: item.id,
+                name: item.name,
+                firstName: item.first_name,
+                lastName: item.last_name,
+                email: item.email,
+                role: item.role,
+                partnerId: item.partner_id,
+                partnerName: item.partner_name,
+                agencyId: item.agency_id,
+                phone: item.phone,
+                status: item.status,
+                createdAt: item.created_at,
+                avatarSeed: null,
+                commissions_mois_estimees: 0,
+                commissions_dues: 0,
+                volume_partner_mois: 0,
+                commissions_partner_mois: 0,
+                agents_actifs: 0
+            }));
+
+            return {
+                users,
+                totalCount
+            };
+        } catch (error) {
+            console.error('Exception dans getUsersPaginated:', error);
+            return { users: [], totalCount: 0 };
+        }
+    }
+
     public async getUserWithAgency(userId: string): Promise<User | null> {
         const { data, error } = await supabase.from('users').select('*, agency:agencies(*)').eq('id', userId).single();
         if (error) { console.error(`Error fetching user ${userId}:`, error); return null; }
@@ -183,10 +246,138 @@ export class ApiService {
         }));
     }
 
+    public async getTransactionsPaginated(filters: {
+        agentId?: string,
+        partnerId?: string,
+        status?: string,
+        page?: number,
+        limit?: number,
+        search?: string,
+        userRole?: string,
+        userId?: string
+    } = {}): Promise<{ transactions: Transaction[], totalCount: number }> {
+        const { page = 1, limit = 20, agentId, partnerId, status, search, userRole, userId } = filters;
+        const offset = (page - 1) * limit;
+
+        try {
+            // Utiliser la fonction de pagination côté serveur
+            const { data, error } = await supabase.rpc('get_transactions_paginated', {
+                p_limit: limit,
+                p_offset: offset,
+                p_user_id: userId || agentId,
+                p_role: userRole,
+                p_partner_id: partnerId,
+                p_status: status,
+                p_search: search
+            });
+
+            if (error) {
+                console.error('Error fetching paginated transactions:', error);
+                throw error;
+            }
+
+            if (!data || data.length === 0) {
+                return { transactions: [], totalCount: 0 };
+            }
+
+            const totalCount = data[0]?.total_count || 0;
+            const transactions = data.map(item => ({
+                id: item.id,
+                date: item.date,
+                agentId: item.agent_id,
+                agentName: item.agent_name,
+                partnerId: item.partner_id,
+                partnerName: item.partner_name,
+                opTypeId: item.operation_type_id,
+                opTypeName: item.operation_type_name,
+                data: item.form_data || {},
+                montant_principal: item.montant_principal,
+                frais: item.frais || 0,
+                montant_total: item.montant_principal + (item.frais || 0),
+                statut: item.statut,
+                preuveUrl: item.preuve_url,
+                commission_societe: item.commission || 0,
+                commission_partenaire: item.commission_partenaire || 0,
+                validateurId: item.validateur_id,
+                motif_rejet: item.motif_rejet,
+                assignedTo: item.assigned_to,
+                notes: item.notes
+            }));
+
+            return {
+                transactions,
+                totalCount
+            };
+        } catch (error) {
+            console.error('Exception dans getTransactionsPaginated:', error);
+            return { transactions: [], totalCount: 0 };
+        }
+    }
+
     public async getAgentRechargeRequests(): Promise<AgentRechargeRequest[]> {
         const { data, error } = await supabase.from('agent_recharge_requests').select('*');
         if (error) { console.error('Error fetching recharge requests:', error); throw error; }
         return (data || []).map(item => ({ ...item, date: item.created_at, agentId: item.agent_id, methodId: item.method_id, processedBy: item.processed_by, processedAt: item.processed_at }));
+    }
+
+    public async getAgentRechargeRequestsPaginated(filters: {
+        agentId?: string,
+        partnerId?: string,
+        status?: string,
+        page?: number,
+        limit?: number,
+        search?: string,
+        userRole?: string,
+        userId?: string
+    } = {}): Promise<{ requests: AgentRechargeRequest[], totalCount: number }> {
+        const { page = 1, limit = 15, agentId, partnerId, status, search, userRole, userId } = filters;
+        const offset = (page - 1) * limit;
+
+        try {
+            // Utiliser la fonction de pagination côté serveur
+            const { data, error } = await supabase.rpc('get_agent_recharge_requests_paginated', {
+                p_limit: limit,
+                p_offset: offset,
+                p_user_id: userId || agentId,
+                p_role: userRole,
+                p_partner_id: partnerId,
+                p_status: status,
+                p_search: search
+            });
+
+            if (error) {
+                console.error('Error fetching paginated recharge requests:', error);
+                throw error;
+            }
+
+            if (!data || data.length === 0) {
+                return { requests: [], totalCount: 0 };
+            }
+
+            const totalCount = data[0]?.total_count || 0;
+            const requests = data.map(item => ({
+                id: item.id,
+                agentId: item.agent_id,
+                agentName: item.agent_name,
+                methodId: item.method_id,
+                methodName: item.method_name,
+                montant: item.montant,
+                statut: item.statut,
+                date: item.date,
+                notes: item.notes,
+                processedBy: item.processed_by,
+                processedByName: item.processed_by_name,
+                processedAt: item.processed_at
+            }));
+
+            return {
+                requests,
+                totalCount
+            };
+        } catch (error) {
+            console.error('Exception dans getAgentRechargeRequestsPaginated:', error);
+            return { requests: [], totalCount: 0 };
+        }
     }
 
     public async getRechargePaymentMethods(filters: any = {}): Promise<RechargePaymentMethod[]> {
@@ -283,29 +474,51 @@ export class ApiService {
         return (data || []).map(this.mapSupabaseToAgency);
     }
 
-    public async getNotifications(userId: string): Promise<Notification[]> {
-        console.log('getNotifications appelé pour userId:', userId);
+    public async getNotifications(userId: string, options: { page?: number, limit?: number, readStatus?: boolean } = {}): Promise<{ notifications: Notification[], totalCount: number }> {
+        console.log('getNotifications appelé pour userId:', userId, 'options:', options);
+
+        const { page = 1, limit = 20, readStatus } = options;
+        const offset = (page - 1) * limit;
+
         try {
-            const { data, error } = await supabase.from('notifications').select('*').or(`user_id.eq.${userId},user_id.eq.all`);
+            // Utiliser la fonction de pagination côté serveur
+            const { data, error } = await supabase.rpc('get_notifications_paginated', {
+                p_limit: limit,
+                p_offset: offset,
+                p_user_id: userId,
+                p_read_status: readStatus
+            });
+
             if (error) {
                 console.error('Error fetching notifications:', error);
-                return [];
+                return { notifications: [], totalCount: 0 };
             }
+
+            if (!data || data.length === 0) {
+                return { notifications: [], totalCount: 0 };
+            }
+
+            const totalCount = data[0]?.total_count || 0;
             console.log('Données de notifications récupérées:', data);
-            const notifications = (data || []).map((item): Notification => ({
+            
+            const notifications = data.map((item): Notification => ({
                 id: item.id,
                 text: item.message || 'Notification sans contenu.',
-                time: item.created_at,
+                time: item.date,
                 read: item.read || false,
-                icon: 'fa-bell', // Pas de colonne icon dans la DB
+                icon: 'fa-bell',
                 userId: item.user_id,
-                target: undefined, // Pas de colonne target dans la DB
+                target: undefined,
             }));
+
             console.log('Notifications mappées:', notifications);
-            return notifications;
+            return {
+                notifications,
+                totalCount
+            };
         } catch (error) {
             console.error('Exception dans getNotifications:', error);
-            return [];
+            return { notifications: [], totalCount: 0 };
         }
     }
 
