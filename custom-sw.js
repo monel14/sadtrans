@@ -51,7 +51,18 @@ if (workbox) {
   );
   
   workbox.routing.registerRoute(
-    /^https:\/\/onesignal\.com\/sdks\/.*/,
+    /^https:\/\/onesignal\.com/,
+    new workbox.strategies.NetworkOnly()
+  );
+  
+  workbox.routing.registerRoute(
+    /^https:\/\/api\.onesignal\.com/,
+    new workbox.strategies.NetworkOnly()
+  );
+  
+  // Exclure le service worker OneSignal lui-même
+  workbox.routing.registerRoute(
+    /OneSignalSDKWorker\.js/,
     new workbox.strategies.NetworkOnly()
   );
   
