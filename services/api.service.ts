@@ -518,7 +518,23 @@ export class ApiService {
     }
 
     public async updateOperationType(opType: OperationType): Promise<OperationType> {
-        const supabaseOpType = { ...opType, impacts_balance: opType.impactsBalance, fee_application: opType.feeApplication, commission_config: opType.commissionConfig };
+        const supabaseOpType = { 
+            ...opType, 
+            impacts_balance: opType.impactsBalance, 
+            fee_application: opType.feeApplication, 
+            commission_config: opType.commissionConfig 
+        };
+        
+        // Remove camelCase properties that don't exist in database
+        delete supabaseOpType.impactsBalance;
+        delete supabaseOpType.feeApplication;
+        delete supabaseOpType.commissionConfig;
+        
+        // If id is empty string, remove it so database can generate a new UUID
+        if (supabaseOpType.id === '') {
+            delete supabaseOpType.id;
+        }
+        
         const { data, error } = await supabase.from('operation_types').upsert(supabaseOpType).select().single();
         if (error) { console.error('Error updating operation type:', error); throw error; }
         await this.logAction('UPDATE_OPERATION_TYPE', { entity_id: data.id });
