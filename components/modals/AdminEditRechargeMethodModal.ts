@@ -110,10 +110,30 @@ export class AdminEditRechargeMethodModal extends BaseModal {
 
             try {
                 const api = ApiService.getInstance();
+                
+                // Check for duplicates only when creating new items
+                if (!data.id || data.id === '') {
+                    const existingMethods = await api.getRechargePaymentMethods();
+                    const duplicate = existingMethods.find(method => 
+                        method.name.toLowerCase().trim() === data.name!.toLowerCase().trim()
+                    );
+                    
+                    if (duplicate) {
+                        document.body.dispatchEvent(new CustomEvent('showToast', { 
+                            detail: { message: `Une méthode avec le nom "${data.name}" existe déjà.`, type: 'warning' } 
+                        }));
+                        return;
+                    }
+                }
+                
                 await api.updateRechargePaymentMethod(data as RechargePaymentMethod);
                 // Dispatch a global event to notify the view to re-render
                 document.body.dispatchEvent(new CustomEvent('rechargeMethodsUpdated'));
                 this.hide();
+                
+                document.body.dispatchEvent(new CustomEvent('showToast', { 
+                    detail: { message: 'Méthode de recharge sauvegardée avec succès.', type: 'success' } 
+                }));
             } catch (error) {
                 console.error("Failed to save recharge method", error);
                 document.body.dispatchEvent(new CustomEvent('showToast', { detail: { message: "Une erreur s'est produite.", type: 'error' } }));

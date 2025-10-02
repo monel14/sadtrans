@@ -196,8 +196,9 @@ export class ApiService {
         if (error) { console.error('Error fetching payment methods:', error); throw error; }
         return (data || []).map(item => ({
             ...item,
-            feeType: item.config?.feeType || 'none',
-            feeValue: item.config?.feeValue || 0
+            // Handle both camelCase and snake_case formats in config
+            feeType: item.config?.feeType || item.config?.fee_type || 'none',
+            feeValue: item.config?.feeValue || item.config?.fee_value || 0
         }));
     }
 
@@ -961,12 +962,21 @@ export class ApiService {
             }
         };
 
-        // If id is empty string, remove it so database can generate a new UUID
-        if (supabaseMethod.id === '') {
+        let data, error;
+
+        if (!method.id || method.id === '') {
+            // Create new record
             delete supabaseMethod.id;
+            const result = await supabase.from('recharge_payment_methods').insert(supabaseMethod).select().single();
+            data = result.data;
+            error = result.error;
+        } else {
+            // Update existing record
+            const result = await supabase.from('recharge_payment_methods').update(supabaseMethod).eq('id', method.id).select().single();
+            data = result.data;
+            error = result.error;
         }
 
-        const { data, error } = await supabase.from('recharge_payment_methods').upsert(supabaseMethod).select().single();
         if (error) throw error;
         return {
             ...data,
