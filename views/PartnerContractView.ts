@@ -30,6 +30,78 @@ function getCommissionDescription(opType: OperationType, contract: Contract | nu
     return `<span class="badge badge-light" title="Aucune règle de commission applicable">Non défini</span>`;
 }
 
+function getCommissionConfigDescription(opType: OperationType, contract: Contract | null): string {
+    if (!contract) {
+        if (opType.commissionConfig && opType.commissionConfig.type !== 'none') {
+            return formatCommissionConfig(opType.commissionConfig);
+        }
+        return 'Non configuré';
+    }
+
+    // Vérifier les exceptions spécifiques au service
+    const serviceException = contract.exceptions.find(ex => ex.targetType === 'service' && ex.targetId === opType.id);
+    if (serviceException) {
+        return formatCommissionConfig((serviceException as any).commissionConfig);
+    }
+
+    // Vérifier les exceptions par catégorie
+    if (opType.category) {
+        const categoryException = contract.exceptions.find(ex => ex.targetType === 'category' && ex.targetId === opType.category);
+        if (categoryException) {
+            return formatCommissionConfig((categoryException as any).commissionConfig);
+        }
+    }
+
+    // Utiliser la configuration par défaut du contrat
+    if (contract.defaultCommissionConfig) {
+        return formatCommissionConfig(contract.defaultCommissionConfig);
+    }
+
+    return 'Non configuré';
+}
+
+function formatCommissionConfig(config: any): string {
+    if (!config) return 'Non configuré';
+
+    const partnerSharePercent = 100 - (config.partageSociete || 100);
+
+    switch (config.type) {
+        case 'fixed':
+            return `${formatAmount(config.amount || 0)} fixe (${partnerSharePercent}% pour vous)`;
+        
+        case 'percentage':
+            const totalRate = config.rate || 0;
+            const partnerRate = (totalRate * partnerSharePercent) / 100;
+            return `${partnerRate.toFixed(2)}% du montant`;
+        
+        case 'tiers':
+            if (!config.tiers || config.tiers.length === 0) {
+                return `Par paliers (${partnerSharePercent}% pour vous)`;
+            }
+            
+            const tiersDescription = config.tiers.map((tier: any) => {
+                const fromAmount = formatAmount(tier.from);
+                const toAmount = tier.to === 999999999 ? '∞' : formatAmount(tier.to);
+                
+                if (tier.type === 'fixed') {
+                    const partnerAmount = Math.round((tier.value * partnerSharePercent) / 100);
+                    return `${fromAmount} - ${toAmount}: ${formatAmount(partnerAmount)} pour vous`;
+                } else {
+                    const partnerRate = (tier.value * partnerSharePercent) / 100;
+                    return `${fromAmount} - ${toAmount}: ${partnerRate.toFixed(2)}% pour vous`;
+                }
+            }).join('<br>');
+            
+            return `<div class="text-sm">
+                <div class="font-medium mb-1">Par paliers:</div>
+                <div class="text-xs text-slate-600">${tiersDescription}</div>
+            </div>`;
+        
+        default:
+            return `${partnerSharePercent}% des frais`;
+    }
+}
+
 export async function renderPartnerContractView(user: User): Promise<HTMLElement> {
     if (!user.partnerId) {
         return createCard('Erreur', '<p>Partenaire non identifié.</p>', 'fa-exclamation-triangle');
@@ -125,18 +197,7 @@ export async function renderPartnerContractView(user: User): Promise<HTMLElement
             }
 
             const ruleSource = getCommissionDescription(opType, myContract);
-            const { partnerShare } = await api.getFeePreview(user.id, opType.id, 10000); // Use a sample amount to get the share percentage
-
-            let shareDescription = `${100 - (myContract.defaultCommissionConfig?.partageSociete || 100)}% des frais`;
-            
-            const exception = myContract.exceptions.find(ex => (ex.targetType === 'service' && ex.targetId === opType.id) || (ex.targetType === 'category' && ex.targetId === opType.category));
-            // FIX: Add type assertion for exception to resolve potential 'unknown' type error.
-            if (exception && (exception as any).commissionConfig.partageSociete !== undefined) {
-                 shareDescription = `${100 - (exception as any).commissionConfig.partageSociete}% des frais`;
-            } else if (opType.commissionConfig.partageSociete !== undefined) {
-                 shareDescription = `${100 - opType.commissionConfig.partageSociete}% des frais`;
-            }
-
+            const shareDescription = getCommissionConfigDescription(opType, myContract);
 
             const tr = document.createElement('tr');
             tr.innerHTML = `
