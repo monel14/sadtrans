@@ -253,28 +253,49 @@ export class AdminCreatePartnerModal extends BaseModal {
                 (userData as any).partnerName = name;
 
                 // Appeler directement la fonction Edge create-partner
-                const { data, error } = await supabase.functions.invoke('create-partner', {
+                const response = await supabase.functions.invoke('create-partner', {
                     body: {
                         userData: userData,
                         password: password
                     }
                 });
 
-                if (error) {
-                    console.error('Error calling create-partner Edge function:', error);
-                    throw new Error('Failed to create partner');
+                console.log('Full response:', response);
+                console.log('Response data:', response.data);
+                console.log('Response error:', response.error);
+
+                if (response.error) {
+                    console.error('Error calling create-partner Edge function:', response.error);
+                    console.error('Full error object:', JSON.stringify(response.error, null, 2));
+
+                    // Try to get more details from the response
+                    let errorMessage = 'Erreur Edge Function';
+                    if (response.data) {
+                        console.error('Error response data:', response.data);
+                        errorMessage = response.data.error || response.data.details || errorMessage;
+                    }
+                    throw new Error(errorMessage);
                 }
 
-                if (data.error) {
+                const data = response.data;
+
+                if (data && data.error) {
                     console.error('Error in create-partner function:', data.error);
-                    console.log('Debug info:', data.debug);
-                    throw new Error(data.error);
+                    console.error('Error details:', data.details);
+                    console.error('Error hint:', data.hint);
+                    console.error('Error code:', data.code);
+                    if (data.debug) {
+                        console.log('Debug info:', data.debug);
+                    }
+                    throw new Error(data.error + (data.details ? ` - ${data.details}` : ''));
                 }
 
                 // Log debug info for successful calls too
-                if (data.debug) {
+                if (data && data.debug) {
                     console.log('Debug info:', data.debug);
                 }
+
+                console.log('Partner created successfully:', data);
 
                 document.body.dispatchEvent(new CustomEvent('partnerCreated', { bubbles: true, composed: true }));
                 document.body.dispatchEvent(new CustomEvent('showToast', {
