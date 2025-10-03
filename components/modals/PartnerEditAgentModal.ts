@@ -37,17 +37,6 @@ export class PartnerEditAgentModal extends BaseModal {
                 <div id="password-section">
                     <!-- Password fields will be rendered dynamically -->
                 </div>
-
-                <div class="border-t pt-4">
-                    <label class="form-label">Statut du Compte</label>
-                    <div class="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-                        <span id="statusLabel" class="font-medium text-slate-700">Actif</span>
-                        <select id="agentStatus" name="status" class="form-select w-36">
-                            <option value="active">Actif</option>
-                            <option value="suspended">Suspendu</option>
-                        </select>
-                    </div>
-                </div>
             </form>
         `;
 
@@ -88,20 +77,7 @@ export class PartnerEditAgentModal extends BaseModal {
 
         const passwordSection = $('#password-section', this.form) as HTMLElement;
         if (this.editingAgent) {
-            passwordSection.innerHTML = `
-                <div class="border-t pt-4">
-                    <label class="form-label">Réinitialiser le mot de passe</label>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                            <input type="password" name="password" class="form-input" placeholder="Nouveau mot de passe" autocomplete="new-password">
-                        </div>
-                        <div>
-                            <input type="password" name="passwordConfirm" class="form-input" placeholder="Confirmer le mot de passe" autocomplete="new-password">
-                        </div>
-                    </div>
-                    <p class="text-xs text-slate-500 mt-1">Laissez vide pour ne pas changer le mot de passe.</p>
-                </div>
-            `;
+            passwordSection.innerHTML = ``;
         } else {
             passwordSection.innerHTML = `
                 <div class="border-t pt-4">
@@ -120,25 +96,12 @@ export class PartnerEditAgentModal extends BaseModal {
         }
 
 
-    const statusSelect = $('#agentStatus', this.form) as HTMLSelectElement;
-    const initialStatus = this.editingAgent ? (this.editingAgent.status || 'suspended') : 'active';
-    statusSelect.value = initialStatus;
-    this.updateStatusLabel(initialStatus === 'active');
+
     }
 
-    private updateStatusLabel(isActive: boolean) {
-        const statusLabel = $('#statusLabel', this.form);
-        if (statusLabel) {
-            statusLabel.textContent = isActive ? 'Actif' : 'Suspendu';
-            statusLabel.className = `font-medium ${isActive ? 'text-slate-700' : 'text-red-600'}`;
-        }
-    }
+
 
     private attachListeners() {
-        const statusSelect = $('#agentStatus', this.form) as HTMLSelectElement;
-        statusSelect?.addEventListener('change', () => {
-            this.updateStatusLabel(statusSelect.value === 'active');
-        });
 
         this.form.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -151,29 +114,29 @@ export class PartnerEditAgentModal extends BaseModal {
 
             try {
                 const formData = new FormData(this.form);
-                const statusSelect = $('#agentStatus', this.form) as HTMLSelectElement;
 
-                const newPassword = formData.get('password') as string;
-                const confirmPassword = formData.get('passwordConfirm') as string;
+                // Pour la création d'un nouvel agent, vérifier les mots de passe
+                if (!this.editingAgent) {
+                    const newPassword = formData.get('password') as string;
+                    const confirmPassword = formData.get('passwordConfirm') as string;
 
-                // Vérifier que les mots de passe correspondent (pour la création et la modification)
-                if (newPassword && newPassword !== confirmPassword) {
-                    document.body.dispatchEvent(new CustomEvent('showToast', {
-                        detail: { message: "Les mots de passe ne correspondent pas.", type: 'error' }
-                    }));
-                    submitButton.disabled = false;
-                    submitButton.innerHTML = originalButtonHtml;
-                    return;
-                }
+                    if (!newPassword || !confirmPassword) {
+                        document.body.dispatchEvent(new CustomEvent('showToast', {
+                            detail: { message: "Veuillez saisir et confirmer un mot de passe.", type: 'error' }
+                        }));
+                        submitButton.disabled = false;
+                        submitButton.innerHTML = originalButtonHtml;
+                        return;
+                    }
 
-                // Pour la création d'un nouvel agent, les mots de passe sont requis
-                if (!this.editingAgent && (!newPassword || !confirmPassword)) {
-                    document.body.dispatchEvent(new CustomEvent('showToast', {
-                        detail: { message: "Veuillez saisir et confirmer un mot de passe.", type: 'error' }
-                    }));
-                    submitButton.disabled = false;
-                    submitButton.innerHTML = originalButtonHtml;
-                    return;
+                    if (newPassword !== confirmPassword) {
+                        document.body.dispatchEvent(new CustomEvent('showToast', {
+                            detail: { message: "Les mots de passe ne correspondent pas.", type: 'error' }
+                        }));
+                        submitButton.disabled = false;
+                        submitButton.innerHTML = originalButtonHtml;
+                        return;
+                    }
                 }
 
                 const agentData: Partial<User> = {
@@ -181,32 +144,35 @@ export class PartnerEditAgentModal extends BaseModal {
                     name: formData.get('name') as string,
                     email: formData.get('email') as string,
                     phone: formData.get('phone') as string,
-                    status: statusSelect.value === 'active' ? 'active' : 'suspended',
+                    status: this.editingAgent ? this.editingAgent.status : 'active',
                 };
                 
                 if (!this.editingAgent) {
                     agentData.role = 'agent';
                     agentData.partnerId = this.partnerId;
                     agentData.agencyId = this.agencyId;
+                } else {
+                    // Pour les agents existants, conserver le rôle existant
+                    agentData.role = this.editingAgent.role;
+                    agentData.partnerId = this.editingAgent.partnerId;
+                    agentData.agencyId = this.editingAgent.agencyId;
                 }
                 
-                if (this.editingAgent && newPassword) {
-                    agentData.password = newPassword;
-                }
-
                 // Pour un nouvel agent, inclure le mot de passe
-                if (!this.editingAgent && newPassword) {
+                if (!this.editingAgent) {
+                    const newPassword = formData.get('password') as string;
                     agentData.password = newPassword;
                 }
 
                 const api = ApiService.getInstance();
+                
+                // Mettre à jour les données de l'agent (inclut maintenant la gestion du mot de passe)
                 await api.updateAgent(agentData);
 
-                let toastMessage = this.editingAgent ? "Agent mis à jour avec succès." : "Agent créé avec succès.";
-                if ((this.editingAgent && newPassword) || (!this.editingAgent && newPassword)) {
-                    toastMessage = "Agent mis à jour et mot de passe changé avec succès.";
-                }
-                if (!this.editingAgent && newPassword) {
+                let toastMessage;
+                if (this.editingAgent) {
+                    toastMessage = "Agent mis à jour avec succès.";
+                } else {
                     toastMessage = "Agent créé avec succès et mot de passe défini.";
                 }
 
