@@ -1485,8 +1485,43 @@ export class ApiService {
     }
 
     public async updatePartnerDetails(partnerData: Partial<Partner>): Promise<Partner> {
-        const supabasePartner = { ...partnerData, partner_manager_id: partnerData.partnerManagerId, contact_person: partnerData.contactPerson, id_card_image_url: partnerData.idCardImageUrl, agency_name: partnerData.agencyName };
-        const { data, error } = await supabase.from('partners').update(supabasePartner).eq('id', partnerData.id).select().single();
+        // Si un mot de passe est fourni, mettre à jour l'utilisateur correspondant
+        if ((partnerData as any).password) {
+            const password = (partnerData as any).password;
+            
+            // Trouver l'utilisateur correspondant au partenaire
+            const { data: user, error: userError } = await supabase
+                .from('users')
+                .select('*')
+                .eq('partner_id', partnerData.id)
+                .eq('role', 'partner')
+                .single();
+
+            if (!userError && user) {
+                // Mettre à jour le mot de passe de l'utilisateur
+                await this.adminUpdateUser({
+                    id: user.id,
+                    email: user.email,
+                    name: user.name,
+                    role: user.role,
+                    partnerId: user.partner_id,
+                    agencyId: user.agency_id,
+                    password: password
+                });
+            }
+        }
+
+        // Mettre à jour les informations du partenaire (sans le mot de passe)
+        const { password, ...partnerDataWithoutPassword } = partnerData as any;
+        const supabasePartner = { 
+            ...partnerDataWithoutPassword, 
+            partner_manager_id: partnerDataWithoutPassword.partnerManagerId, 
+            contact_person: partnerDataWithoutPassword.contactPerson, 
+            id_card_image_url: partnerDataWithoutPassword.idCardImageUrl, 
+            agency_name: partnerDataWithoutPassword.agencyName 
+        };
+        
+        const { data, error } = await supabase.from('partners').update(supabasePartner).eq('id', partnerDataWithoutPassword.id).select().single();
         if (error) throw error;
         return data as Partner;
     }
@@ -1552,9 +1587,43 @@ export class ApiService {
         const { data, error } = await supabase.from('users').upsert(supabaseUser).select().single();
         if (error) { console.error('Error in adminUpdateUser:', error); throw error; }
 
-        // Si c'est un nouveau partenaire, créer automatiquement un contrat par défaut
+        // Si c'est un nouveau partenaire, créer l'enregistrement dans la table partners et un contrat par défaut
         if (isNewUser && userData.role === 'partner') {
             try {
+                // 1. Créer l'enregistrement dans la table partners
+                const partnerData = {
+                    id: data.id,
+                    name: (userData as any).partnerName || `${userData.firstName} ${userData.lastName}`,
+                    partner_manager_id: data.id,
+                    agency_name: userData.agencyName || null,
+                    contact_person: userData.contactPerson || null,
+                    id_card_image_url: userData.idCardImageUrl || null,
+                    ifu: userData.ifu || null,
+                    rccm: userData.rccm || null,
+                    address: userData.address || null,
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString()
+                };
+
+                const { error: partnerError } = await supabase.from('partners').insert(partnerData);
+                if (partnerError) {
+                    console.error('Error creating partner record:', partnerError);
+                    throw new Error('Failed to create partner record');
+                }
+
+                // Mettre à jour l'utilisateur avec le partner_id
+                const { error: updateError } = await supabase
+                    .from('users')
+                    .update({ partner_id: data.id })
+                    .eq('id', data.id);
+
+                if (updateError) {
+                    console.error('Error updating user with partner_id:', updateError);
+                }
+
+                console.log(`Partner record created: ${data.id}`);
+
+                // 2. Créer automatiquement un contrat par défaut
                 const defaultContract = {
                     id: `contract_default_${data.id}`,
                     name: `Contrat par Défaut - ${userData.firstName} ${userData.lastName}`,
@@ -1578,8 +1647,9 @@ export class ApiService {
                 } else {
                     console.log(`Contrat par défaut créé pour le partenaire: ${data.id}`);
                 }
-            } catch (contractError) {
-                console.error('Failed to create default contract:', contractError);
+            } catch (error) {
+                console.error('Failed to create partner:', error);
+                throw error;
             }
         }
 

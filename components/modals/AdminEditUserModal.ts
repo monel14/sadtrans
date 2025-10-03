@@ -46,10 +46,8 @@ export class AdminEditUserModal extends BaseModal {
 
                 <div id="role-specific-fields" class="space-y-4 pt-4 border-t"></div>
                 
-                <div class="border-t pt-4">
-                    <label class="form-label text-slate-400">Réinitialiser le mot de passe</label>
-                    <input type="password" id="adminEditUserPassword" name="password" class="form-input bg-slate-100" placeholder="Contactez l'administrateur système pour définir le mot de passe" autocomplete="new-password" disabled>
-                    <p class="text-xs text-slate-500 mt-1">La modification du mot de passe n'est pas disponible via ce formulaire.</p>
+                <div id="password-section" class="border-t pt-4">
+                    <!-- Password fields will be rendered dynamically -->
                 </div>
                 <div class="border-t pt-4">
                     <label class="form-label">Statut du Compte</label>
@@ -118,9 +116,30 @@ export class AdminEditUserModal extends BaseModal {
         ($('#adminEditUserEmail', this.form) as HTMLInputElement).value = userToDisplay?.email || '';
         ($('#adminEditUserPhone', this.form) as HTMLInputElement).value = userToDisplay?.phone || '';
 
-        const passwordInput = $('#adminEditUserPassword', this.form) as HTMLInputElement;
-        // Password field is disabled - no validation needed
-        passwordInput.required = false;
+        // Gérer les champs de mot de passe
+        const passwordSection = $('#password-section', this.form) as HTMLElement;
+        if (this.editingUser) {
+            // Pour les utilisateurs existants, pas de modification de mot de passe
+            passwordSection.innerHTML = `
+                <label class="form-label text-slate-400">Réinitialiser le mot de passe</label>
+                <input type="password" id="adminEditUserPassword" name="password" class="form-input bg-slate-100" placeholder="Contactez l'administrateur système pour définir le mot de passe" autocomplete="new-password" disabled>
+                <p class="text-xs text-slate-500 mt-1">La modification du mot de passe n'est pas disponible via ce formulaire.</p>
+            `;
+        } else {
+            // Pour les nouveaux utilisateurs, permettre la saisie du mot de passe
+            passwordSection.innerHTML = `
+                <label class="form-label">Mot de passe</label>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <input type="password" id="adminEditUserPassword" name="password" class="form-input" placeholder="Mot de passe" autocomplete="new-password" required>
+                    </div>
+                    <div>
+                        <input type="password" id="adminEditUserPasswordConfirm" name="passwordConfirm" class="form-input" placeholder="Confirmer le mot de passe" autocomplete="new-password" required>
+                    </div>
+                </div>
+                <p class="text-xs text-slate-500 mt-1">Veuillez définir un mot de passe pour le nouvel utilisateur.</p>
+            `;
+        }
         
         const roleFieldsContainer = $('#role-specific-fields', this.form) as HTMLElement;
         roleFieldsContainer.innerHTML = '';
@@ -235,6 +254,39 @@ export class AdminEditUserModal extends BaseModal {
                 const formData = new FormData(this.form);
                 const statusSelectInput = $('#userStatus', this.form) as HTMLSelectElement;
 
+                // Validation du mot de passe pour les nouveaux utilisateurs
+                if (!this.editingUser) {
+                    const password = formData.get('password') as string;
+                    const passwordConfirm = formData.get('passwordConfirm') as string;
+
+                    if (!password || !passwordConfirm) {
+                        document.body.dispatchEvent(new CustomEvent('showToast', {
+                            detail: { message: "Veuillez saisir et confirmer un mot de passe.", type: 'error' }
+                        }));
+                        submitButton.disabled = false;
+                        submitButton.innerHTML = originalButtonHtml;
+                        return;
+                    }
+
+                    if (password !== passwordConfirm) {
+                        document.body.dispatchEvent(new CustomEvent('showToast', {
+                            detail: { message: "Les mots de passe ne correspondent pas.", type: 'error' }
+                        }));
+                        submitButton.disabled = false;
+                        submitButton.innerHTML = originalButtonHtml;
+                        return;
+                    }
+
+                    if (password.length < 6) {
+                        document.body.dispatchEvent(new CustomEvent('showToast', {
+                            detail: { message: "Le mot de passe doit contenir au moins 6 caractères.", type: 'error' }
+                        }));
+                        submitButton.disabled = false;
+                        submitButton.innerHTML = originalButtonHtml;
+                        return;
+                    }
+                }
+
                 const userData: Partial<User> = {
                     id: this.editingUser?.id,
                     firstName: formData.get('firstName') as string,
@@ -246,9 +298,9 @@ export class AdminEditUserModal extends BaseModal {
 
                 if (!this.editingUser && this.roleToCreate) {
                     userData.role = this.roleToCreate;
+                    // Ajouter le mot de passe pour les nouveaux utilisateurs
+                    userData.password = formData.get('password') as string;
                 }
-
-                // Password update is disabled - skip password handling
 
                 const userRole = this.editingUser?.role || this.roleToCreate;
                 if (userRole === 'agent') {
@@ -293,15 +345,18 @@ export class AdminEditUserModal extends BaseModal {
                 if (this.editingUser) {
                     // Modification d'un utilisateur existant
                     await api.adminUpdateUser(userData);
+                    document.body.dispatchEvent(new CustomEvent('showToast', { 
+                        detail: { message: "Utilisateur mis à jour avec succès.", type: 'success' } 
+                    }));
                 } else {
-                    // Création d'un nouvel utilisateur - informer que le mot de passe doit être défini séparément
+                    // Création d'un nouvel utilisateur avec mot de passe
+                    await api.adminUpdateUser(userData);
                     document.body.dispatchEvent(new CustomEvent('showToast', { 
                         detail: { 
-                            message: "Utilisateur créé avec succès. Le mot de passe doit être défini par l'administrateur système.", 
-                            type: 'info' 
+                            message: "Utilisateur créé avec succès et mot de passe défini.", 
+                            type: 'success' 
                         } 
                     }));
-                    await api.adminUpdateUser(userData); // Utiliser adminUpdateUser au lieu de createUser
                 }
                 
                 document.body.dispatchEvent(new CustomEvent('userUpdated', { bubbles: true, composed: true }));

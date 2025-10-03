@@ -135,48 +135,7 @@ export async function renderAdminManageUsersView(): Promise<HTMLElement> {
 
         const section = renderUserSection(userType, usersOfType, partnerMap, allUsers);
         container.appendChild(section);
-            let partnerInfo = '';
-            // Specifically add partner name for agents, as requested
-            if (user.role === 'agent' && user.partnerId) {
-                const partner = partnerMap.get(user.partnerId);
-                partnerInfo = `<p class="text-sm text-slate-500">Partenaire: <strong>${partner?.name || 'Inconnu'}</strong></p>`;
-            }
-
-            const statusBadge = user.status 
-                ? (user.status === 'active' 
-                    ? `<span class="badge badge-success">Actif</span>`
-                    : `<span class="badge badge-danger">Suspendu</span>`)
-                : '';
-            
-            let editButtonHtml = '';
-            if (user.role === 'agent' || user.role === 'partner') {
-                editButtonHtml = `
-                    <button class="btn btn-sm btn-outline-secondary" title="Modifier" data-action="edit-user" data-user-id="${user.id}">
-                        <i class="fas fa-edit"></i>
-                    </button>
-                `;
-            }
-
-            const li = document.createElement('li');
-            li.className = 'card !p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3';
-            li.innerHTML = `
-                <div class="flex items-center gap-3 flex-grow">
-                     <img src="https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=f3f4f6&color=4b5563" alt="Avatar" class="w-10 h-10 rounded-full">
-                     <div>
-                        <p class="font-semibold text-slate-800">${user.name}</p>
-                        <p class="text-sm text-slate-500">${user.email}</p>
-                        ${partnerInfo}
-                     </div>
-                </div>
-                <div class="flex items-center gap-4 w-full sm:w-auto mt-2 sm:mt-0">
-                    ${statusBadge}
-                    <div class="flex gap-1">
-                        ${editButtonHtml}
-                    </div>
-                 </div>
-            `;
-            list.appendChild(li);
-        });
+    });
 
     const card = createCard('Gestion de Tous les Utilisateurs', container, 'fa-users-cog');
     

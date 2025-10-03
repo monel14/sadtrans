@@ -124,10 +124,9 @@ export async function renderAdminManagePartnersView(): Promise<HTMLElement> {
 
         const createBtn = target.closest<HTMLButtonElement>('#create-partner-btn');
         if (createBtn) {
-            document.body.dispatchEvent(new CustomEvent('openAdminEditUserModal', {
+            document.body.dispatchEvent(new CustomEvent('openAdminCreatePartnerModal', {
                 bubbles: true,
-                composed: true,
-                detail: { user: null, roleToCreate: 'partner' }
+                composed: true
             }));
             return;
         }

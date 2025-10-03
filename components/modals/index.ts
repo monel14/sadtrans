@@ -5,6 +5,7 @@ export { AdminDefaultExceptionModal } from './AdminDefaultExceptionModal';
 export { AdminEditCardTypeModal } from './AdminEditCardTypeModal';
 export { AdminEditContractModal } from './AdminEditContractModal';
 export { AdminEditPartnerModal } from './AdminEditPartnerModal';
+export { AdminCreatePartnerModal } from './AdminCreatePartnerModal';
 export { AdminEditRechargeMethodModal } from './AdminEditRechargeMethodModal';
 export { AdminEditUserModal } from './AdminEditUserModal';
 export { AdminRejectRechargeModal } from './AdminRejectRechargeModal';

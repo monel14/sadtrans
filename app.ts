@@ -16,6 +16,7 @@ import {
   PartnerEditAgentModal,
   AdminEditUserModal,
   AdminEditPartnerModal,
+  AdminCreatePartnerModal,
   AdminRejectRechargeModal,
   PartnerTransferRevenueModal,
   ConfirmationModal,
@@ -35,6 +36,7 @@ export class App {
   private partnerEditAgentModal: PartnerEditAgentModal | null = null;
   private adminEditUserModal: AdminEditUserModal | null = null;
   private adminEditPartnerModal: AdminEditPartnerModal | null = null;
+  private adminCreatePartnerModal: AdminCreatePartnerModal | null = null;
   private adminRejectRechargeModal: AdminRejectRechargeModal | null = null;
   private partnerTransferRevenueModal: PartnerTransferRevenueModal | null =
     null;
@@ -140,6 +142,10 @@ export class App {
     document.body.addEventListener(
       "openAdminEditPartnerModal",
       this.handleOpenAdminEditPartnerModal as EventListener,
+    );
+    document.body.addEventListener(
+      "openAdminCreatePartnerModal",
+      this.handleOpenAdminCreatePartnerModal as EventListener,
     );
     document.body.addEventListener(
       "openAdminRejectRechargeModal",
@@ -513,6 +519,7 @@ export class App {
     this.partnerEditAgentModal = new PartnerEditAgentModal();
     this.adminEditUserModal = new AdminEditUserModal();
     this.adminEditPartnerModal = new AdminEditPartnerModal();
+    this.adminCreatePartnerModal = new AdminCreatePartnerModal();
     this.adminRejectRechargeModal = new AdminRejectRechargeModal();
     this.partnerTransferRevenueModal = new PartnerTransferRevenueModal();
     this.confirmationModal = new ConfirmationModal();
@@ -536,6 +543,8 @@ export class App {
     this.adminEditUserModal?.show(event.detail.user, event.detail.roleToCreate);
   private handleOpenAdminEditPartnerModal = (event: CustomEvent) =>
     this.adminEditPartnerModal?.show(event.detail.partner);
+  private handleOpenAdminCreatePartnerModal = (event: CustomEvent) =>
+    this.adminCreatePartnerModal?.show();
   private handleOpenAdminRejectRechargeModal = (event: CustomEvent) =>
     this.adminRejectRechargeModal?.show(event.detail.requestId);
   private handleOpenAdminAdjustBalanceModal = (event: CustomEvent) =>
