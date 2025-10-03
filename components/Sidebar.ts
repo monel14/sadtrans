@@ -84,15 +84,18 @@ export function renderSidebar(user: User): HTMLElement {
     sidebar.className = 'sidebar w-64 p-4 space-y-2 flex flex-col fixed inset-y-0 left-0 transform -translate-x-full md:translate-x-0 z-30';
 
     const logo = `
-        <div class="text-2xl font-semibold text-center py-4 flex items-center justify-center">
-            <i class="fas fa-shield-alt mr-3 text-violet-400"></i>
-            <span class="text-slate-100">SadTrans</span>
+        <div class="sidebar-logo text-2xl font-bold text-center py-6 flex items-center justify-center mb-2">
+            <div class="logo-icon-wrapper">
+                <i class="fas fa-shield-alt text-violet-400"></i>
+            </div>
+            <span class="text-white ml-3 tracking-wide">SadTrans</span>
         </div>
+        <div class="sidebar-divider"></div>
     `;
 
     const nav = document.createElement('nav');
     nav.id = 'appNavigation';
-    nav.className = 'flex-grow overflow-y-auto space-y-1 pr-2';
+    nav.className = 'flex-grow overflow-y-auto space-y-1 pr-2 py-4';
 
     // Initialiser avec les liens statiques
     const links = navigationLinks[user.role];
@@ -107,8 +110,11 @@ export function renderSidebar(user: User): HTMLElement {
 
     const logoutButton = document.createElement('button');
     logoutButton.id = 'logoutButton';
-    logoutButton.className = 'w-full flex items-center p-2 rounded-md text-slate-300 hover:bg-red-500/20 hover:text-red-400 transition-colors';
-    logoutButton.innerHTML = `<i class="fas fa-sign-out-alt w-10 text-center mr-1"></i><span class="text-sm">Déconnexion</span>`;
+    logoutButton.className = 'w-full flex items-center justify-center p-3 rounded-lg text-slate-300 hover:bg-red-500/20 hover:text-red-400 transition-all duration-200 group';
+    logoutButton.innerHTML = `
+        <i class="fas fa-sign-out-alt mr-2 group-hover:scale-110 transition-transform"></i>
+        <span class="font-medium">Déconnexion</span>
+    `;
     logoutButton.addEventListener('click', () => {
         sidebar.dispatchEvent(new CustomEvent('logout', { bubbles: true, composed: true }));
     });
