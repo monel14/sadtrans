@@ -409,7 +409,7 @@ export async function renderDeveloperManageOperationTypesView(user: User): Promi
         }
 
         // Create new operation type button
-        const createNewBtn = target.closest('#create-new-op-type-btn') || (target.id === 'create-new-op-type-btn' ? target : null);
+        const createNewBtn = target.id === 'create-new-op-type-btn' ? target : target.closest('#create-new-op-type-btn');
         console.log('Checking for create button:', createNewBtn);
         if (createNewBtn) {
             console.log('Create new button clicked!');
@@ -469,6 +469,43 @@ export async function renderDeveloperManageOperationTypesView(user: User): Promi
             } catch (error) {
                 console.error('Error in create new button handler:', error);
             }
+        }
+
+        // Add field button
+        const addFieldBtn = target.id === 'add-field-btn' ? target : target.closest('#add-field-btn');
+        if (addFieldBtn && selectedOpType) {
+            // Préserver l'onglet actif
+            const activeTab = detailView?.querySelector('.tabs button.active') as HTMLButtonElement;
+            const activeTabName = activeTab?.dataset.tab || 'form';
+            
+            const newField: OperationTypeField = {
+                id: 'f_new_field_' + Date.now(),
+                name: 'new_field',
+                type: 'text',
+                label: 'Nouveau champ',
+                options: [],
+                required: false,
+                readonly: false,
+                obsolete: false
+            };
+            selectedOpType.fields = selectedOpType.fields || [];
+            selectedOpType.fields.push(newField);
+            renderDetailView();
+            
+            // Restaurer l'onglet actif après le re-rendu
+            setTimeout(() => {
+                const tabToActivate = detailView?.querySelector(`[data-tab="${activeTabName}"]`) as HTMLButtonElement;
+                if (tabToActivate) {
+                    detailView?.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
+                    tabToActivate.classList.add('active');
+                    tabToActivate.click(); // Déclencher l'affichage du contenu de l'onglet
+                }
+            }, 10);
+            
+            document.body.dispatchEvent(new CustomEvent('showToast', { 
+                detail: { message: 'Nouveau champ ajouté', type: 'success' } 
+            }));
+            return;
         }
 
         // Add card type field button
