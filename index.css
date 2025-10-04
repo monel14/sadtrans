@@ -94,13 +94,36 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%);
-    border-radius: 10px;
-    box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
 }
 
 .logo-icon-wrapper i {
     font-size: 1.25rem;
+}
+
+.logo-icon-wrapper .logo-svg {
+    width: 32px;
+    height: 32px;
+    position: relative;
+    z-index: 2;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+}
+
+/* Styles pour le logo de la page de connexion */
+.login-logo-wrapper {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.login-logo {
+    width: 80px;
+    height: 80px;
+    filter: drop-shadow(0 4px 8px rgba(124, 58, 237, 0.4));
+    transition: transform 0.3s ease;
+}
+
+.login-logo:hover {
+    transform: scale(1.05);
 }
 
 .sidebar-divider {

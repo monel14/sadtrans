@@ -11,7 +11,9 @@ export function renderLoginPage(): HTMLElement {
     page.innerHTML = `
         <div class="bg-slate-800/60 backdrop-blur-lg border border-slate-700 p-8 sm:p-12 rounded-2xl w-full max-w-md shadow-2xl shadow-slate-900/50">
             <div class="text-center mb-8">
-                <i class="fas fa-shield-alt text-5xl text-violet-400"></i>
+                <div class="login-logo-wrapper mb-4">
+                    <img src="/logo.svg" alt="SadTrans Logo" class="login-logo mx-auto" />
+                </div>
                 <h1 class="text-3xl font-bold text-slate-100 mt-4">SadTrans</h1>
                 <p class="text-slate-400">Plateforme de services financiers</p>
             </div>

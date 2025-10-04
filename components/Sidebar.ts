@@ -86,7 +86,8 @@ export function renderSidebar(user: User): HTMLElement {
     const logo = `
         <div class="sidebar-logo text-2xl font-bold text-center py-6 flex items-center justify-center mb-2">
             <div class="logo-icon-wrapper">
-                <i class="fas fa-shield-alt text-violet-400"></i>
+                <img src="/logo.svg" alt="SadTrans Logo" class="logo-svg" />
+                <div class="logo-glow"></div>
             </div>
             <span class="text-white ml-3 tracking-wide">SadTrans</span>
         </div>
