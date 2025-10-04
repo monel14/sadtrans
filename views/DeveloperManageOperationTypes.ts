@@ -521,6 +521,94 @@ export async function renderDeveloperManageOperationTypesView(user: User): Promi
             return;
         }
 
+        // Check for move-up button (for reordering form fields)
+        let moveUpBtn: HTMLButtonElement | null = null;
+        if (target.dataset.action === 'move-up') {
+            moveUpBtn = target as HTMLButtonElement;
+        } else if (target.parentElement?.dataset.action === 'move-up') {
+            moveUpBtn = target.parentElement as HTMLButtonElement;
+        } else {
+            moveUpBtn = target.closest<HTMLButtonElement>('[data-action="move-up"]');
+        }
+
+        if (moveUpBtn && selectedOpType) {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('Move up button clicked');
+            
+            const fieldEditor = moveUpBtn.closest('.field-editor');
+            if (fieldEditor) {
+                const fieldId = fieldEditor.dataset.id;
+                const fieldIndex = selectedOpType.fields.findIndex(f => f.id === fieldId);
+                
+                if (fieldIndex > 0) {
+                    // Swap with previous field
+                    [selectedOpType.fields[fieldIndex - 1], selectedOpType.fields[fieldIndex]] = 
+                    [selectedOpType.fields[fieldIndex], selectedOpType.fields[fieldIndex - 1]];
+                    
+                    // Re-render the form tab
+                    const activeTab = detailView?.querySelector('.tabs button.active') as HTMLButtonElement;
+                    const activeTabName = activeTab?.dataset.tab || 'form';
+                    renderDetailView();
+                    
+                    // Restore the active tab
+                    setTimeout(() => {
+                        const tabToActivate = detailView?.querySelector(`[data-tab="${activeTabName}"]`) as HTMLButtonElement;
+                        if (tabToActivate) {
+                            detailView?.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
+                            tabToActivate.classList.add('active');
+                            tabToActivate.click();
+                        }
+                    }, 10);
+                }
+            }
+            return;
+        }
+
+        // Check for move-down button (for reordering form fields)
+        let moveDownBtn: HTMLButtonElement | null = null;
+        if (target.dataset.action === 'move-down') {
+            moveDownBtn = target as HTMLButtonElement;
+        } else if (target.parentElement?.dataset.action === 'move-down') {
+            moveDownBtn = target.parentElement as HTMLButtonElement;
+        } else {
+            moveDownBtn = target.closest<HTMLButtonElement>('[data-action="move-down"]');
+        }
+
+        if (moveDownBtn && selectedOpType) {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('Move down button clicked');
+            
+            const fieldEditor = moveDownBtn.closest('.field-editor');
+            if (fieldEditor) {
+                const fieldId = fieldEditor.dataset.id;
+                const fieldIndex = selectedOpType.fields.findIndex(f => f.id === fieldId);
+                
+                if (fieldIndex < selectedOpType.fields.length - 1) {
+                    // Swap with next field
+                    [selectedOpType.fields[fieldIndex], selectedOpType.fields[fieldIndex + 1]] = 
+                    [selectedOpType.fields[fieldIndex + 1], selectedOpType.fields[fieldIndex]];
+                    
+                    // Re-render the form tab
+                    const activeTab = detailView?.querySelector('.tabs button.active') as HTMLButtonElement;
+                    const activeTabName = activeTab?.dataset.tab || 'form';
+                    renderDetailView();
+                    
+                    // Restore the active tab
+                    setTimeout(() => {
+                        const tabToActivate = detailView?.querySelector(`[data-tab="${activeTabName}"]`) as HTMLButtonElement;
+                        if (tabToActivate) {
+                            detailView?.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
+                            tabToActivate.classList.add('active');
+                            tabToActivate.click();
+                        }
+                    }, 10);
+                }
+            }
+            return;
+        }
+
         // Create new operation type button
         const createNewBtn = target.id === 'create-new-op-type-btn' ? target : target.closest('#create-new-op-type-btn');
         console.log('Checking for create button:', createNewBtn);
