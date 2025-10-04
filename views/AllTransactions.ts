@@ -19,6 +19,32 @@ let lastLoadTime: number = 0;
 const ITEMS_PER_PAGE = 20;
 let currentPage = 1;
 
+// Helper to show image in fullscreen
+function showImageFullscreen(img: HTMLImageElement) {
+    const fullscreenModal = document.createElement('div');
+    fullscreenModal.className = 'fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 cursor-pointer';
+    fullscreenModal.innerHTML = `
+        <div class="relative max-w-full max-h-full p-4">
+            <img src="${img.src}" alt="${img.alt}" class="max-w-full max-h-full object-contain">
+            <button class="absolute top-2 right-2 text-white text-3xl hover:text-gray-300 bg-black bg-opacity-50 rounded-full w-10 h-10 flex items-center justify-center" title="Fermer">
+                &times;
+            </button>
+            <div class="absolute bottom-4 left-1/2 transform -translate-x-1/2 text-white text-sm bg-black bg-opacity-50 px-3 py-1 rounded">
+                ${img.alt} - Cliquez n'importe où pour fermer
+            </div>
+        </div>
+    `;
+    
+    fullscreenModal.addEventListener('click', () => {
+        fullscreenModal.remove();
+    });
+    
+    document.body.appendChild(fullscreenModal);
+}
+
+// Make the function globally accessible for onclick handlers
+(window as any).showImageFullscreen = showImageFullscreen;
+
 // Helper function to show a details modal for a transaction
 function showDetailsModal(transaction: Transaction) {
     const opType = opTypeMap.get(transaction.opTypeId);
@@ -43,12 +69,31 @@ function showDetailsModal(transaction: Transaction) {
     opType.fields.forEach(field => {
         if (field.obsolete) return;
         const value = transaction.form_data[field.name];
-        dataFields += `
-            <div class="py-2 grid grid-cols-3 gap-4">
-                <dt class="text-sm font-medium text-slate-500">${field.label}</dt>
-                <dd class="text-sm text-slate-900 col-span-2">${value || '<em>Non fourni</em>'}</dd>
-            </div>
-        `;
+        
+        // Handle image fields specially
+        if (field.type === 'image' && value) {
+            dataFields += `
+                <div class="py-2 grid grid-cols-3 gap-4">
+                    <dt class="text-sm font-medium text-slate-500">${field.label}</dt>
+                    <dd class="text-sm text-slate-900 col-span-2">
+                        <div class="image-preview-container">
+                            <img src="${value}" alt="${field.label}" 
+                                 class="max-w-full max-h-48 rounded-lg border shadow-sm cursor-pointer hover:shadow-md transition-shadow"
+                                 onclick="showImageFullscreen(this);"
+                                 title="Cliquez pour agrandir/réduire">
+                            <p class="text-xs text-slate-400 mt-1">Cliquez sur l'image pour l'agrandir</p>
+                        </div>
+                    </dd>
+                </div>
+            `;
+        } else {
+            dataFields += `
+                <div class="py-2 grid grid-cols-3 gap-4">
+                    <dt class="text-sm font-medium text-slate-500">${field.label}</dt>
+                    <dd class="text-sm text-slate-900 col-span-2">${value || '<em>Non fourni</em>'}</dd>
+                </div>
+            `;
+        }
     });
 
     let proofSection = '';

@@ -1891,4 +1891,49 @@ export class ApiService {
             return false;
         }
     }
+
+    /**
+     * Upload an image file to Supabase Storage and return the public URL
+     */
+    public async uploadImage(file: File): Promise<string> {
+        try {
+            // Generate a unique filename
+            const fileExt = file.name.split('.').pop();
+            const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+            const filePath = `transaction-images/${fileName}`;
+
+            // Upload the file to Supabase Storage
+            // Use the public transaction-proofs bucket
+            let bucketName = 'transaction-proofs';
+            const { data, error } = await supabase.storage
+                .from(bucketName)
+                .upload(filePath, file, {
+                    cacheControl: '3600',
+                    upsert: false
+                });
+
+            if (error) {
+                console.error('Error uploading image:', error);
+                
+                if (error.message.includes('Bucket not found')) {
+                    throw new Error('Le stockage d\'images n\'est pas configuré. Contactez l\'administrateur.');
+                }
+                throw new Error(`Échec de l'upload: ${error.message}`);
+            }
+
+            // Get the public URL
+            const { data: urlData } = supabase.storage
+                .from(bucketName)
+                .getPublicUrl(filePath);
+
+            if (!urlData?.publicUrl) {
+                throw new Error('Impossible de générer l\'URL publique de l\'image');
+            }
+
+            return urlData.publicUrl;
+        } catch (error) {
+            console.error('Exception in uploadImage:', error);
+            throw error;
+        }
+    }
 }

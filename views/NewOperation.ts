@@ -169,6 +169,50 @@ async function renderDynamicFields(opType: OperationType, container: HTMLElement
                 input.type = 'file';
                 input.accept = 'image/*';
                 input.className += ' file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-violet-50 file:text-violet-700 hover:file:bg-violet-100';
+                
+                // Add image preview functionality
+                input.addEventListener('change', (e) => {
+                    const fileInput = e.target as HTMLInputElement;
+                    const file = fileInput.files?.[0];
+                    
+                    // Remove existing preview
+                    const existingPreview = fieldWrapper.querySelector('.image-preview');
+                    existingPreview?.remove();
+                    
+                    if (file) {
+                        // Validate file size
+                        const maxSize = 5 * 1024 * 1024; // 5MB
+                        if (file.size > maxSize) {
+                            document.body.dispatchEvent(new CustomEvent('showToast', {
+                                detail: { message: `Image trop volumineuse (max 5MB). Taille: ${(file.size / 1024 / 1024).toFixed(1)}MB`, type: 'warning' }
+                            }));
+                            fileInput.value = '';
+                            return;
+                        }
+                        
+                        // Create preview
+                        const preview = document.createElement('div');
+                        preview.className = 'image-preview mt-2 p-2 border rounded-lg bg-slate-50';
+                        
+                        const img = document.createElement('img');
+                        img.className = 'max-w-full max-h-32 rounded object-contain mx-auto block';
+                        
+                        const fileName = document.createElement('p');
+                        fileName.className = 'text-xs text-slate-500 mt-1 text-center';
+                        fileName.textContent = `${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+                        
+                        preview.appendChild(img);
+                        preview.appendChild(fileName);
+                        fieldWrapper.appendChild(preview);
+                        
+                        // Load image preview
+                        const reader = new FileReader();
+                        reader.onload = (e) => {
+                            img.src = e.target?.result as string;
+                        };
+                        reader.readAsDataURL(file);
+                    }
+                });
             } else {
                 input.type = field.type;
             }
@@ -631,28 +675,118 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
 
     $('#cancelOperationBtn', container)?.addEventListener('click', () => handleCancelNavigation(container, user));
 
+    // Variables to prevent double submission
+    let isSubmitting = false;
+    let lastSubmissionTime = 0;
+
     container.querySelector('form')?.addEventListener('submit', async (e) => {
         e.preventDefault();
         const form = e.target as HTMLFormElement;
+        
+        // Prevent double submission
+        const now = Date.now();
+        if (isSubmitting) {
+            console.log('Submission already in progress, ignoring duplicate click');
+            return;
+        }
+        
+        // Prevent rapid successive clicks (minimum 2 seconds between submissions)
+        if (now - lastSubmissionTime < 2000) {
+            console.log('Too soon after last submission, ignoring click');
+            document.body.dispatchEvent(new CustomEvent('showToast', {
+                detail: { message: 'Veuillez patienter avant de soumettre à nouveau.', type: 'warning' }
+            }));
+            return;
+        }
+        
+        lastSubmissionTime = now;
+        
         if (!selectedOperationType) {
             document.body.dispatchEvent(new CustomEvent('showToast', {
                 detail: { message: "Veuillez d'abord sélectionner une opération.", type: 'warning' }
             }));
             return;
         }
+        
+        // Set submission flag and disable button immediately
+        isSubmitting = true;
+        submitButton.disabled = true;
+        submitButton.style.pointerEvents = 'none'; // Prevent any clicks
 
         const formData = new FormData(form);
         const data: { [key: string]: any } = {};
+        
+        // Store original button state for error recovery
+        const originalBtnHtml = submitButton.innerHTML;
+        
+        // Handle files separately - upload them first and store URLs
         for (let [key, value] of formData.entries()) {
-            data[key] = value;
+            if (value instanceof File && value.size > 0) {
+                // Validate file size (max 5MB)
+                const maxSize = 5 * 1024 * 1024; // 5MB
+                if (value.size > maxSize) {
+                    document.body.dispatchEvent(new CustomEvent('showToast', {
+                        detail: { message: `L'image est trop volumineuse (max 5MB). Taille actuelle: ${(value.size / 1024 / 1024).toFixed(1)}MB`, type: 'error' }
+                    }));
+                    submitButton.disabled = false;
+                    submitButton.innerHTML = originalBtnHtml;
+                    submitButton.style.pointerEvents = 'auto'; // Re-enable clicks
+                    isSubmitting = false; // Reset submission flag
+                    return;
+                }
+
+                // Validate file type
+                if (!value.type.startsWith('image/')) {
+                    document.body.dispatchEvent(new CustomEvent('showToast', {
+                        detail: { message: `Le fichier doit être une image. Type détecté: ${value.type}`, type: 'error' }
+                    }));
+                    submitButton.disabled = false;
+                    submitButton.innerHTML = originalBtnHtml;
+                    submitButton.style.pointerEvents = 'auto'; // Re-enable clicks
+                    isSubmitting = false; // Reset submission flag
+                    return;
+                }
+
+                // This is a file (image), we need to upload it first
+                try {
+                    const uploadedUrl = await api.uploadImage(value);
+                    data[key] = uploadedUrl;
+                } catch (error) {
+                    console.error(`Failed to upload image for field ${key}:`, error);
+                    document.body.dispatchEvent(new CustomEvent('showToast', {
+                        detail: { message: `Échec de l'upload de l'image: ${(error as Error).message}`, type: 'error' }
+                    }));
+                    submitButton.disabled = false;
+                    submitButton.innerHTML = originalBtnHtml;
+                    submitButton.style.pointerEvents = 'auto'; // Re-enable clicks
+                    isSubmitting = false; // Reset submission flag
+                    return;
+                }
+            } else {
+                data[key] = value;
+            }
         }
 
-        const originalBtnHtml = submitButton.innerHTML;
+        // Update button state
         submitButton.disabled = true;
-        submitButton.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i>Soumission en cours...`;
+        
+        // Check if there are any image files to upload
+        const hasImages = Array.from(formData.entries()).some(([key, value]) => value instanceof File && value.size > 0);
+        if (hasImages) {
+            submitButton.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i>Upload des images...`;
+        } else {
+            submitButton.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i>Soumission en cours...`;
+        }
+        
+        // Update button text after image uploads are complete
+        if (hasImages) {
+            submitButton.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i>Soumission en cours...`;
+        }
 
         try {
             const newTransaction = await api.createTransaction(user.id, selectedOperationType.id, data);
+            // Reset submission flag on success
+            isSubmitting = false;
             handleCancelNavigation(container, user);
         } catch (error) {
             console.error("Transaction creation failed:", (error as Error).message || error);
@@ -661,6 +795,9 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
             }));
             submitButton.disabled = false;
             submitButton.innerHTML = originalBtnHtml;
+            submitButton.style.pointerEvents = 'auto'; // Re-enable clicks
+            // Reset submission flag on error
+            isSubmitting = false;
         }
     });
 

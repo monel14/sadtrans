@@ -8,6 +8,9 @@ export class AgentRequestRechargeModal extends BaseModal {
     private form: HTMLFormElement | null = null;
     private currentUser: User | null = null;
     private paymentMethods: RechargePaymentMethod[] = [];
+    // Variables to prevent double submission
+    private isSubmitting = false;
+    private lastSubmissionTime = 0;
 
     constructor() {
         super('agentRequestRechargeModal', { size: 'lg' });
@@ -71,6 +74,9 @@ export class AgentRequestRechargeModal extends BaseModal {
     public async show(user: User) {
         this.currentUser = user;
         this.form?.reset();
+        // Reset submission state when opening modal
+        this.isSubmitting = false;
+        this.lastSubmissionTime = 0;
         await this.loadPaymentMethods();
         this.updateCalculations();
         super.show();
@@ -146,6 +152,25 @@ export class AgentRequestRechargeModal extends BaseModal {
 
         this.form?.addEventListener('submit', async (e) => {
             e.preventDefault();
+            
+            // Prevent double submission
+            const now = Date.now();
+            if (this.isSubmitting) {
+                console.log('Agent recharge submission already in progress, ignoring duplicate click');
+                return;
+            }
+            
+            // Prevent rapid successive clicks (minimum 2 seconds between submissions)
+            if (now - this.lastSubmissionTime < 2000) {
+                console.log('Too soon after last agent recharge submission, ignoring click');
+                document.body.dispatchEvent(new CustomEvent('showToast', {
+                    detail: { message: 'Veuillez patienter avant de soumettre à nouveau.', type: 'warning' }
+                }));
+                return;
+            }
+            
+            this.lastSubmissionTime = now;
+            
             if (!this.currentUser || !this.form) {
                 document.body.dispatchEvent(new CustomEvent('showToast', { detail: { message: "Erreur: Utilisateur non identifié.", type: 'error' } }));
                 return;
@@ -163,17 +188,22 @@ export class AgentRequestRechargeModal extends BaseModal {
             if (!methodId) {
                 document.body.dispatchEvent(new CustomEvent('showToast', { detail: { message: "Veuillez sélectionner un mode de paiement.", type: 'warning' } }));
                 paymentMethodInput.focus();
+                this.isSubmitting = false; // Reset submission flag
                 return;
             }
 
             if (isNaN(montant) || montant <= 0) {
                 document.body.dispatchEvent(new CustomEvent('showToast', { detail: { message: "Veuillez entrer un montant valide.", type: 'warning' } }));
                 amountInput.focus();
+                this.isSubmitting = false; // Reset submission flag
                 return;
             }
             
+            // Set submission flag and disable button immediately
+            this.isSubmitting = true;
             const originalButtonHtml = submitButton.innerHTML;
             submitButton.disabled = true;
+            submitButton.style.pointerEvents = 'none'; // Prevent any clicks
             submitButton.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i>Envoi...`;
 
             try {
@@ -185,6 +215,8 @@ export class AgentRequestRechargeModal extends BaseModal {
                     reference
                 );
                 document.body.dispatchEvent(new CustomEvent('showToast', { detail: { message: "Votre demande de recharge a été soumise avec succès !", type: 'success' } }));
+                // Reset submission flag on success
+                this.isSubmitting = false;
                 this.hide();
             } catch (error) {
                 console.error("Failed to create recharge request:", (error as Error).message || error);
@@ -192,6 +224,9 @@ export class AgentRequestRechargeModal extends BaseModal {
             } finally {
                 submitButton.disabled = false;
                 submitButton.innerHTML = originalButtonHtml;
+                submitButton.style.pointerEvents = 'auto'; // Re-enable clicks
+                // Reset submission flag in finally block
+                this.isSubmitting = false;
             }
         });
     }
