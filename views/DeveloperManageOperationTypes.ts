@@ -361,9 +361,33 @@ export async function renderDeveloperManageOperationTypesView(user: User): Promi
         const target = e.target as HTMLElement;
         console.log('Click detected on:', target, 'ID:', target.id, 'Classes:', target.className);
 
-        const deleteBtn = target.closest<HTMLButtonElement>('[data-action="delete-op"]');
+        // Check for delete button first and handle it completely
+        console.log('Looking for delete button from target:', target);
+        console.log('Target dataset:', target.dataset);
+        console.log('Target parent dataset:', target.parentElement?.dataset);
+        
+        // More robust check for delete button
+        let deleteBtn: HTMLButtonElement | null = null;
+        
+        // Check if target itself is the delete button
+        if (target.dataset.action === 'delete-op') {
+            deleteBtn = target as HTMLButtonElement;
+        }
+        // Check if target's parent is the delete button (for the icon case)
+        else if (target.parentElement?.dataset.action === 'delete-op') {
+            deleteBtn = target.parentElement as HTMLButtonElement;
+        }
+        // Fallback to closest search
+        else {
+            deleteBtn = target.closest<HTMLButtonElement>('[data-action="delete-op"]');
+        }
+        
+        console.log('Delete button found:', deleteBtn);
         if (deleteBtn) {
+            e.preventDefault();
             e.stopPropagation(); // Prevent selecting the item when clicking delete
+            console.log('Delete button found, handling delete action');
+            
             const opId = deleteBtn.dataset.id!;
             const opName = deleteBtn.dataset.name!;
             const message = `Êtes-vous sûr de vouloir supprimer le service "<strong>${opName}</strong>" ?<br><br><small>Note: Les transactions existantes seront conservées mais ne seront plus liées à un type d'opération valide. Cette action est irréversible.</small>`;
@@ -405,6 +429,95 @@ export async function renderDeveloperManageOperationTypesView(user: User): Promi
                     }
                 }
             }));
+            return; // Exit early to prevent other handlers from running
+        }
+
+        // Check for remove-field button (for removing form fields)
+        let removeFieldBtn: HTMLButtonElement | null = null;
+        if (target.dataset.action === 'remove-field') {
+            removeFieldBtn = target as HTMLButtonElement;
+        } else if (target.parentElement?.dataset.action === 'remove-field') {
+            removeFieldBtn = target.parentElement as HTMLButtonElement;
+        } else {
+            removeFieldBtn = target.closest<HTMLButtonElement>('[data-action="remove-field"]');
+        }
+
+        if (removeFieldBtn && selectedOpType) {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('Remove field button clicked');
+            
+            // Find the field editor container
+            const fieldEditor = removeFieldBtn.closest('.field-editor');
+            if (fieldEditor) {
+                const fieldId = fieldEditor.dataset.id;
+                // Remove the field from selectedOpType
+                selectedOpType.fields = selectedOpType.fields.filter(f => f.id !== fieldId);
+                
+                // Re-render the form tab
+                const activeTab = detailView?.querySelector('.tabs button.active') as HTMLButtonElement;
+                const activeTabName = activeTab?.dataset.tab || 'form';
+                renderDetailView();
+                
+                // Restore the active tab
+                setTimeout(() => {
+                    const tabToActivate = detailView?.querySelector(`[data-tab="${activeTabName}"]`) as HTMLButtonElement;
+                    if (tabToActivate) {
+                        detailView?.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
+                        tabToActivate.classList.add('active');
+                        tabToActivate.click();
+                    }
+                }, 10);
+                
+                document.body.dispatchEvent(new CustomEvent('showToast', { 
+                    detail: { message: 'Champ supprimé', type: 'success' } 
+                }));
+            }
+            return;
+        }
+
+        // Check for remove-tier button (for removing commission tiers)
+        let removeTierBtn: HTMLButtonElement | null = null;
+        if (target.dataset.action === 'remove-tier') {
+            removeTierBtn = target as HTMLButtonElement;
+        } else if (target.parentElement?.dataset.action === 'remove-tier') {
+            removeTierBtn = target.parentElement as HTMLButtonElement;
+        } else {
+            removeTierBtn = target.closest<HTMLButtonElement>('[data-action="remove-tier"]');
+        }
+
+        if (removeTierBtn && selectedOpType) {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('Remove tier button clicked');
+            
+            // Find the tier editor container
+            const tierEditor = removeTierBtn.closest('.tier-editor');
+            if (tierEditor && selectedOpType.commissionConfig.type === 'tiers' && selectedOpType.commissionConfig.tiers) {
+                const tierId = tierEditor.dataset.id;
+                // Remove the tier (we'll need to match by index since tiers don't have unique IDs)
+                const tierIndex = Array.from(tierEditor.parentElement!.children).indexOf(tierEditor);
+                selectedOpType.commissionConfig.tiers.splice(tierIndex, 1);
+                
+                // Re-render the fees tab
+                const activeTab = detailView?.querySelector('.tabs button.active') as HTMLButtonElement;
+                const activeTabName = activeTab?.dataset.tab || 'fees';
+                renderDetailView();
+                
+                // Restore the active tab
+                setTimeout(() => {
+                    const tabToActivate = detailView?.querySelector(`[data-tab="${activeTabName}"]`) as HTMLButtonElement;
+                    if (tabToActivate) {
+                        detailView?.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
+                        tabToActivate.classList.add('active');
+                        tabToActivate.click();
+                    }
+                }, 10);
+                
+                document.body.dispatchEvent(new CustomEvent('showToast', { 
+                    detail: { message: 'Palier supprimé', type: 'success' } 
+                }));
+            }
             return;
         }
 
@@ -529,9 +642,9 @@ export async function renderDeveloperManageOperationTypesView(user: User): Promi
             return;
         }
 
-        // Master list item selection
+        // Master list item selection - but not if we clicked on a delete button
         const masterItem = target.closest<HTMLButtonElement>('#master-list button[data-id]');
-        if (masterItem) {
+        if (masterItem && !target.closest('[data-action="delete-op"]')) {
             selectedOpType = allOpTypes.find(op => op.id === masterItem.dataset.id) || null;
             renderMasterList(); // Re-render to update active state
             renderDetailView();
