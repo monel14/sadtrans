@@ -256,7 +256,7 @@ body {
 
 /* Login Page Background */
 .login-page {
-    background: linear-gradient(180deg, #3b1e3a 1%, #0f292a 100%);
+    background: linear-gradient( 342deg, #3b1e3a 1%, #234042 100%);
     position: relative;
     overflow: hidden;
 }
