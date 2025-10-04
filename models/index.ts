@@ -101,7 +101,7 @@ export interface OperationTypeField {
     id: string;
     name: string; // key in the `data` object of a transaction
     label: string;
-    type: 'text' | 'number' | 'select' | 'tel' | 'date' | 'file';
+    type: 'text' | 'number' | 'select' | 'tel' | 'date' | 'file' | 'image';
     required: boolean;
     obsolete: boolean;
     options?: string[] | OperationTypeFieldOption[]; // Support des deux formats

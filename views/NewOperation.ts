@@ -163,11 +163,20 @@ async function renderDynamicFields(opType: OperationType, container: HTMLElement
             input.id = `op_field_${field.id}`;
             input.name = field.name;
             input.className = 'form-input mt-1';
-            input.type = field.type;
+            
+            // Handle image type specially
+            if (field.type === 'image') {
+                input.type = 'file';
+                input.accept = 'image/*';
+                input.className += ' file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-violet-50 file:text-violet-700 hover:file:bg-violet-100';
+            } else {
+                input.type = field.type;
+            }
+            
             if (field.required) input.required = true;
-            if (field.placeholder) input.placeholder = field.placeholder;
+            if (field.placeholder && field.type !== 'image') input.placeholder = field.placeholder;
             if (field.readonly) input.readOnly = true;
-            if (field.defaultValue) input.defaultValue = String(field.defaultValue);
+            if (field.defaultValue && field.type !== 'image') input.defaultValue = String(field.defaultValue);
 
             // Ajouter les événements directement sur l'input
             if (updateCallback) {

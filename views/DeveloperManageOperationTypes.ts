@@ -244,9 +244,10 @@ function createFieldEditor(field: OperationTypeField, index: number, total: numb
                         <option value="tel" ${field.type === 'tel' ? 'selected' : ''}>Téléphone</option>
                         <option value="date" ${field.type === 'date' ? 'selected' : ''}>Date</option>
                         <option value="select" ${field.type === 'select' || isCardTypeField ? 'selected' : ''}>Liste</option>
+                        <option value="image" ${field.type === 'image' ? 'selected' : ''}>Image</option>
                     </select>
                 </div>
-                <div>
+                <div class="field-options-container" ${field.type === 'image' ? 'style="display: none;"' : ''}>
                     <label class="form-label form-label-sm">Options (séparées par ,)</label>
                     <input type="text" class="form-input form-input-sm" data-prop="options" value="${optionsValue}" ${isCardTypeField ? 'readonly title="Options automatiquement générées depuis les types de cartes"' : ''}>
                     ${isCardTypeField ? '<small class="text-xs text-blue-600">🔗 Synchronisé avec les types de cartes</small>' : ''}
@@ -604,6 +605,21 @@ export async function renderDeveloperManageOperationTypesView(user: User): Promi
                             tabToActivate.click();
                         }
                     }, 10);
+                }
+            }
+            return;
+        }
+
+        // Handle field type changes to show/hide options field
+        if (target.matches('select[data-prop="type"]')) {
+            const fieldEditor = target.closest('.field-editor');
+            const optionsContainer = fieldEditor?.querySelector('.field-options-container') as HTMLElement;
+            
+            if (optionsContainer) {
+                if (target.value === 'image') {
+                    optionsContainer.style.display = 'none';
+                } else {
+                    optionsContainer.style.display = '';
                 }
             }
             return;
