@@ -146,18 +146,18 @@ export class PartnerEditAgentModal extends BaseModal {
                     phone: formData.get('phone') as string,
                     status: this.editingAgent ? this.editingAgent.status : 'active',
                 };
-                
+
                 if (!this.editingAgent) {
                     agentData.role = 'agent';
                     agentData.partnerId = this.partnerId;
-                    agentData.agencyId = this.agencyId;
+                    agentData.agencyId = this.agencyId || undefined;
                 } else {
                     // Pour les agents existants, conserver le rôle existant
                     agentData.role = this.editingAgent.role;
                     agentData.partnerId = this.editingAgent.partnerId;
                     agentData.agencyId = this.editingAgent.agencyId;
                 }
-                
+
                 // Pour un nouvel agent, inclure le mot de passe
                 if (!this.editingAgent) {
                     const newPassword = formData.get('password') as string;
@@ -165,7 +165,7 @@ export class PartnerEditAgentModal extends BaseModal {
                 }
 
                 const api = ApiService.getInstance();
-                
+
                 // Mettre à jour les données de l'agent (inclut maintenant la gestion du mot de passe)
                 await api.updateAgent(agentData);
 
