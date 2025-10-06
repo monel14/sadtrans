@@ -144,7 +144,7 @@ export class PartnerEditAgentModal extends BaseModal {
                     name: formData.get('name') as string,
                     email: formData.get('email') as string,
                     phone: formData.get('phone') as string,
-                    status: this.editingAgent ? this.editingAgent.status : 'active',
+                     status: this.editingAgent ? this.editingAgent.status : 'active',
                 };
 
                 if (!this.editingAgent) {

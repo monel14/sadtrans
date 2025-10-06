@@ -68,7 +68,7 @@ function showDetailsModal(transaction: Transaction) {
     let dataFields = '';
     opType.fields.forEach(field => {
         if (field.obsolete) return;
-        const value = transaction.form_data[field.name];
+        const value = transaction.data[field.name];
         
         // Handle image fields specially
         if (field.type === 'image' && value) {
