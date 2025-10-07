@@ -799,13 +799,9 @@ export class AdminEditContractModal extends BaseModal {
             (this.form.elements.namedItem('partageSociete') as HTMLInputElement).value = '60';
             this.addDefaultTiers();
             
-            // Charger et ajouter les exceptions par défaut pour un nouveau contrat
-            try {
-                this.defaultExceptions = await this.dataService.getDefaultExceptions();
+            // Ajouter les exceptions par défaut pour un nouveau contrat (déjà chargées au démarrage)
+            if (this.defaultExceptions && this.defaultExceptions.length > 0) {
                 this.addDefaultExceptions();
-            } catch (error) {
-                console.error('Error loading default exceptions:', error);
-                this.defaultExceptions = [];
             }
         }
         
