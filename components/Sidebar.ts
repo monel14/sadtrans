@@ -111,13 +111,30 @@ export function renderSidebar(user: User): HTMLElement {
 
     const logoutButton = document.createElement('button');
     logoutButton.id = 'logoutButton';
-    logoutButton.className = 'w-full flex items-center justify-center p-3 rounded-lg text-slate-300 hover:bg-red-500/20 hover:text-red-400 transition-all duration-200 group';
+    logoutButton.className = 'w-full flex items-center justify-center p-3 rounded-lg text-slate-300 hover:bg-red-500/20 hover:text-red-400 transition-all duration-300 group relative overflow-hidden';
     logoutButton.innerHTML = `
-        <i class="fas fa-sign-out-alt mr-2 group-hover:scale-110 transition-transform"></i>
-        <span class="font-medium">Déconnexion</span>
+        <div class="absolute inset-0 bg-gradient-to-r from-red-500/0 via-red-500/10 to-red-500/0 transform -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-out"></div>
+        <i class="fas fa-sign-out-alt mr-2 group-hover:scale-125 group-hover:rotate-12 transition-all duration-300 relative z-10"></i>
+        <span class="font-medium relative z-10 group-hover:tracking-wide transition-all duration-300">Déconnexion</span>
+        <div class="absolute inset-0 rounded-lg border-2 border-transparent group-hover:border-red-400/30 group-hover:shadow-lg group-hover:shadow-red-500/20 transition-all duration-300"></div>
     `;
-    logoutButton.addEventListener('click', () => {
-        sidebar.dispatchEvent(new CustomEvent('logout', { bubbles: true, composed: true }));
+    
+    // Animation au clic
+    logoutButton.addEventListener('click', (e) => {
+        // Animation de pulsation
+        logoutButton.style.transform = 'scale(0.95)';
+        logoutButton.style.transition = 'transform 0.1s ease-in-out';
+        
+        // Effet de ripple
+        const ripple = document.createElement('div');
+        ripple.className = 'absolute inset-0 bg-red-500/30 rounded-lg animate-ping';
+        logoutButton.appendChild(ripple);
+        
+        setTimeout(() => {
+            logoutButton.style.transform = 'scale(1)';
+            ripple.remove();
+            sidebar.dispatchEvent(new CustomEvent('logout', { bubbles: true, composed: true }));
+        }, 150);
     });
     footer.appendChild(logoutButton);
     
