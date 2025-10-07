@@ -231,6 +231,153 @@ async function renderDynamicFields(opType: OperationType, container: HTMLElement
             }
 
             inputElement = input;
+
+            // Autocomplétion: Identification carte/décodeur depuis l’historique
+            try {
+                const norm = (s: string) => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+                const labelNorm = norm(field.label);
+                const nameNorm = norm(field.name);
+
+                // Détecter si ce champ est l'identifiant de carte
+                const isCardIdField = (() => {
+                    const candidates = [
+                        'identification de la carte',
+                        'id carte',
+                        'identification carte',
+                        'identifiant carte',
+                        'numero carte',
+                        'num carte'
+                    ];
+                    return candidates.some(c => labelNorm.includes(norm(c)))
+                        || (nameNorm.includes('identification') && nameNorm.includes('carte'))
+                        || nameNorm === 'id_carte'
+                        || nameNorm === 'numero_carte'
+                        || nameNorm === 'num_carte';
+                })();
+
+                // Détecter si ce champ est l'identifiant du décodeur
+                const isDecoderIdField = (() => {
+                    const candidates = [
+                        'identifiant du decodeur',
+                        'identifiant decodeur',
+                        'id decodeur',
+                        'decoder id',
+                        'numero decodeur',
+                        'num decodeur',
+                        'identifiant du décodeur',
+                        'identifiant décodeur'
+                    ];
+                    return candidates.some(c => labelNorm.includes(norm(c)))
+                        || (nameNorm.includes('identifiant') && (nameNorm.includes('decodeur') || nameNorm.includes('décodeur')))
+                        || nameNorm === 'decoder_id'
+                        || nameNorm === 'id_decodeur'
+                        || nameNorm === 'numero_decodeur'
+                        || nameNorm === 'num_decodeur'
+                        || nameNorm === 'identifiant_decodeur';
+                })();
+
+                const registerAutocomplete = (
+                    categoryFilter: (cat: string) => boolean,
+                    candidateKeys: string[],
+                    datalistIdPrefix: string,
+                    hintText: string
+                ) => {
+                    const datalistId = `${datalistIdPrefix}${opType.id}`;
+                    const dl = document.createElement('datalist');
+                    dl.id = datalistId;
+                    input.setAttribute('list', datalistId);
+                    fieldWrapper.appendChild(dl);
+
+                    const hint = document.createElement('small');
+                    hint.className = 'block mt-1 text-xs text-slate-500';
+                    hint.textContent = hintText;
+                    fieldWrapper.appendChild(hint);
+
+                    (async () => {
+                        try {
+                            const ds = DataService.getInstance();
+                            const [txs, opMap] = await Promise.all([
+                                ds.getTransactions({ limit: 500 }),
+                                ds.getOpTypeMap()
+                            ]);
+
+                            const idToData = new Map<string, any>();
+
+                            for (const t of txs) {
+                                const tOp = opMap.get(t.opTypeId);
+                                const cat = norm(tOp?.category || '');
+                                if (!tOp || !categoryFilter(cat)) continue;
+
+                                const d = (t.data || (t as any).form_data || {}) as Record<string, any>;
+                                let idVal: any = null;
+                                for (const k of candidateKeys) {
+                                    if (d[k] !== undefined && d[k] !== null && String(d[k]).trim() !== '') { idVal = d[k]; break; }
+                                }
+                                if (idVal !== null) {
+                                    idToData.set(String(idVal), d);
+                                }
+                            }
+
+                            // Peupler le datalist avec des identifiants uniques (max 50)
+                            dl.innerHTML = '';
+                            Array.from(idToData.keys()).slice(0, 50).forEach(val => {
+                                const opt = document.createElement('option');
+                                opt.value = val;
+                                dl.appendChild(opt);
+                            });
+
+                            const fillFromHistory = () => {
+                                const val = input.value.trim();
+                                if (!val) return;
+                                const d = idToData.get(val);
+                                if (!d) return;
+
+                                Object.entries(d).forEach(([key, value]) => {
+                                    // Ignorer les fichiers / images
+                                    const selector = `[name="${key.replace(/"/g, '\\"')}"]`;
+                                    const target = (container.querySelector(selector) as HTMLInputElement | HTMLSelectElement | null);
+                                    if (!target) return;
+                                    if ((target as HTMLInputElement).type === 'file' || (target as any).type === 'image') return;
+
+                                    if (target instanceof HTMLSelectElement) {
+                                        const match = Array.from(target.options).find(o => o.value == String(value));
+                                        if (match) {
+                                            target.value = match.value;
+                                            target.dispatchEvent(new Event('change', { bubbles: true }));
+                                        }
+                                    } else {
+                                        target.value = String(value ?? '');
+                                        target.dispatchEvent(new Event('input', { bubbles: true }));
+                                    }
+                                });
+
+                                if (updateCallback) updateCallback();
+                            };
+
+                            input.addEventListener('change', fillFromHistory);
+                            input.addEventListener('blur', fillFromHistory);
+                        } catch (e) {
+                            console.error('Erreur autocomplétion:', e);
+                        }
+                    })();
+                };
+
+                if (isCardIdField && input.type !== 'file' && input.type !== 'image') {
+                    registerAutocomplete(
+                        (cat) => cat === norm('Cartes VISA'),
+                        [field.name, 'identification_carte', 'identification_de_la_carte', 'identification', 'id_carte', 'numero_carte', 'num_carte', 'identifiant_carte'],
+                        'cardIdSuggestions_',
+                        'Suggestions basées sur l’historique des opérations Cartes VISA'
+                    );
+                } else if (isDecoderIdField && input.type !== 'file' && input.type !== 'image') {
+                    registerAutocomplete(
+                        (cat) => cat.includes('decodeur') || cat.includes('décodeur') || cat.includes('decoder') || cat.includes('canal'),
+                        [field.name, 'identifiant_decodeur', 'identifiant_du_decodeur', 'decoder_id', 'id_decodeur', 'numero_decodeur', 'num_decodeur', 'identifiant décodeur'],
+                        'decoderIdSuggestions_',
+                        'Suggestions basées sur l’historique des opérations Décodeurs'
+                    );
+                }
+            } catch {}
         }
 
         fieldWrapper.appendChild(inputElement);
