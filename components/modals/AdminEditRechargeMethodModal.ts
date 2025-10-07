@@ -127,12 +127,20 @@ export class AdminEditRechargeMethodModal extends BaseModal {
                 }
                 
                 await api.updateRechargePaymentMethod(data as RechargePaymentMethod);
-                // Dispatch a global event to notify the view to re-render
+                
+                // Déclencher des événements spécifiques selon l'action
+                const isCreating = !this.editingMethod;
+                const eventName = isCreating ? 'rechargeMethodCreated' : 'rechargeMethodUpdated';
+                document.body.dispatchEvent(new CustomEvent(eventName, { bubbles: true, composed: true }));
+                
+                // Garder l'ancien événement pour compatibilité
                 document.body.dispatchEvent(new CustomEvent('rechargeMethodsUpdated'));
+                
                 this.hide();
                 
+                const message = isCreating ? 'Méthode de recharge créée avec succès.' : 'Méthode de recharge mise à jour avec succès.';
                 document.body.dispatchEvent(new CustomEvent('showToast', { 
-                    detail: { message: 'Méthode de recharge sauvegardée avec succès.', type: 'success' } 
+                    detail: { message, type: 'success' } 
                 }));
             } catch (error) {
                 console.error("Failed to save recharge method", error);

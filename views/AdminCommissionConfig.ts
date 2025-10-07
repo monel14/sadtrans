@@ -8,6 +8,65 @@ import { ApiService } from '../services/api.service';
 import { showAdminDefaultCommissionsView } from './AdminDefaultCommissions';
 import { ConfirmationModal } from '../components/modals/ConfirmationModal';
 
+let currentContainer: HTMLElement | null = null;
+let currentTab: 'contracts' | 'defaults' = 'contracts';
+let contractModal: AdminEditContractModal | null = null;
+
+async function loadCommissionData() {
+    const dataService = DataService.getInstance();
+    return await Promise.all([
+        dataService.getPartners(),
+        dataService.getAllOperationTypes(),
+        dataService.getContracts(),
+    ]);
+}
+
+async function refreshCommissionView() {
+    if (!currentContainer || !contractModal) return;
+    
+    // Afficher un indicateur de chargement
+    const loadingIndicator = document.createElement('div');
+    loadingIndicator.className = 'flex items-center justify-center p-8';
+    loadingIndicator.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Mise à jour des données...';
+    
+    // Remplacer le contenu temporairement
+    const originalContent = currentContainer.innerHTML;
+    currentContainer.innerHTML = '';
+    currentContainer.appendChild(loadingIndicator);
+
+    try {
+        // Invalider le cache et recharger les données
+        const dataService = DataService.getInstance();
+        dataService.invalidateContractsCache();
+        
+        const [partners, opTypes, contracts] = await loadCommissionData();
+
+        // Reconstruire le contenu selon l'onglet actuel
+        currentContainer.innerHTML = '';
+        
+        if (currentTab === 'contracts') {
+            await renderContractsTabContent(currentContainer, contracts, partners, contractModal);
+        } else {
+            const defaultCommissionsView = new (await import('./AdminDefaultCommissions')).AdminDefaultCommissionsView();
+            const el = await defaultCommissionsView.render();
+            currentContainer.appendChild(el);
+        }
+
+        // Afficher un message de succès
+        document.body.dispatchEvent(new CustomEvent('showToast', {
+            detail: { message: 'Configuration des commissions mise à jour', type: 'success' }
+        }));
+
+    } catch (error) {
+        console.error('Erreur lors du rafraîchissement:', error);
+        currentContainer.innerHTML = originalContent;
+        
+        document.body.dispatchEvent(new CustomEvent('showToast', {
+            detail: { message: 'Erreur lors de la mise à jour des données', type: 'error' }
+        }));
+    }
+}
+
 // --- Contracts Tab ---
 async function renderContractsTabContent(
     container: HTMLElement,
@@ -104,6 +163,12 @@ async function renderContractsTabContent(
                             dataService.invalidateContractsCache();
                             const freshContracts = await dataService.getContracts();
                             await renderContractsTabContent(container, freshContracts, partners, contractModal);
+                            
+                            // Déclencher l'événement pour les autres vues
+                            document.body.dispatchEvent(new CustomEvent('contractDeleted', { bubbles: true, composed: true }));
+                            document.body.dispatchEvent(new CustomEvent('showToast', {
+                                detail: { message: 'Contrat supprimé avec succès.', type: 'success' }
+                            }));
                         } else {
                             document.body.dispatchEvent(new CustomEvent('showToast', {
                                 detail: { message: 'Erreur lors de la suppression du contrat.', type: 'error' }
@@ -124,15 +189,10 @@ async function renderContractsTabContent(
 }
 
 export async function renderAdminCommissionConfigView(user: User): Promise<HTMLElement> {
-    const dataService = DataService.getInstance();
-    // Fetch all data needed for contract management
-    const [partners, opTypes, contracts] = await Promise.all([
-        dataService.getPartners(),
-        dataService.getAllOperationTypes(),
-        dataService.getContracts(),
-    ]);
+    const [partners, opTypes, contracts] = await loadCommissionData();
+    
     // Initialize contract modal with the fetched data
-    const contractModal = new AdminEditContractModal(partners, opTypes);
+    contractModal = new AdminEditContractModal(partners, opTypes);
 
     const viewContainer = document.createElement('div');
     viewContainer.innerHTML = `
@@ -153,11 +213,13 @@ export async function renderAdminCommissionConfigView(user: User): Promise<HTMLE
     card.id = 'admin-commission-config-view-wrapper';
 
     const contentContainer = $('#commission-config-content', card) as HTMLElement;
+    currentContainer = contentContainer;
     const tabContracts = viewContainer.querySelector('#tab-contracts') as HTMLButtonElement;
     const tabDefaults = viewContainer.querySelector('#tab-defaults') as HTMLButtonElement;
 
     // Helper to switch tabs
     async function showTab(tab: 'contracts' | 'defaults') {
+        currentTab = tab;
         // Reset tab styles
         tabContracts.classList.remove('border-blue-500', 'text-blue-600');
         tabDefaults.classList.remove('border-blue-500', 'text-blue-600');
@@ -167,7 +229,7 @@ export async function renderAdminCommissionConfigView(user: User): Promise<HTMLE
         if (tab === 'contracts') {
             tabContracts.classList.add('border-blue-500', 'text-blue-600');
             contentContainer.innerHTML = '';
-            await renderContractsTabContent(contentContainer, contracts, partners, contractModal);
+            await renderContractsTabContent(contentContainer, contracts, partners, contractModal!);
         } else {
             tabDefaults.classList.add('border-blue-500', 'text-blue-600');
             contentContainer.innerHTML = '';
@@ -183,11 +245,36 @@ export async function renderAdminCommissionConfigView(user: User): Promise<HTMLE
     tabContracts.addEventListener('click', () => showTab('contracts'));
     tabDefaults.addEventListener('click', () => showTab('defaults'));
 
+    // Ajouter les écouteurs d'événements pour la mise à jour automatique
+    const refreshEventHandler = () => {
+        refreshCommissionView();
+    };
+
+    // Écouter les événements qui nécessitent une mise à jour
+    document.body.addEventListener('contractUpdated', refreshEventHandler);
+    document.body.addEventListener('contractCreated', refreshEventHandler);
+    document.body.addEventListener('contractDeleted', refreshEventHandler);
+    document.body.addEventListener('commissionUpdated', refreshEventHandler);
+
+    // Nettoyer les écouteurs quand la vue est détruite
+    card.addEventListener('beforeunload', () => {
+        document.body.removeEventListener('contractUpdated', refreshEventHandler);
+        document.body.removeEventListener('contractCreated', refreshEventHandler);
+        document.body.removeEventListener('contractDeleted', refreshEventHandler);
+        document.body.removeEventListener('commissionUpdated', refreshEventHandler);
+        currentContainer = null;
+        contractModal = null;
+    });
+
     // Listen for modal events to refresh data
     contractModal.onSave = async () => {
+        const dataService = DataService.getInstance();
         dataService.invalidateContractsCache();
         const freshContracts = await dataService.getContracts();
-        await renderContractsTabContent(contentContainer, freshContracts, partners, contractModal);
+        await renderContractsTabContent(contentContainer, freshContracts, partners, contractModal!);
+        
+        // Déclencher l'événement pour les autres vues
+        document.body.dispatchEvent(new CustomEvent('contractUpdated', { bubbles: true, composed: true }));
     };
 
     return card;

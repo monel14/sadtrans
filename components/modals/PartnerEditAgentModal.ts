@@ -178,6 +178,10 @@ export class PartnerEditAgentModal extends BaseModal {
 
                 document.body.dispatchEvent(new CustomEvent('showToast', { detail: { message: toastMessage, type: 'success' } }));
                 document.body.dispatchEvent(new CustomEvent('agentUpdated', { bubbles: true, composed: true }));
+                
+                // Déclencher aussi l'événement de mise à jour des partenaires
+                document.body.dispatchEvent(new CustomEvent('partnerUpdated', { bubbles: true, composed: true }));
+                
                 this.hide();
 
             } catch (error) {

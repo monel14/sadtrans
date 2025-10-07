@@ -6,6 +6,65 @@ import { DataService } from '../services/data.service';
 const ITEMS_PER_PAGE = 20;
 const currentPages: Map<string, number> = new Map();
 
+let currentContainer: HTMLElement | null = null;
+
+async function loadUserData() {
+    const dataService = DataService.getInstance();
+    return await Promise.all([
+        dataService.getUsers(),
+        dataService.getPartnerMap()
+    ]);
+}
+
+async function refreshUserView() {
+    if (!currentContainer) return;
+    
+    // Afficher un indicateur de chargement
+    const loadingIndicator = document.createElement('div');
+    loadingIndicator.className = 'flex items-center justify-center p-8';
+    loadingIndicator.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Mise à jour des données...';
+    
+    // Remplacer le contenu temporairement
+    const originalContent = currentContainer.innerHTML;
+    currentContainer.innerHTML = '';
+    currentContainer.appendChild(loadingIndicator);
+
+    try {
+        const [allUsers, partnerMap] = await loadUserData();
+
+        // Reconstruire le contenu
+        currentContainer.innerHTML = '';
+        
+        const userTypes: { role: User['role'], title: string }[] = [
+            { role: 'admin_general', title: 'Administrateurs Généraux' },
+            { role: 'sous_admin', title: 'Sous-Administrateurs' },
+            { role: 'partner', title: 'Partenaires (Chefs d\'Agence)' },
+            { role: 'agent', title: 'Agents (Utilisateurs Partenaires)' },
+        ];
+
+        userTypes.forEach(userType => {
+            const usersOfType = allUsers.filter(u => u.role === userType.role).sort((a,b) => a.name.localeCompare(b.name));
+            if (usersOfType.length === 0) return;
+
+            const section = renderUserSection(userType, usersOfType, partnerMap, allUsers);
+            currentContainer!.appendChild(section);
+        });
+
+        // Afficher un message de succès
+        document.body.dispatchEvent(new CustomEvent('showToast', {
+            detail: { message: 'Liste des utilisateurs mise à jour', type: 'success' }
+        }));
+
+    } catch (error) {
+        console.error('Erreur lors du rafraîchissement:', error);
+        currentContainer.innerHTML = originalContent;
+        
+        document.body.dispatchEvent(new CustomEvent('showToast', {
+            detail: { message: 'Erreur lors de la mise à jour des données', type: 'error' }
+        }));
+    }
+}
+
 // Fonction pour rendre une section d'utilisateurs avec pagination
 function renderUserSection(userType: { role: User['role'], title: string }, usersOfType: User[], partnerMap: Map<string, Partner>, allUsers: User[]): HTMLElement {
     const sectionId = `section-${userType.role}`;
@@ -114,13 +173,10 @@ function renderUserSection(userType: { role: User['role'], title: string }, user
 }
 
 export async function renderAdminManageUsersView(): Promise<HTMLElement> {
-    const dataService = DataService.getInstance();
-    const [allUsers, partnerMap] = await Promise.all([
-        dataService.getUsers(),
-        dataService.getPartnerMap()
-    ]);
+    const [allUsers, partnerMap] = await loadUserData();
 
     const container = document.createElement('div');
+    currentContainer = container;
 
     const userTypes: { role: User['role'], title: string }[] = [
         { role: 'admin_general', title: 'Administrateurs Généraux' },
@@ -138,6 +194,26 @@ export async function renderAdminManageUsersView(): Promise<HTMLElement> {
     });
 
     const card = createCard('Gestion de Tous les Utilisateurs', container, 'fa-users-cog');
+    
+    // Ajouter les écouteurs d'événements pour la mise à jour automatique
+    const refreshEventHandler = () => {
+        refreshUserView();
+    };
+
+    // Écouter les événements qui nécessitent une mise à jour
+    document.body.addEventListener('userUpdated', refreshEventHandler);
+    document.body.addEventListener('partnerCreated', refreshEventHandler);
+    document.body.addEventListener('partnerUpdated', refreshEventHandler);
+    document.body.addEventListener('agentUpdated', refreshEventHandler);
+
+    // Nettoyer les écouteurs quand la vue est détruite
+    card.addEventListener('beforeunload', () => {
+        document.body.removeEventListener('userUpdated', refreshEventHandler);
+        document.body.removeEventListener('partnerCreated', refreshEventHandler);
+        document.body.removeEventListener('partnerUpdated', refreshEventHandler);
+        document.body.removeEventListener('agentUpdated', refreshEventHandler);
+        currentContainer = null;
+    });
     
     card.addEventListener('click', e => {
         const target = e.target as HTMLElement;
