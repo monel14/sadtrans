@@ -173,7 +173,7 @@ export class AdminCreateOrderModal extends BaseModal {
             try {
                 const api = ApiService.getInstance();
                 await api.createOrder({ partnerId, items });
-                document.body.dispatchEvent(new CustomEvent('orderCreated'));
+                document.body.dispatchEvent(new CustomEvent('orderCreated', { bubbles: true, composed: true }));
                 document.body.dispatchEvent(new CustomEvent('showToast', { detail: { message: "Commande enregistrée avec succès !", type: 'success' } }));
                 this.hide();
             } catch (error) {

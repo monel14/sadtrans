@@ -85,8 +85,22 @@ export class AdminEditCardTypeModal extends BaseModal {
             try {
                 const api = ApiService.getInstance();
                 await api.updateCardType(data);
+                
+                // Invalider le cache pour garantir des données fraîches
+                const { DataService } = await import('../../services/data.service');
+                const dataService = DataService.getInstance();
+                dataService.invalidateCardTypesCache();
+                
+                // Déclencher des événements spécifiques selon l'action
+                const isCreating = !this.editingCardType;
+                const eventName = isCreating ? 'cardTypeCreated' : 'cardTypeUpdated';
+                document.body.dispatchEvent(new CustomEvent(eventName, { bubbles: true, composed: true }));
+                
+                // Garder l'ancien événement pour compatibilité
                 document.body.dispatchEvent(new CustomEvent('cardTypesUpdated'));
-                document.body.dispatchEvent(new CustomEvent('showToast', { detail: { message: "Type de carte enregistré avec succès !", type: 'success' } }));
+                
+                const message = isCreating ? "Type de carte créé avec succès !" : "Type de carte mis à jour avec succès !";
+                document.body.dispatchEvent(new CustomEvent('showToast', { detail: { message, type: 'success' } }));
                 this.hide();
             } catch (error) {
                 console.error("Failed to save card type", error);

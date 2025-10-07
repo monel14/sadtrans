@@ -7,6 +7,77 @@ import { AdminCreateOrderModal } from '../components/modals/AdminCreateOrderModa
 import { $ } from '../utils/dom';
 import { formatAmount, formatDate, formatNumber } from '../utils/formatters';
 
+let currentContainer: HTMLElement | null = null;
+let currentTab: 'types' | 'orders' = 'orders';
+let editModal: AdminEditCardTypeModal | null = null;
+let createOrderModal: AdminCreateOrderModal | null = null;
+
+async function loadCardManagementData() {
+    const api = ApiService.getInstance();
+    const dataService = DataService.getInstance();
+    return await Promise.all([
+        dataService.getPartners(),
+        dataService.getCardTypes(),
+        dataService.getCards(),
+        dataService.getOrders(),
+        dataService.getPartnerMap(),
+        dataService.getCardTypeMap()
+    ]);
+}
+
+async function refreshCardManagementView() {
+    if (!currentContainer || !editModal || !createOrderModal) return;
+    
+    // Détecter l'onglet actuel depuis le DOM
+    const activeTabButton = document.querySelector('#admin-card-management-view-wrapper .tabs button.active') as HTMLButtonElement;
+    const activeTab = activeTabButton?.dataset.tab as 'types' | 'orders' || currentTab;
+    
+    // Afficher un indicateur de chargement
+    const loadingIndicator = document.createElement('div');
+    loadingIndicator.className = 'flex items-center justify-center p-8';
+    loadingIndicator.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Mise à jour des données...';
+    
+    // Remplacer le contenu temporairement
+    const originalContent = currentContainer.innerHTML;
+    currentContainer.innerHTML = '';
+    currentContainer.appendChild(loadingIndicator);
+
+    try {
+        // Invalider le cache pour garantir des données fraîches
+        const dataService = DataService.getInstance();
+        dataService.invalidateCardTypesCache();
+        dataService.invalidateCardsCache();
+        dataService.invalidateOrdersCache();
+        
+        const [partners, cardTypes] = await Promise.all([
+            dataService.getPartners(),
+            dataService.getCardTypes()
+        ]);
+
+        // Reconstruire le contenu selon l'onglet actuel
+        currentContainer.innerHTML = '';
+        
+        if (activeTab === 'types') {
+            await renderCardTypesTabContent(currentContainer, ApiService.getInstance(), DataService.getInstance(), editModal);
+        } else {
+            await renderOrdersTabContent(currentContainer, ApiService.getInstance(), DataService.getInstance(), createOrderModal, cardTypes);
+        }
+
+        // Afficher un message de succès
+        document.body.dispatchEvent(new CustomEvent('showToast', {
+            detail: { message: 'Gestion des cartes mise à jour', type: 'success' }
+        }));
+
+    } catch (error) {
+        console.error('Erreur lors du rafraîchissement:', error);
+        currentContainer.innerHTML = originalContent;
+        
+        document.body.dispatchEvent(new CustomEvent('showToast', {
+            detail: { message: 'Erreur lors de la mise à jour des données', type: 'error' }
+        }));
+    }
+}
+
 // --- Card Types Tab ---
 async function renderCardTypesTabContent(container: HTMLElement, api: ApiService, dataService: DataService, editModal: AdminEditCardTypeModal) {
     const [cardTypes, allCards, allOrders] = await Promise.all([
@@ -80,8 +151,12 @@ async function renderCardTypesTabContent(container: HTMLElement, api: ApiService
                     message: `Voulez-vous vraiment supprimer le type de carte "<strong>${typeName}</strong>" ? Cette action est irréversible.`,
                     onConfirm: async () => {
                         await api.deleteCardType(typeId);
+                        
+                        // Invalider le cache pour garantir des données fraîches
+                        dataService.invalidateCardTypesCache();
+                        
                         document.body.dispatchEvent(new CustomEvent('showToast', { detail: { message: 'Type de carte supprimé.', type: 'success' } }));
-                        document.body.dispatchEvent(new CustomEvent('cardTypesUpdated'));
+                        document.body.dispatchEvent(new CustomEvent('cardTypeDeleted', { bubbles: true, composed: true }));
                     },
                     options: { confirmButtonClass: 'btn-danger', confirmButtonText: 'Oui, Supprimer' }
                 },
@@ -187,7 +262,7 @@ async function renderOrdersTabContent(container: HTMLElement, api: ApiService, d
                         try {
                             await api.updateOrderStatus(orderId, 'delivered');
                             document.body.dispatchEvent(new CustomEvent('showToast', { detail: { message: 'Commande marquée comme livrée.', type: 'success' } }));
-                            document.body.dispatchEvent(new CustomEvent('orderCreated')); // Reusing this event to refresh the view
+                            document.body.dispatchEvent(new CustomEvent('orderUpdated', { bubbles: true, composed: true }));
                         } catch (error) {
                             console.error('Failed to update order status:', error);
                             document.body.dispatchEvent(new CustomEvent('showToast', { detail: { message: 'La mise à jour a échoué.', type: 'error' } }));
@@ -211,14 +286,13 @@ async function renderOrdersTabContent(container: HTMLElement, api: ApiService, d
 
 // --- Main View ---
 export async function renderAdminCardManagementView(): Promise<HTMLElement> {
-    const api = ApiService.getInstance();
-    const dataService = DataService.getInstance();
     const [partners, cardTypes] = await Promise.all([
-        dataService.getPartners(),
-        dataService.getCardTypes(),
+        DataService.getInstance().getPartners(),
+        DataService.getInstance().getCardTypes(),
     ]);
-    const editModal = new AdminEditCardTypeModal();
-    const createOrderModal = new AdminCreateOrderModal(partners, cardTypes);
+    
+    editModal = new AdminEditCardTypeModal();
+    createOrderModal = new AdminCreateOrderModal(partners, cardTypes);
     
     const viewContainer = document.createElement('div');
     viewContainer.innerHTML = `
@@ -235,13 +309,15 @@ export async function renderAdminCardManagementView(): Promise<HTMLElement> {
     card.id = 'admin-card-management-view-wrapper';
     
     const contentContainer = $('#card-management-content', card) as HTMLElement;
+    currentContainer = contentContainer;
     
     async function switchTab(tabName: 'types' | 'orders') {
+        currentTab = tabName;
         contentContainer.innerHTML = '<div class="text-center p-8"><i class="fas fa-spinner fa-spin text-3xl text-indigo-500"></i></div>';
         if (tabName === 'types') {
-            await renderCardTypesTabContent(contentContainer, api, dataService, editModal);
+            await renderCardTypesTabContent(contentContainer, ApiService.getInstance(), DataService.getInstance(), editModal!);
         } else if (tabName === 'orders') {
-            await renderOrdersTabContent(contentContainer, api, dataService, createOrderModal, cardTypes);
+            await renderOrdersTabContent(contentContainer, ApiService.getInstance(), DataService.getInstance(), createOrderModal!, cardTypes);
         }
     }
 
@@ -255,19 +331,31 @@ export async function renderAdminCardManagementView(): Promise<HTMLElement> {
         }
     });
 
-    document.body.addEventListener('cardTypesUpdated', async () => {
-        const activeTab = card.querySelector<HTMLButtonElement>('.tabs button.active')?.dataset.tab;
-        if(activeTab === 'types') {
-            await switchTab('types');
-        }
-    });
-    
-    document.body.addEventListener('orderCreated', async () => {
-        const activeTab = card.querySelector<HTMLButtonElement>('.tabs button.active')?.dataset.tab;
-        if(activeTab === 'orders') {
-            const newCardTypes = await dataService.getCardTypes(); // Re-fetch in case they changed
-            await renderOrdersTabContent(contentContainer, api, dataService, createOrderModal, newCardTypes);
-        }
+    // Ajouter les écouteurs d'événements pour la mise à jour automatique
+    const refreshEventHandler = (event: Event) => {
+        console.log('Card management refresh triggered by event:', event.type);
+        refreshCardManagementView();
+    };
+
+    // Écouter les événements qui nécessitent une mise à jour
+    document.body.addEventListener('cardTypeCreated', refreshEventHandler);
+    document.body.addEventListener('cardTypeUpdated', refreshEventHandler);
+    document.body.addEventListener('cardTypeDeleted', refreshEventHandler);
+    document.body.addEventListener('orderCreated', refreshEventHandler);
+    document.body.addEventListener('orderUpdated', refreshEventHandler);
+    document.body.addEventListener('cardTypesUpdated', refreshEventHandler); // Garder pour compatibilité
+
+    // Nettoyer les écouteurs quand la vue est détruite
+    card.addEventListener('beforeunload', () => {
+        document.body.removeEventListener('cardTypeCreated', refreshEventHandler);
+        document.body.removeEventListener('cardTypeUpdated', refreshEventHandler);
+        document.body.removeEventListener('cardTypeDeleted', refreshEventHandler);
+        document.body.removeEventListener('orderCreated', refreshEventHandler);
+        document.body.removeEventListener('orderUpdated', refreshEventHandler);
+        document.body.removeEventListener('cardTypesUpdated', refreshEventHandler);
+        currentContainer = null;
+        editModal = null;
+        createOrderModal = null;
     });
 
     // Initial load

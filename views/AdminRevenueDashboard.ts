@@ -8,56 +8,57 @@ import { createTable } from '../components/Table';
 // Chart.js is loaded globally from index.html, we can declare it to satisfy TypeScript
 declare const Chart: any;
 
-function renderChart(canvasId: string, type: 'line' | 'doughnut', labels: string[], datasets: { label: string, data: number[], backgroundColor?: string[] | string, borderColor?: string, borderWidth?: number, fill?: boolean, tension?: number }[]) {
-    const canvas = document.getElementById(canvasId) as HTMLCanvasElement;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    
-    // Destroy existing chart instance if it exists to prevent flickering on re-render
-    const existingChart = Chart.getChart(canvas);
-    if (existingChart) {
-        existingChart.destroy();
-    }
+let currentContainer: HTMLElement | null = null;
 
-    new Chart(ctx, {
-        type: type,
-        data: {
-            labels: labels,
-            datasets: datasets
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    position: type === 'doughnut' ? 'right' : 'top',
-                },
-            },
-            scales: type === 'line' ? {
-                y: {
-                    beginAtZero: true
-                }
-            } : undefined
-        }
-    });
-}
-
-export async function renderAdminRevenueDashboardView(user: User): Promise<HTMLElement> {
-    const api = ApiService.getInstance(); // Keep for stats calculation
+async function loadRevenueDashboardData() {
+    const api = ApiService.getInstance();
     const dataService = DataService.getInstance();
-    
-    const [stats, userMap, partnerMap, opTypeMap] = await Promise.all([
+    return await Promise.all([
         api.getCompanyRevenueStats(),
         dataService.getUserMap(),
         dataService.getPartnerMap(),
         dataService.getOpTypeMap()
     ]);
+}
 
+async function refreshRevenueDashboardView() {
+    if (!currentContainer) return;
+    
+    // Afficher un indicateur de chargement
+    const loadingIndicator = document.createElement('div');
+    loadingIndicator.className = 'flex items-center justify-center p-8';
+    loadingIndicator.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Mise à jour des statistiques...';
+    
+    // Remplacer le contenu temporairement
+    const originalContent = currentContainer.innerHTML;
+    currentContainer.innerHTML = '';
+    currentContainer.appendChild(loadingIndicator);
+
+    try {
+        const [stats, userMap, partnerMap, opTypeMap] = await loadRevenueDashboardData();
+
+        // Reconstruire le contenu
+        await renderDashboardContent(currentContainer, stats, userMap, partnerMap, opTypeMap);
+
+        // Afficher un message de succès
+        document.body.dispatchEvent(new CustomEvent('showToast', {
+            detail: { message: 'Dashboard revenus mis à jour', type: 'success' }
+        }));
+
+    } catch (error) {
+        console.error('Erreur lors du rafraîchissement:', error);
+        currentContainer.innerHTML = originalContent;
+        
+        document.body.dispatchEvent(new CustomEvent('showToast', {
+            detail: { message: 'Erreur lors de la mise à jour des données', type: 'error' }
+        }));
+    }
+}
+
+async function renderDashboardContent(container: HTMLElement, stats: any, userMap: Map<string, User>, partnerMap: Map<string, Partner>, opTypeMap: Map<string, OperationType>) {
     const { totalRevenue, revenueByPartner, revenueByCategory, revenueTrend, latestCommissions } = stats;
     const topService = Object.entries(revenueByCategory).sort(([, a], [, b]) => (b as number) - (a as number))[0];
 
-    const container = document.createElement('div');
     container.innerHTML = `
         <!-- KPIs Row -->
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
@@ -165,6 +166,71 @@ export async function renderAdminRevenueDashboardView(user: User): Promise<HTMLE
             ]
         }]);
     }, 0);
+}
 
-    return container;
+function renderChart(canvasId: string, type: 'line' | 'doughnut', labels: string[], datasets: { label: string, data: number[], backgroundColor?: string[] | string, borderColor?: string, borderWidth?: number, fill?: boolean, tension?: number }[]) {
+    const canvas = document.getElementById(canvasId) as HTMLCanvasElement;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    
+    // Destroy existing chart instance if it exists to prevent flickering on re-render
+    const existingChart = Chart.getChart(canvas);
+    if (existingChart) {
+        existingChart.destroy();
+    }
+
+    new Chart(ctx, {
+        type: type,
+        data: {
+            labels: labels,
+            datasets: datasets
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: type === 'doughnut' ? 'right' : 'top',
+                },
+            },
+            scales: type === 'line' ? {
+                y: {
+                    beginAtZero: true
+                }
+            } : undefined
+        }
+    });
+}
+
+export async function renderAdminRevenueDashboardView(user: User): Promise<HTMLElement> {
+    const [stats, userMap, partnerMap, opTypeMap] = await loadRevenueDashboardData();
+
+    const container = document.createElement('div');
+    currentContainer = container;
+
+    await renderDashboardContent(container, stats, userMap, partnerMap, opTypeMap);
+
+    const card = createCard('Dashboard Revenus Société', container, 'fa-chart-pie');
+    card.id = 'admin-revenue-dashboard-wrapper';
+
+    // Ajouter les écouteurs d'événements pour la mise à jour automatique
+    const refreshEventHandler = () => {
+        refreshRevenueDashboardView();
+    };
+
+    // Écouter les événements qui nécessitent une mise à jour des statistiques
+    document.body.addEventListener('transactionValidated', refreshEventHandler);
+    document.body.addEventListener('transactionUpdated', refreshEventHandler);
+    document.body.addEventListener('revenueStatsUpdated', refreshEventHandler);
+
+    // Nettoyer les écouteurs quand la vue est détruite
+    card.addEventListener('beforeunload', () => {
+        document.body.removeEventListener('transactionValidated', refreshEventHandler);
+        document.body.removeEventListener('transactionUpdated', refreshEventHandler);
+        document.body.removeEventListener('revenueStatsUpdated', refreshEventHandler);
+        currentContainer = null;
+    });
+
+    return card;
 }
