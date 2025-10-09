@@ -76,12 +76,14 @@ export class PartnerRequestRechargeModal extends BaseModal {
         this.lastSubmissionTime = 0;
         await this.loadPaymentMethods();
         this.updateCalculations();
+        // Ensure form is enabled after loading
+        this.enableForm();
         super.show();
     }
 
     private async loadPaymentMethods() {
         if (!this.form) return;
-        this.form.classList.add('opacity-50', 'pointer-events-none');
+        this.disableForm();
         const select = $('#rechargePaymentMethod', this.form) as HTMLSelectElement;
         select.innerHTML = '<option value="">Chargement...</option>';
 
@@ -93,10 +95,11 @@ export class PartnerRequestRechargeModal extends BaseModal {
             this.paymentMethods.forEach(method => {
                 select.add(new Option(method.name, method.id));
             });
-            this.form.classList.remove('opacity-50', 'pointer-events-none');
+            this.enableForm();
         } catch (error) {
             select.innerHTML = '<option value="">Erreur de chargement</option>';
             console.error("Failed to load payment methods:", error);
+            this.enableForm(); // Ensure form is enabled even on error
         }
     }
 
@@ -104,14 +107,14 @@ export class PartnerRequestRechargeModal extends BaseModal {
         if (!this.form) return;
         const amountInput = $('#rechargeAmount', this.form) as HTMLInputElement;
         const methodSelect = $('#rechargePaymentMethod', this.form) as HTMLSelectElement;
-        
+
         // Summary elements
         const summaryContainer = $('#rechargeCalculationSummary', this.form) as HTMLElement;
         const summaryAmount = $('#summaryAmount', this.form) as HTMLElement;
         const summaryFeeDetails = $('#summaryFeeDetails', this.form) as HTMLElement;
         const summaryFees = $('#summaryFees', this.form) as HTMLElement;
         const summaryTotal = $('#summaryTotal', this.form) as HTMLElement;
-        
+
         const amount = parseFloat(amountInput.value) || 0;
         const selectedMethod = this.paymentMethods.find(m => m.id === methodSelect.value);
 
@@ -133,7 +136,7 @@ export class PartnerRequestRechargeModal extends BaseModal {
                 feeDetailsText = `(${selectedMethod.feeValue}%)`;
             }
         }
-        
+
         fees = Math.round(fees);
         const amountToReceive = amount - fees;
 
@@ -147,6 +150,39 @@ export class PartnerRequestRechargeModal extends BaseModal {
     private isSubmitting = false;
     private lastSubmissionTime = 0;
 
+    private enableForm() {
+        if (this.form) {
+            this.form.classList.remove('opacity-50', 'pointer-events-none');
+        }
+    }
+
+    private disableForm() {
+        if (this.form) {
+            this.form.classList.add('opacity-50', 'pointer-events-none');
+        }
+    }
+
+    private resetFormAfterSuccess() {
+        if (!this.form) return;
+
+        // Clear form inputs
+        const amountInput = $('#rechargeAmount', this.form) as HTMLInputElement;
+        const referenceInput = $('#rechargeReference', this.form) as HTMLInputElement;
+
+        if (amountInput) amountInput.value = '';
+        if (referenceInput) referenceInput.value = '';
+
+        // Hide calculation summary
+        const summaryContainer = $('#rechargeCalculationSummary', this.form) as HTMLElement;
+        if (summaryContainer) summaryContainer.classList.add('hidden');
+
+        // Reset payment method selection to default
+        const paymentMethodSelect = $('#rechargePaymentMethod', this.form) as HTMLSelectElement;
+        if (paymentMethodSelect) paymentMethodSelect.selectedIndex = 0;
+
+        console.log('Form reset after successful submission');
+    }
+
     private attachEventListeners() {
         if (this.form) {
             $('#rechargeAmount', this.form)?.addEventListener('input', () => this.updateCalculations());
@@ -155,14 +191,14 @@ export class PartnerRequestRechargeModal extends BaseModal {
 
         this.form?.addEventListener('submit', async (e) => {
             e.preventDefault();
-            
+
             // Prevent double submission
             const now = Date.now();
             if (this.isSubmitting) {
                 console.log('Recharge submission already in progress, ignoring duplicate click');
                 return;
             }
-            
+
             // Prevent rapid successive clicks (minimum 2 seconds between submissions)
             if (now - this.lastSubmissionTime < 2000) {
                 console.log('Too soon after last recharge submission, ignoring click');
@@ -171,27 +207,35 @@ export class PartnerRequestRechargeModal extends BaseModal {
                 }));
                 return;
             }
-            
+
             this.lastSubmissionTime = now;
-            
+
             if (!this.currentUser || !this.form) {
                 document.body.dispatchEvent(new CustomEvent('showToast', { detail: { message: "Erreur: Utilisateur non identifié.", type: 'error' } }));
                 return;
             }
 
+            // Ensure form is enabled before reading values
+            this.enableForm();
+
+            // Get fresh references to form elements and read their current values
             const amountInput = $('#rechargeAmount', this.form) as HTMLInputElement;
             const paymentMethodInput = $('#rechargePaymentMethod', this.form) as HTMLSelectElement;
             const referenceInput = $('#rechargeReference', this.form) as HTMLInputElement;
             const submitButton = this.modalElement.querySelector('button[type="submit"]') as HTMLButtonElement;
 
+            // Read values immediately after ensuring form is enabled
             const montant = parseFloat(amountInput.value);
             const methodId = paymentMethodInput.value;
             const reference = referenceInput.value.trim();
+
+            console.log('Form values at submission:', { montant, methodId, reference }); // Debug log
 
             if (!methodId) {
                 document.body.dispatchEvent(new CustomEvent('showToast', { detail: { message: "Veuillez sélectionner un mode de paiement.", type: 'warning' } }));
                 paymentMethodInput.focus();
                 this.isSubmitting = false; // Reset submission flag
+                this.enableForm(); // Ensure form remains interactive
                 return;
             }
 
@@ -199,9 +243,10 @@ export class PartnerRequestRechargeModal extends BaseModal {
                 document.body.dispatchEvent(new CustomEvent('showToast', { detail: { message: "Veuillez entrer un montant valide.", type: 'warning' } }));
                 amountInput.focus();
                 this.isSubmitting = false; // Reset submission flag
+                this.enableForm(); // Ensure form remains interactive
                 return;
             }
-            
+
             // Set submission flag and disable button immediately
             this.isSubmitting = true;
             const originalButtonHtml = submitButton.innerHTML;
@@ -219,16 +264,24 @@ export class PartnerRequestRechargeModal extends BaseModal {
                     reference
                 );
                 document.body.dispatchEvent(new CustomEvent('showToast', { detail: { message: "Votre demande de recharge a été soumise avec succès !", type: 'success' } }));
+
+                // Reset the form for potential next submission
+                this.resetFormAfterSuccess();
+
                 // Reset submission flag on success
                 this.isSubmitting = false;
-                this.hide();
             } catch (error) {
                 console.error("Failed to create recharge request:", (error as Error).message || error);
                 document.body.dispatchEvent(new CustomEvent('showToast', { detail: { message: "Une erreur est survenue lors de la soumission de votre demande.", type: 'error' } }));
             } finally {
+                // Restore button state
                 submitButton.disabled = false;
                 submitButton.innerHTML = originalButtonHtml;
                 submitButton.style.pointerEvents = 'auto'; // Re-enable clicks
+
+                // Ensure form is fully interactive
+                this.enableForm();
+
                 // Reset submission flag in finally block
                 this.isSubmitting = false;
             }
