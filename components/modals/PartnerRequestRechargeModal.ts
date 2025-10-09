@@ -165,20 +165,41 @@ export class PartnerRequestRechargeModal extends BaseModal {
     private resetFormAfterSuccess() {
         if (!this.form) return;
 
+        // Temporarily disable HTML5 validation to prevent focus issues
+        const originalNoValidate = this.form.noValidate;
+        this.form.noValidate = true;
+
         // Clear form inputs
         const amountInput = $('#rechargeAmount', this.form) as HTMLInputElement;
         const referenceInput = $('#rechargeReference', this.form) as HTMLInputElement;
+        const paymentMethodSelect = $('#rechargePaymentMethod', this.form) as HTMLSelectElement;
 
-        if (amountInput) amountInput.value = '';
-        if (referenceInput) referenceInput.value = '';
+        if (amountInput) {
+            amountInput.value = '';
+            // Clear any validation state
+            amountInput.setCustomValidity('');
+        }
+        if (referenceInput) {
+            referenceInput.value = '';
+            referenceInput.setCustomValidity('');
+        }
+
+        // Reset payment method selection to default
+        if (paymentMethodSelect) {
+            paymentMethodSelect.selectedIndex = 0;
+            paymentMethodSelect.setCustomValidity('');
+        }
 
         // Hide calculation summary
         const summaryContainer = $('#rechargeCalculationSummary', this.form) as HTMLElement;
         if (summaryContainer) summaryContainer.classList.add('hidden');
 
-        // Reset payment method selection to default
-        const paymentMethodSelect = $('#rechargePaymentMethod', this.form) as HTMLSelectElement;
-        if (paymentMethodSelect) paymentMethodSelect.selectedIndex = 0;
+        // Use setTimeout to restore validation after DOM updates
+        setTimeout(() => {
+            if (this.form) {
+                this.form.noValidate = originalNoValidate;
+            }
+        }, 100);
 
         console.log('Form reset after successful submission');
     }
@@ -191,6 +212,7 @@ export class PartnerRequestRechargeModal extends BaseModal {
 
         this.form?.addEventListener('submit', async (e) => {
             e.preventDefault();
+            e.stopPropagation();
 
             // Prevent double submission
             const now = Date.now();
@@ -223,6 +245,11 @@ export class PartnerRequestRechargeModal extends BaseModal {
             const paymentMethodInput = $('#rechargePaymentMethod', this.form) as HTMLSelectElement;
             const referenceInput = $('#rechargeReference', this.form) as HTMLInputElement;
             const submitButton = this.modalElement.querySelector('button[type="submit"]') as HTMLButtonElement;
+
+            // Clear any previous validation states
+            if (amountInput) amountInput.setCustomValidity('');
+            if (paymentMethodInput) paymentMethodInput.setCustomValidity('');
+            if (referenceInput) referenceInput.setCustomValidity('');
 
             // Read values immediately after ensuring form is enabled
             const montant = parseFloat(amountInput.value);
