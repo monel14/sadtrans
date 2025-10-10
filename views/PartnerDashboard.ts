@@ -5,11 +5,16 @@ import { createCard } from '../components/Card';
 import { formatAmount } from '../utils/formatters';
 import { navigationLinks } from '../config/navigation';
 import { NavLink } from '../models';
-import { PartnerRequestRechargeModal } from '../components/modals/PartnerRequestRechargeModal';
+import { RechargePaymentMethod } from '../models';
 
 export async function renderPartnerDashboardView(user: User): Promise<HTMLElement> {
     const dataService = DataService.getInstance();
     const api = ApiService.getInstance(); // Keep for the transfer function
+    
+    // Variables pour la gestion du formulaire de recharge
+    let paymentMethods: RechargePaymentMethod[] = [];
+    let isSubmitting = false;
+    let lastSubmissionTime = 0;
 
     // Force cache invalidation to get fresh data with agency information
     dataService.invalidateUsersCache();
@@ -57,7 +62,7 @@ export async function renderPartnerDashboardView(user: User): Promise<HTMLElemen
                     <p class="text-4xl font-bold text-emerald-600" id="main-balance">${formatAmount(mainBalance)}</p>
                 </div>
                 <div class="flex space-x-2 mt-4">
-                    <button id="request-recharge-btn" class="btn btn-primary flex-1">
+                    <button id="toggle-recharge-form-btn" class="btn btn-primary flex-1">
                         <i class="fas fa-plus-circle mr-2"></i> Demander Recharge
                     </button>
                 </div>
@@ -78,6 +83,177 @@ export async function renderPartnerDashboardView(user: User): Promise<HTMLElemen
         </div>
     `;
     container.innerHTML = balancesGrid;
+
+    // --- Section de recharge intégrée ---
+    const rechargeSection = document.createElement('div');
+    rechargeSection.id = 'recharge-section';
+    rechargeSection.className = 'mb-6 hidden'; // Cachée par défaut
+    rechargeSection.innerHTML = `
+        <div class="card p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold text-slate-800">
+                    <i class="fas fa-plus-circle mr-2 text-violet-600"></i>
+                    Demande de Recharge de Solde
+                </h3>
+                <button id="close-recharge-form-btn" class="text-slate-400 hover:text-slate-600">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <p class="text-sm text-slate-600 mb-4">Votre demande sera envoyée à l'administrateur pour approbation. Veuillez spécifier comment vous avez effectué le versement correspondant.</p>
+            
+            <form id="partnerRechargeForm" class="opacity-50 pointer-events-none">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="md:col-span-2">
+                        <label class="form-label" for="rechargePaymentMethod">Liste des modes de paiement <span class="text-red-500">*</span></label>
+                        <select id="rechargePaymentMethod" class="form-select mt-1" required>
+                            <option value="">Chargement des options...</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label" for="rechargeAmount">Montant du dépôt <span class="text-red-500">*</span></label>
+                        <input type="number" id="rechargeAmount" class="form-input mt-1" min="1" required placeholder="Montant du dépôt">
+                    </div>
+                     <div>
+                        <label class="form-label" for="rechargeReference">ID de Transaction / Référence</label>
+                        <input type="text" id="rechargeReference" class="form-input mt-1" placeholder="Optionnel">
+                    </div>
+                    
+                    <!-- Résumé des calculs -->
+                    <div id="rechargeCalculationSummary" class="md:col-span-2 mt-2 p-4 border-l-4 border-violet-500 bg-violet-50 space-y-2 hidden">
+                        <div class="flex justify-between items-center text-sm">
+                            <span class="text-slate-600">Montant du dépôt :</span>
+                            <span id="summaryAmount" class="font-medium text-slate-800">0 XOF</span>
+                        </div>
+                        <div class="flex justify-between items-center text-sm">
+                            <span class="text-slate-600">Frais de transaction <span id="summaryFeeDetails" class="text-xs text-slate-500 font-mono"></span> :</span>
+                            <span id="summaryFees" class="font-medium text-red-600">- 0 XOF</span>
+                        </div>
+                        <div class="border-t my-2 border-violet-200"></div>
+                        <div class="flex justify-between items-center">
+                            <span class="font-semibold text-slate-700">Total à recevoir :</span>
+                            <span id="summaryTotal" class="font-bold text-lg text-emerald-700">0 XOF</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="flex justify-end space-x-2 mt-6 pt-4 border-t">
+                    <button type="button" id="cancel-recharge-btn" class="btn btn-secondary">Annuler</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-paper-plane mr-2"></i>Enregistrer et Soumettre
+                    </button>
+                </div>
+            </form>
+        </div>
+    `;
+    container.appendChild(rechargeSection);
+
+    // --- Fonctions utilitaires pour le formulaire de recharge ---
+    const enableRechargeForm = () => {
+        const form = container.querySelector('#partnerRechargeForm') as HTMLFormElement;
+        if (form) {
+            form.classList.remove('opacity-50', 'pointer-events-none');
+        }
+    };
+
+    const disableRechargeForm = () => {
+        const form = container.querySelector('#partnerRechargeForm') as HTMLFormElement;
+        if (form) {
+            form.classList.add('opacity-50', 'pointer-events-none');
+        }
+    };
+
+    const loadPaymentMethods = async () => {
+        const form = container.querySelector('#partnerRechargeForm') as HTMLFormElement;
+        if (!form) return;
+        
+        disableRechargeForm();
+        const select = form.querySelector('#rechargePaymentMethod') as HTMLSelectElement;
+        select.innerHTML = '<option value="">Chargement...</option>';
+
+        try {
+            paymentMethods = await api.getRechargePaymentMethods({ status: 'active' });
+            select.innerHTML = '<option value="">Sélectionnez le mode de paiement</option>';
+            paymentMethods.forEach(method => {
+                select.add(new Option(method.name, method.id));
+            });
+            enableRechargeForm();
+        } catch (error) {
+            select.innerHTML = '<option value="">Erreur de chargement</option>';
+            console.error("Failed to load payment methods:", error);
+            enableRechargeForm();
+        }
+    };
+
+    const updateCalculations = () => {
+        const form = container.querySelector('#partnerRechargeForm') as HTMLFormElement;
+        if (!form) return;
+        
+        const amountInput = form.querySelector('#rechargeAmount') as HTMLInputElement;
+        const methodSelect = form.querySelector('#rechargePaymentMethod') as HTMLSelectElement;
+        const summaryContainer = form.querySelector('#rechargeCalculationSummary') as HTMLElement;
+        const summaryAmount = form.querySelector('#summaryAmount') as HTMLElement;
+        const summaryFeeDetails = form.querySelector('#summaryFeeDetails') as HTMLElement;
+        const summaryFees = form.querySelector('#summaryFees') as HTMLElement;
+        const summaryTotal = form.querySelector('#summaryTotal') as HTMLElement;
+
+        const amount = parseFloat(amountInput.value) || 0;
+        const selectedMethod = paymentMethods.find(m => m.id === methodSelect.value);
+
+        if (amount <= 0 || !selectedMethod) {
+            summaryContainer.classList.add('hidden');
+            return;
+        }
+        summaryContainer.classList.remove('hidden');
+
+        let fees = 0;
+        let feeDetailsText = '';
+
+        if (selectedMethod) {
+            if (selectedMethod.feeType === 'fixed') {
+                fees = selectedMethod.feeValue;
+                feeDetailsText = `(Fixe)`;
+            } else if (selectedMethod.feeType === 'percentage') {
+                fees = (amount * selectedMethod.feeValue) / 100;
+                feeDetailsText = `(${selectedMethod.feeValue}%)`;
+            }
+        }
+
+        fees = Math.round(fees);
+        const amountToReceive = amount - fees;
+
+        summaryAmount.textContent = formatAmount(amount);
+        summaryFeeDetails.textContent = feeDetailsText;
+        summaryFees.textContent = `- ${formatAmount(fees)}`;
+        summaryTotal.textContent = formatAmount(amountToReceive);
+    };
+
+    const resetRechargeForm = () => {
+        const form = container.querySelector('#partnerRechargeForm') as HTMLFormElement;
+        if (!form) return;
+
+        const amountInput = form.querySelector('#rechargeAmount') as HTMLInputElement;
+        const referenceInput = form.querySelector('#rechargeReference') as HTMLInputElement;
+        const paymentMethodSelect = form.querySelector('#rechargePaymentMethod') as HTMLSelectElement;
+        const summaryContainer = form.querySelector('#rechargeCalculationSummary') as HTMLElement;
+
+        if (amountInput) amountInput.value = '';
+        if (referenceInput) referenceInput.value = '';
+        if (paymentMethodSelect) paymentMethodSelect.selectedIndex = 0;
+        if (summaryContainer) summaryContainer.classList.add('hidden');
+    };
+
+    const showRechargeSection = async () => {
+        const section = container.querySelector('#recharge-section') as HTMLElement;
+        section.classList.remove('hidden');
+        await loadPaymentMethods();
+        updateCalculations();
+    };
+
+    const hideRechargeSection = () => {
+        const section = container.querySelector('#recharge-section') as HTMLElement;
+        section.classList.add('hidden');
+        resetRechargeForm();
+    };
 
     // --- Quick Access Card ---
     const quickAccessCard = document.createElement('div');
@@ -251,10 +427,12 @@ export async function renderPartnerDashboardView(user: User): Promise<HTMLElemen
             }));
         }
 
-        if (requestRechargeBtn) {
-            // Créer et afficher le modal de demande de recharge
-            const modal = new PartnerRequestRechargeModal();
-            modal.show(fullUser);
+        if (target.closest('#toggle-recharge-form-btn')) {
+            showRechargeSection();
+        }
+
+        if (target.closest('#close-recharge-form-btn') || target.closest('#cancel-recharge-btn')) {
+            hideRechargeSection();
         }
 
         if (navButton) {
@@ -267,6 +445,127 @@ export async function renderPartnerDashboardView(user: User): Promise<HTMLElemen
                     composed: true
                 }));
             }
+        }
+    });
+
+    // --- Event listeners pour le formulaire de recharge ---
+    container.addEventListener('input', (e) => {
+        const target = e.target as HTMLElement;
+        if (target.id === 'rechargeAmount' || target.id === 'rechargePaymentMethod') {
+            updateCalculations();
+        }
+    });
+
+    container.addEventListener('change', (e) => {
+        const target = e.target as HTMLElement;
+        if (target.id === 'rechargePaymentMethod') {
+            updateCalculations();
+        }
+    });
+
+    container.addEventListener('submit', async (e) => {
+        const form = e.target as HTMLFormElement;
+        if (form.id !== 'partnerRechargeForm') return;
+        
+        e.preventDefault();
+        e.stopPropagation();
+
+        // Prévenir les soumissions multiples
+        const now = Date.now();
+        if (isSubmitting) {
+            console.log('Recharge submission already in progress, ignoring duplicate click');
+            return;
+        }
+
+        if (now - lastSubmissionTime < 2000) {
+            console.log('Too soon after last recharge submission, ignoring click');
+            document.body.dispatchEvent(new CustomEvent('showToast', {
+                detail: { message: 'Veuillez patienter avant de soumettre à nouveau.', type: 'warning' }
+            }));
+            return;
+        }
+
+        lastSubmissionTime = now;
+
+        if (!fullUser || !form) {
+            document.body.dispatchEvent(new CustomEvent('showToast', { 
+                detail: { message: "Erreur: Utilisateur non identifié.", type: 'error' } 
+            }));
+            return;
+        }
+
+        enableRechargeForm();
+
+        const amountInput = form.querySelector('#rechargeAmount') as HTMLInputElement;
+        const paymentMethodInput = form.querySelector('#rechargePaymentMethod') as HTMLSelectElement;
+        const referenceInput = form.querySelector('#rechargeReference') as HTMLInputElement;
+        const submitButton = form.querySelector('button[type="submit"]') as HTMLButtonElement;
+
+        // Nettoyer les états de validation précédents
+        if (amountInput) amountInput.setCustomValidity('');
+        if (paymentMethodInput) paymentMethodInput.setCustomValidity('');
+        if (referenceInput) referenceInput.setCustomValidity('');
+
+        const montant = parseFloat(amountInput.value);
+        const methodId = paymentMethodInput.value;
+        const reference = referenceInput.value.trim();
+
+        console.log('Form values at submission:', { montant, methodId, reference });
+
+        if (!methodId) {
+            document.body.dispatchEvent(new CustomEvent('showToast', { 
+                detail: { message: "Veuillez sélectionner un mode de paiement.", type: 'warning' } 
+            }));
+            paymentMethodInput.focus();
+            isSubmitting = false;
+            enableRechargeForm();
+            return;
+        }
+
+        if (isNaN(montant) || montant <= 0) {
+            document.body.dispatchEvent(new CustomEvent('showToast', { 
+                detail: { message: "Veuillez entrer un montant valide.", type: 'warning' } 
+            }));
+            amountInput.focus();
+            isSubmitting = false;
+            enableRechargeForm();
+            return;
+        }
+
+        // Définir l'état de soumission et désactiver le bouton
+        isSubmitting = true;
+        const originalButtonHtml = submitButton.innerHTML;
+        submitButton.disabled = true;
+        submitButton.style.pointerEvents = 'none';
+        submitButton.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i>Envoi...`;
+
+        try {
+            await api.createPartnerRechargeRequest(
+                fullUser.id,
+                montant,
+                methodId,
+                reference
+            );
+            document.body.dispatchEvent(new CustomEvent('showToast', { 
+                detail: { message: "Votre demande de recharge a été soumise avec succès !", type: 'success' } 
+            }));
+
+            // Réinitialiser le formulaire et le cacher
+            resetRechargeForm();
+            hideRechargeSection();
+            isSubmitting = false;
+        } catch (error) {
+            console.error("Failed to create recharge request:", (error as Error).message || error);
+            document.body.dispatchEvent(new CustomEvent('showToast', { 
+                detail: { message: "Une erreur est survenue lors de la soumission de votre demande.", type: 'error' } 
+            }));
+        } finally {
+            // Restaurer l'état du bouton
+            submitButton.disabled = false;
+            submitButton.innerHTML = originalButtonHtml;
+            submitButton.style.pointerEvents = 'auto';
+            enableRechargeForm();
+            isSubmitting = false;
         }
     });
 

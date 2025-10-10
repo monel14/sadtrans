@@ -15,7 +15,7 @@ export { AssignToSubAdminModal } from './AssignToSubAdminModal';
 export { BaseModal } from './BaseModal';
 export { ConfirmationModal } from './ConfirmationModal';
 export { PartnerEditAgentModal } from './PartnerEditAgentModal';
-export { PartnerRequestRechargeModal } from './PartnerRequestRechargeModal';
+
 export { PartnerTransferRevenueModal } from './PartnerTransferRevenueModal';
 export { SimpleCommissionModal } from './SimpleCommissionModal';
 export { ViewProofModal } from './ViewProofModal';
