@@ -38,6 +38,7 @@ import { DataService } from "../services/data.service";
 // Helper function to get category icons
 const categoryIcons: { [key: string]: string } = {
     'Cartes VISA': 'fa-credit-card',
+    'décodeurs': 'fa-satellite-dish', // Ajouté pour correspondre à la DB
     'Gestion des décodeurs (Canal +)': 'fa-satellite-dish',
     'Ecobank Xpress': 'fa-university',
     'Western Union': 'fa-globe-americas',
@@ -45,6 +46,7 @@ const categoryIcons: { [key: string]: string } = {
     'MoneyGram': 'fa-dollar-sign',
     'Paiement de Factures': 'fa-file-invoice-dollar',
     'Dépôts': 'fa-money-bill-wave',
+    'test': 'fa-flask', // Ajouté pour les services de test
     'Autres Services': 'fa-cogs',
 };
 
@@ -130,6 +132,14 @@ async function loadDynamicServices(): Promise<NavLink[]> {
             });
         });
         
+        // Log détaillé par catégorie
+        Object.keys(groupedOps).forEach(category => {
+            console.log(`Debug - Catégorie "${category}":`, {
+                icon: categoryIcons[category] || 'fa-concierge-bell',
+                services: groupedOps[category].map(op => ({ id: op.id, name: op.name }))
+            });
+        });
+        
         return serviceLinks;
     } catch (error) {
         console.error('Erreur lors du chargement des services dynamiques:', error);
@@ -199,28 +209,131 @@ function updateNavigationServices(services: NavLink[]) {
     partnerAndAgentServices = services;
     
     // Log pour déboguer
-    console.log('Debug - Navigation services updated:', services);
+    console.log('Debug - Navigation services updated:', services.length, 'services loaded');
+    console.log('Debug - Services:', services.map(s => ({ label: s.label, navId: s.navId })));
     
-    // Mettre à jour les liens de navigation pour tous les rôles
-    Object.keys(navigationLinks).forEach(role => {
+    // Mettre à jour les liens de navigation pour tous les rôles concernés
+    ['agent', 'partner'].forEach(role => {
         const roleLinks = navigationLinks[role as UserRole];
-        const servicesIndex = roleLinks.findIndex(link => link.navId === 'agent_services' || link.navId === 'partner_services');
+        const servicesIndex = roleLinks.findIndex(link => 
+            link.navId === 'agent_services' || link.navId === 'partner_services'
+        );
+        
         if (servicesIndex !== -1) {
+            // Remplacer complètement les services
             roleLinks[servicesIndex].children = services;
-            console.log(`Debug - Updated services for role ${role}`);
+            console.log(`Debug - Updated ${services.length} services for role ${role}`);
         }
     });
     
     // Déclencher un événement pour informer que les services ont été mis à jour
-    document.dispatchEvent(new CustomEvent('servicesLoaded'));
+    document.dispatchEvent(new CustomEvent('servicesLoaded', { 
+        detail: { servicesCount: services.length } 
+    }));
 }
 
-loadDynamicServices().then(services => {
-    updateNavigationServices(services);
-}).catch(error => {
-    console.error('Erreur lors du chargement initial des services:', error);
-    updateNavigationServices(partnerAndAgentServicesStatic);
-});
+// Fonction pour recharger les services (utile pour le débogage)
+async function reloadServices() {
+    console.log('Debug - Reloading services...');
+    const dataService = DataService.getInstance();
+    dataService.clearOperationTypesCache(); // Vider le cache
+    
+    try {
+        const services = await loadDynamicServices();
+        updateNavigationServices(services);
+        console.log('Debug - Services reloaded successfully');
+        return services;
+    } catch (error) {
+        console.error('Erreur lors du rechargement des services:', error);
+        updateNavigationServices(partnerAndAgentServicesStatic);
+        throw error;
+    }
+}
+
+// Fonction pour déboguer les services manquants
+function debugMissingServices() {
+    console.log('=== DEBUG SERVICES ===');
+    
+    // Comparer avec les services statiques
+    const staticCategories = partnerAndAgentServicesStatic.map(s => s.label);
+    console.log('Catégories statiques:', staticCategories);
+    
+    // Vérifier les services dynamiques actuels
+    const currentServices = navigationLinks.agent.find(link => link.navId === 'agent_services')?.children || [];
+    const dynamicCategories = currentServices.map(s => s.label);
+    console.log('Catégories dynamiques:', dynamicCategories);
+    
+    // Identifier les différences
+    const missingInDynamic = staticCategories.filter(cat => !dynamicCategories.includes(cat));
+    const extraInDynamic = dynamicCategories.filter(cat => !staticCategories.includes(cat));
+    
+    console.log('Manquant dans dynamique:', missingInDynamic);
+    console.log('En plus dans dynamique:', extraInDynamic);
+    
+    return {
+        static: staticCategories,
+        dynamic: dynamicCategories,
+        missing: missingInDynamic,
+        extra: extraInDynamic
+    };
+}
+
+// Fonction de test simple pour vérifier le chargement
+async function testServicesLoading() {
+    console.log('=== TEST SERVICES LOADING ===');
+    
+    try {
+        const dataService = DataService.getInstance();
+        const operationTypes = await dataService.getAllOperationTypes();
+        
+        console.log('Total operation types:', operationTypes.length);
+        console.log('Active operation types:', operationTypes.filter(ot => ot.status === 'active').length);
+        
+        const activeOpTypes = operationTypes.filter(ot => ot.status === 'active');
+        const categories = [...new Set(activeOpTypes.map(ot => ot.category || 'Autres Services'))];
+        
+        console.log('Categories found:', categories);
+        console.log('Services by category:');
+        
+        categories.forEach(category => {
+            const servicesInCategory = activeOpTypes.filter(ot => (ot.category || 'Autres Services') === category);
+            console.log(`  ${category}: ${servicesInCategory.length} services`);
+            servicesInCategory.forEach(service => {
+                console.log(`    - ${service.name} (${service.id})`);
+            });
+        });
+        
+        return { total: operationTypes.length, active: activeOpTypes.length, categories };
+        
+    } catch (error) {
+        console.error('Test failed:', error);
+        return null;
+    }
+}
+
+// Exposer les fonctions globalement pour le débogage
+(window as any).reloadServices = reloadServices;
+(window as any).debugMissingServices = debugMissingServices;
+(window as any).testServicesLoading = testServicesLoading;
+
+// Chargement initial des services dynamiques
+const initializeServices = async () => {
+    console.log('Debug - Initializing dynamic services...');
+    
+    try {
+        const services = await loadDynamicServices();
+        updateNavigationServices(services);
+        console.log('Debug - Dynamic services initialized successfully');
+    } catch (error) {
+        console.error('Erreur lors du chargement initial des services:', error);
+        // En cas d'erreur, utiliser une liste vide plutôt que les services statiques
+        // pour forcer l'affichage des services de la DB uniquement
+        updateNavigationServices([]);
+    }
+};
+
+// Lancer l'initialisation immédiatement
+initializeServices();
 
 export const navigationLinks: Record<UserRole, NavLink[]> = {
     agent: [

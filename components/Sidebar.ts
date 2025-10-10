@@ -65,17 +65,21 @@ function updateSidebar(sidebar: HTMLElement, user: User): void {
     }
 }
 
-// Fonction pour vérifier si les services sont chargés
-function areServicesLoaded(user: User): boolean {
-    const servicesLink = navigationLinks[user.role].find(link => 
-        link.navId === 'agent_services' || link.navId === 'partner_services'
-    );
-    
-    // Vérifier si les services ont des enfants et qu'ils ne sont pas les services statiques
-    return servicesLink !== undefined && 
-           servicesLink.children !== undefined && 
-           servicesLink.children.length > 0 && 
-           servicesLink.children !== (window as any).partnerAndAgentServicesStatic;
+// Fonction pour charger les services dynamiquement
+async function loadDynamicServicesForSidebar(): Promise<void> {
+    try {
+        console.log('Sidebar - Loading dynamic services...');
+        
+        // Forcer le rechargement des services
+        if ((window as any).reloadServices) {
+            await (window as any).reloadServices();
+            console.log('Sidebar - Services reloaded successfully');
+        } else {
+            console.warn('Sidebar - reloadServices function not available');
+        }
+    } catch (error) {
+        console.error('Sidebar - Error loading dynamic services:', error);
+    }
 }
 
 export function renderSidebar(user: User): HTMLElement {
@@ -142,25 +146,33 @@ export function renderSidebar(user: User): HTMLElement {
     sidebar.appendChild(nav);
     sidebar.appendChild(footer);
 
-    // Mettre à jour la sidebar après un court délai pour permettre le chargement asynchrone
-    // Amélioration : vérifier périodiquement si les services sont chargés
-    let updateAttempts = 0;
-    const maxAttempts = 10; // Maximum 10 tentatives (5 secondes)
-    
-    const tryUpdateSidebar = () => {
-        updateAttempts++;
-        
-        // Si les services sont chargés ou si nous avons atteint le maximum de tentatives, mettre à jour
-        if (areServicesLoaded(user) || updateAttempts >= maxAttempts) {
+    // Charger les services dynamiquement et mettre à jour la sidebar
+    const initializeDynamicServices = async () => {
+        try {
+            // Charger les services dynamiquement
+            await loadDynamicServicesForSidebar();
+            
+            // Mettre à jour la sidebar après le chargement
+            setTimeout(() => {
+                updateSidebar(sidebar, user);
+                console.log('Sidebar - Updated with dynamic services');
+            }, 100);
+            
+        } catch (error) {
+            console.error('Sidebar - Failed to initialize dynamic services:', error);
+            // Fallback : mettre à jour avec les services actuels
             updateSidebar(sidebar, user);
-            return;
         }
-        
-        // Continuer à vérifier périodiquement
-        setTimeout(tryUpdateSidebar, 500);
     };
     
-    setTimeout(tryUpdateSidebar, 500);
+    // Lancer l'initialisation après un court délai
+    setTimeout(initializeDynamicServices, 200);
+    
+    // Écouter l'événement de services chargés pour mettre à jour
+    document.addEventListener('servicesLoaded', () => {
+        console.log('Sidebar - Services loaded event received');
+        updateSidebar(sidebar, user);
+    });
 
     return sidebar;
 }
