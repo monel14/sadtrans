@@ -3,6 +3,7 @@ import { DataService } from '../services/data.service';
 import { User, OperationType, OperationTypeField, CommissionTier, OperationTypeFieldOption } from '../models';
 import { ApiService } from '../services/api.service';
 import { $ } from '../utils/dom';
+import { hasAmountField, getAmountField } from '../utils/operation-type-helpers';
 
 // Helper function to display options in the form (supports both string[] and OperationTypeFieldOption[])
 function getOptionsDisplayValue(options: string[] | OperationTypeFieldOption[] | undefined): string {
@@ -137,9 +138,19 @@ function renderDetailView() {
         const isCartesVisa = opTypeForEditing.category === 'Cartes VISA';
         const hasCardTypeField = opTypeForEditing.fields.some(f => f.name === 'card_type');
         
+        const amountField = getAmountField(opTypeForEditing);
+        const amountFieldInfo = amountField 
+            ? `<span class="text-green-600"><i class="fas fa-check-circle mr-1"></i>Champ de montant: "${amountField.label}"</span>`
+            : opTypeForEditing.impactsBalance 
+                ? `<span class="text-orange-600"><i class="fas fa-exclamation-triangle mr-1"></i>Aucun champ de montant défini (requis pour les services qui impactent le solde)</span>`
+                : `<span class="text-slate-500"><i class="fas fa-info-circle mr-1"></i>Aucun champ de montant défini</span>`;
+        
         tabContent.innerHTML = `
             <div class="p-4 border rounded-b-lg">
-                <p class="text-sm text-slate-500 mb-4">Définissez les champs que l'agent devra remplir. Utilisez les flèches pour réorganiser.</p>
+                <div class="flex justify-between items-center mb-4">
+                    <p class="text-sm text-slate-500">Définissez les champs que l'agent devra remplir. Utilisez les flèches pour réorganiser.</p>
+                    <div class="text-sm">${amountFieldInfo}</div>
+                </div>
                 <div id="fields-list-container" class="space-y-2"></div>
                 <div class="flex gap-2 mt-4">
                     <button id="add-field-btn" class="btn btn-sm btn-outline-secondary"><i class="fas fa-plus mr-2"></i>Ajouter un champ</button>
@@ -256,6 +267,7 @@ function createFieldEditor(field: OperationTypeField, index: number, total: numb
             <div class="flex gap-4 mt-3">
                 <div class="flex items-center"><input type="checkbox" data-prop="required" class="mr-2" ${field.required ? 'checked' : ''}><label class="form-label form-label-sm">Requis</label></div>
                 <div class="flex items-center"><input type="checkbox" data-prop="readonly" class="mr-2" ${field.readonly ? 'checked' : ''}><label class="form-label form-label-sm">Lecture seule</label></div>
+                <div class="flex items-center ${field.type !== 'number' ? 'opacity-50' : ''}"><input type="checkbox" data-prop="isAmountField" class="mr-2" ${field.isAmountField ? 'checked' : ''} ${field.type !== 'number' ? 'disabled' : ''}><label class="form-label form-label-sm">Champ de montant</label></div>
             </div>
         </div>
     `;
@@ -651,6 +663,17 @@ export async function renderDeveloperManageOperationTypesView(user: User): Promi
                             required: true,
                             readonly: false,
                             obsolete: false
+                        },
+                        // Auto-add amount field for services that impact balance
+                        {
+                            id: 'f_montant_' + Date.now(),
+                            name: 'montant',
+                            type: 'number',
+                            label: 'Montant (XOF)',
+                            required: true,
+                            readonly: false,
+                            obsolete: false,
+                            isAmountField: true
                         }
                     ],
                     commissionConfig: {
@@ -868,6 +891,7 @@ export async function renderDeveloperManageOperationTypesView(user: User): Promi
                         options: finalOptions,
                         required: (editor.querySelector('[data-prop="required"]') as HTMLInputElement).checked,
                         readonly: (editor.querySelector('[data-prop="readonly"]') as HTMLInputElement).checked,
+                        isAmountField: (editor.querySelector('[data-prop="isAmountField"]') as HTMLInputElement).checked,
                         obsolete: false
                     });
                 });
@@ -904,6 +928,19 @@ export async function renderDeveloperManageOperationTypesView(user: User): Promi
                 }
             };
 
+            // Validation: Vérifier qu'un champ de montant est défini si le service impacte le solde
+            if (updatedOpType.impactsBalance && !hasAmountField(updatedOpType)) {
+                document.body.dispatchEvent(new CustomEvent('showToast', { 
+                    detail: { 
+                        message: 'Un champ de montant doit être défini pour les services qui impactent le solde. Veuillez cocher "Champ de montant" sur un champ de type "Nombre".', 
+                        type: 'error' 
+                    } 
+                }));
+                saveBtn.innerHTML = `<i class="fas fa-save mr-2"></i>Enregistrer les modifications`;
+                (saveBtn as HTMLButtonElement).disabled = false;
+                return;
+            }
+
             try {
                 const api = ApiService.getInstance();
                 const savedOp = await api.updateOperationType(updatedOpType);
@@ -935,6 +972,50 @@ export async function renderDeveloperManageOperationTypesView(user: User): Promi
                 if (tempContainer) {
                     tempContainer.remove();
                 }
+            }
+        }
+    });
+
+    // --- Event Listener for Input Changes ---
+    viewContainer.addEventListener('change', (e) => {
+        const target = e.target as HTMLElement;
+        
+        // Handle field type changes to enable/disable amount field checkbox
+        if (target.matches('[data-prop="type"]')) {
+            const fieldEditor = target.closest('.field-editor');
+            if (fieldEditor) {
+                const typeSelect = target as HTMLSelectElement;
+                const isAmountCheckbox = fieldEditor.querySelector('[data-prop="isAmountField"]') as HTMLInputElement;
+                const amountFieldContainer = isAmountCheckbox.closest('.flex');
+                
+                if (typeSelect.value === 'number') {
+                    // Enable amount field option for number fields
+                    isAmountCheckbox.disabled = false;
+                    amountFieldContainer?.classList.remove('opacity-50');
+                } else {
+                    // Disable and uncheck amount field option for non-number fields
+                    isAmountCheckbox.disabled = true;
+                    isAmountCheckbox.checked = false;
+                    amountFieldContainer?.classList.add('opacity-50');
+                }
+            }
+        }
+        
+        // Handle amount field checkbox changes to ensure only one is selected
+        if (target.matches('[data-prop="isAmountField"]')) {
+            const checkbox = target as HTMLInputElement;
+            if (checkbox.checked) {
+                // Uncheck all other amount field checkboxes
+                const allAmountCheckboxes = viewContainer.querySelectorAll('[data-prop="isAmountField"]');
+                allAmountCheckboxes.forEach(cb => {
+                    if (cb !== checkbox) {
+                        (cb as HTMLInputElement).checked = false;
+                    }
+                });
+                
+                document.body.dispatchEvent(new CustomEvent('showToast', { 
+                    detail: { message: 'Champ de montant défini. Les autres champs de montant ont été désélectionnés.', type: 'info' } 
+                }));
             }
         }
     });

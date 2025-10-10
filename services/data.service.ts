@@ -730,4 +730,53 @@ export class DataService {
     }
     */
 
+    /**
+     * Calcule le montant principal d'une transaction basé sur le champ de montant défini
+     * dans le type d'opération
+     * @param operationTypeId L'ID du type d'opération
+     * @param formData Les données du formulaire de transaction
+     * @returns Le montant principal calculé
+     */
+    public async calculateTransactionAmount(operationTypeId: string, formData: any): Promise<number> {
+        const operationType = await this.getOperationTypeById(operationTypeId);
+        if (!operationType) {
+            console.warn(`Type d'opération non trouvé: ${operationTypeId}`);
+            return 0;
+        }
+
+        // Utiliser les utilitaires pour extraire le montant
+        const { extractAmountFromTransactionData } = await import('../utils/operation-type-helpers');
+        return extractAmountFromTransactionData(operationType, formData);
+    }
+
+    /**
+     * Valide qu'un type d'opération a un champ de montant configuré
+     * @param operationTypeId L'ID du type d'opération
+     * @returns true si un champ de montant est configuré
+     */
+    public async validateOperationTypeAmountField(operationTypeId: string): Promise<boolean> {
+        const operationType = await this.getOperationTypeById(operationTypeId);
+        if (!operationType) {
+            return false;
+        }
+
+        const { hasAmountField } = await import('../utils/operation-type-helpers');
+        return hasAmountField(operationType);
+    }
+
+    /**
+     * Obtient le nom du champ de montant pour un type d'opération
+     * @param operationTypeId L'ID du type d'opération
+     * @returns Le nom du champ de montant ou null
+     */
+    public async getAmountFieldName(operationTypeId: string): Promise<string | null> {
+        const operationType = await this.getOperationTypeById(operationTypeId);
+        if (!operationType) {
+            return null;
+        }
+
+        const { getAmountFieldName } = await import('../utils/operation-type-helpers');
+        return getAmountFieldName(operationType);
+    }
+
 }

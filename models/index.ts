@@ -109,6 +109,7 @@ export interface OperationTypeField {
     readonly?: boolean;
     defaultValue?: string | number;
     dataSource?: 'cardTypes';
+    isAmountField?: boolean; // Indique si ce champ représente le montant principal pour les calculs
 }
 
 export interface OperationType {

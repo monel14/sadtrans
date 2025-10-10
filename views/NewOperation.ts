@@ -9,6 +9,7 @@ import { $ } from '../utils/dom';
 import { renderAgentDashboardView } from './AgentDashboard';
 import { renderPartnerDashboardView } from './PartnerDashboard';
 import { formatAmount } from '../utils/formatters';
+import { hasAmountField, extractAmountFromTransactionData } from '../utils/operation-type-helpers';
 
 // Helper to assign icons to categories
 const categoryIcons: { [key: string]: string } = {
@@ -931,6 +932,39 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
         }
 
         try {
+            // Validation du champ de montant
+            if (selectedOperationType.impactsBalance && !hasAmountField(selectedOperationType)) {
+                document.body.dispatchEvent(new CustomEvent('showToast', {
+                    detail: { 
+                        message: 'Ce service nécessite un champ de montant configuré. Contactez l\'administrateur.', 
+                        type: 'error' 
+                    }
+                }));
+                submitButton.disabled = false;
+                submitButton.innerHTML = originalBtnHtml;
+                submitButton.style.pointerEvents = 'auto';
+                isSubmitting = false;
+                return;
+            }
+
+            // Validation du montant saisi
+            if (selectedOperationType.impactsBalance) {
+                const amount = extractAmountFromTransactionData(selectedOperationType, data);
+                if (amount <= 0) {
+                    document.body.dispatchEvent(new CustomEvent('showToast', {
+                        detail: { 
+                            message: 'Le montant doit être supérieur à zéro.', 
+                            type: 'error' 
+                        }
+                    }));
+                    submitButton.disabled = false;
+                    submitButton.innerHTML = originalBtnHtml;
+                    submitButton.style.pointerEvents = 'auto';
+                    isSubmitting = false;
+                    return;
+                }
+            }
+
             const newTransaction = await api.createTransaction(user.id, selectedOperationType.id, data);
             // Reset submission flag on success
             isSubmitting = false;
