@@ -154,6 +154,7 @@ function renderDetailView() {
                 <div id="fields-list-container" class="space-y-2"></div>
                 <div class="flex gap-2 mt-4">
                     <button id="add-field-btn" class="btn btn-sm btn-outline-secondary"><i class="fas fa-plus mr-2"></i>Ajouter un champ</button>
+                    ${!amountField ? `<button id="add-amount-field-btn" class="btn btn-sm btn-outline-success"><i class="fas fa-calculator mr-2"></i>Ajouter champ de montant</button>` : ''}
                     ${isCartesVisa && !hasCardTypeField ? `<button id="add-card-type-btn" class="btn btn-sm btn-outline-primary"><i class="fas fa-credit-card mr-2"></i>Ajouter Type de carte</button>` : ''}
                 </div>
             </div>
@@ -666,8 +667,8 @@ export async function renderDeveloperManageOperationTypesView(user: User): Promi
                         },
                         // Auto-add amount field for services that impact balance
                         {
-                            id: 'f_montant_' + Date.now(),
-                            name: 'montant',
+                            id: 'f_montant_principal_' + Date.now(),
+                            name: 'montant_principal',
                             type: 'number',
                             label: 'Montant (XOF)',
                             required: true,
@@ -744,6 +745,52 @@ export async function renderDeveloperManageOperationTypesView(user: User): Promi
             
             document.body.dispatchEvent(new CustomEvent('showToast', { 
                 detail: { message: 'Nouveau champ ajouté', type: 'success' } 
+            }));
+            return;
+        }
+
+        // Add amount field button
+        const addAmountFieldBtn = target.id === 'add-amount-field-btn' ? target : target.closest('#add-amount-field-btn');
+        if (addAmountFieldBtn && selectedOpType) {
+            // Préserver l'onglet actif
+            const activeTab = detailView?.querySelector('.tabs button.active') as HTMLButtonElement;
+            const activeTabName = activeTab?.dataset.tab || 'form';
+            
+            const newAmountField: OperationTypeField = {
+                id: 'f_montant_principal_' + Date.now(),
+                name: 'montant_principal',
+                type: 'number',
+                label: 'Montant (XOF)',
+                options: [],
+                required: true,
+                readonly: false,
+                obsolete: false,
+                isAmountField: true
+            };
+            
+            // Désélectionner tous les autres champs de montant existants
+            selectedOpType.fields.forEach(field => {
+                if (field.isAmountField) {
+                    field.isAmountField = false;
+                }
+            });
+            
+            selectedOpType.fields = selectedOpType.fields || [];
+            selectedOpType.fields.push(newAmountField);
+            renderDetailView();
+            
+            // Restaurer l'onglet actif après le re-rendu
+            setTimeout(() => {
+                const tabToActivate = detailView?.querySelector(`[data-tab="${activeTabName}"]`) as HTMLButtonElement;
+                if (tabToActivate) {
+                    detailView?.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
+                    tabToActivate.classList.add('active');
+                    tabToActivate.click();
+                }
+            }, 10);
+            
+            document.body.dispatchEvent(new CustomEvent('showToast', { 
+                detail: { message: 'Champ de montant ajouté avec le nom standardisé "montant_principal"', type: 'success' } 
             }));
             return;
         }
@@ -1004,6 +1051,8 @@ export async function renderDeveloperManageOperationTypesView(user: User): Promi
         // Handle amount field checkbox changes to ensure only one is selected
         if (target.matches('[data-prop="isAmountField"]')) {
             const checkbox = target as HTMLInputElement;
+            const fieldEditor = checkbox.closest('.field-editor');
+            
             if (checkbox.checked) {
                 // Uncheck all other amount field checkboxes
                 const allAmountCheckboxes = viewContainer.querySelectorAll('[data-prop="isAmountField"]');
@@ -1013,8 +1062,23 @@ export async function renderDeveloperManageOperationTypesView(user: User): Promi
                     }
                 });
                 
+                // Définir automatiquement le nom (clé) à "montant_principal"
+                if (fieldEditor) {
+                    const nameInput = fieldEditor.querySelector('[data-prop="name"]') as HTMLInputElement;
+                    if (nameInput) {
+                        const oldName = nameInput.value;
+                        nameInput.value = 'montant_principal';
+                        
+                        // Mettre à jour aussi le libellé si c'est un nouveau champ ou s'il n'a pas été personnalisé
+                        const labelInput = fieldEditor.querySelector('[data-prop="label"]') as HTMLInputElement;
+                        if (labelInput && (labelInput.value === '' || labelInput.value.toLowerCase().includes('montant') || labelInput.value === oldName)) {
+                            labelInput.value = 'Montant (XOF)';
+                        }
+                    }
+                }
+                
                 document.body.dispatchEvent(new CustomEvent('showToast', { 
-                    detail: { message: 'Champ de montant défini. Les autres champs de montant ont été désélectionnés.', type: 'info' } 
+                    detail: { message: 'Champ de montant défini. Nom standardisé à "montant_principal".', type: 'success' } 
                 }));
             }
         }
