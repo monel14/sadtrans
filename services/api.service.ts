@@ -1257,7 +1257,19 @@ export class ApiService {
 
     // Commission profile update method removed - commissions are now configured directly in contracts
 
-    public async getFeePreview(userId: string, opTypeId: string, amount: number, transactionData?: any): Promise<{ totalFee: number; partnerShare: number; companyShare: number }> {
+    public async getFeePreview(userId: string, opTypeId: string, amount: number, transactionData?: any): Promise<{ 
+        totalFee: number; 
+        partnerShare: number; 
+        companyShare: number;
+        feeBreakdown: {
+            commissionFee: number;
+            additionalFees: Array<{
+                name: string;
+                amount: number;
+                description?: string;
+            }>;
+        };
+    }> {
         const dataService = DataService.getInstance();
         try {
             const [user, opType, activeContractsMap] = await Promise.all([
@@ -1313,31 +1325,54 @@ export class ApiService {
             }
 
             // Calculer les frais supplémentaires
-            let additionalFeesTotal = 0;
+            let additionalFeesResult = { total: 0, appliedFees: [] };
             if (opType.commissionConfig.additionalFees && transactionData) {
-                additionalFeesTotal = this.calculateAdditionalFees(opType.commissionConfig.additionalFees, amount, transactionData);
+                additionalFeesResult = this.calculateAdditionalFees(opType.commissionConfig.additionalFees, amount, transactionData);
             }
 
+            // Stocker les frais de commission de base
+            const commissionFee = Math.round(totalFee);
+
             // Ajouter les frais supplémentaires au total
-            totalFee += additionalFeesTotal;
+            totalFee += additionalFeesResult.total;
 
             totalFee = Math.round(totalFee);
             const companyShare = Math.round(totalFee * (companySharePercent / 100));
             const partnerShare = totalFee - companyShare;
 
-            return { totalFee, partnerShare, companyShare };
+            return { 
+                totalFee, 
+                partnerShare, 
+                companyShare,
+                feeBreakdown: {
+                    commissionFee,
+                    additionalFees: additionalFeesResult.appliedFees
+                }
+            };
 
         } catch (error) {
             console.error("Error calculating fee preview:", error);
-            return { totalFee: 0, partnerShare: 0, companyShare: 0 };
+            return { 
+                totalFee: 0, 
+                partnerShare: 0, 
+                companyShare: 0,
+                feeBreakdown: {
+                    commissionFee: 0,
+                    additionalFees: []
+                }
+            };
         }
     }
 
     /**
      * Calcule les frais supplémentaires basés sur les conditions configurées
      */
-    private calculateAdditionalFees(additionalFees: any[], amount: number, transactionData: any): number {
+    private calculateAdditionalFees(additionalFees: any[], amount: number, transactionData: any): { 
+        total: number; 
+        appliedFees: Array<{ name: string; amount: number; description?: string; }> 
+    } {
         let totalAdditionalFees = 0;
+        const appliedFees: Array<{ name: string; amount: number; description?: string; }> = [];
 
         additionalFees.forEach(fee => {
             // Vérifier si le frais est actif
@@ -1386,12 +1421,20 @@ export class ApiService {
                 }
                 
                 totalAdditionalFees += feeAmount;
+                appliedFees.push({
+                    name: fee.name,
+                    amount: Math.round(feeAmount),
+                    description: fee.description
+                });
                 
                 console.log(`Frais supplémentaire appliqué: ${fee.name} = ${feeAmount} XOF`);
             }
         });
 
-        return Math.round(totalAdditionalFees);
+        return { 
+            total: Math.round(totalAdditionalFees), 
+            appliedFees 
+        };
     }
 
     public async updateContract(contract: Contract): Promise<Contract> {

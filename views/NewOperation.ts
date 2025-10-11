@@ -60,9 +60,24 @@ function handleCancelNavigation(container: HTMLElement, user: User) {
     }));
 }
 
-async function calculateFeeAndCommissionPreview(montant: number, user: User, opType: OperationType, api: ApiService, formData?: any): Promise<{ totalFee: number; partnerShare: number }> {
+async function calculateFeeAndCommissionPreview(montant: number, user: User, opType: OperationType, api: ApiService, formData?: any): Promise<{ 
+    totalFee: number; 
+    partnerShare: number; 
+    feeBreakdown: {
+        commissionFee: number;
+        additionalFees: Array<{
+            name: string;
+            amount: number;
+            description?: string;
+        }>;
+    };
+}> {
     const preview = await api.getFeePreview(user.id, opType.id, montant, formData);
-    return { totalFee: preview.totalFee, partnerShare: preview.partnerShare };
+    return { 
+        totalFee: preview.totalFee, 
+        partnerShare: preview.partnerShare,
+        feeBreakdown: preview.feeBreakdown
+    };
 }
 
 
@@ -491,6 +506,7 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
 
         let totalFee: number;
         let partnerShare: number;
+        let feeBreakdown: any;
 
         try {
             // Collecter les données du formulaire pour le calcul des frais supplémentaires
@@ -506,6 +522,7 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
             const preview = await calculateFeeAndCommissionPreview(baseAmount, user, selectedOperationType, api, formData);
             totalFee = preview.totalFee;
             partnerShare = preview.partnerShare;
+            feeBreakdown = preview.feeBreakdown;
             if (submitBtn && selectedOperationType) submitBtn.disabled = false; // Re-enable on success
         } catch (error) {
             console.error("Failed to calculate fee preview:", error);
@@ -536,8 +553,33 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
                     <span class="text-slate-600">Montant total (client) :</span>
                     <span class="font-medium text-slate-800">${formatAmount(baseAmount)}</span>
                 </div>
-                <div class="flex justify-between items-center text-sm">
-                    <span class="text-slate-600">Frais de service (inclus) :</span>
+            `;
+            
+            // Afficher le détail des frais inclus
+            if (feeBreakdown.commissionFee > 0) {
+                summaryHtml += `
+                    <div class="flex justify-between items-center text-sm">
+                        <span class="text-slate-600 pl-4">• Frais de commission (inclus) :</span>
+                        <span class="font-medium text-slate-800">${formatAmount(feeBreakdown.commissionFee)}</span>
+                    </div>
+                `;
+            }
+            
+            // Afficher les frais supplémentaires inclus
+            if (feeBreakdown.additionalFees && feeBreakdown.additionalFees.length > 0) {
+                feeBreakdown.additionalFees.forEach((fee: any) => {
+                    summaryHtml += `
+                        <div class="flex justify-between items-center text-sm">
+                            <span class="text-slate-600 pl-4">• ${fee.name} (inclus) :</span>
+                            <span class="font-medium text-slate-800">${formatAmount(fee.amount)}</span>
+                        </div>
+                    `;
+                });
+            }
+            
+            summaryHtml += `
+                <div class="flex justify-between items-center text-sm border-t border-slate-200 pt-1 mt-1">
+                    <span class="text-slate-600 font-medium">Total des frais (inclus) :</span>
                     <span class="font-medium text-slate-800">${formatAmount(totalFee)}</span>
                 </div>
                 <div class="flex justify-between items-center text-sm">
@@ -552,8 +594,34 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
                     <span class="text-slate-600">Montant de l'opération :</span>
                     <span class="font-medium text-slate-800">${formatAmount(baseAmount)}</span>
                 </div>
-                <div class="flex justify-between items-center text-sm">
-                    <span class="text-slate-600">Frais de service (en plus) :</span>
+            `;
+            
+            // Afficher le détail des frais
+            if (feeBreakdown.commissionFee > 0) {
+                summaryHtml += `
+                    <div class="flex justify-between items-center text-sm">
+                        <span class="text-slate-600 pl-4">• Frais de commission :</span>
+                        <span class="font-medium text-slate-800">${formatAmount(feeBreakdown.commissionFee)}</span>
+                    </div>
+                `;
+            }
+            
+            // Afficher les frais supplémentaires
+            if (feeBreakdown.additionalFees && feeBreakdown.additionalFees.length > 0) {
+                feeBreakdown.additionalFees.forEach((fee: any) => {
+                    summaryHtml += `
+                        <div class="flex justify-between items-center text-sm">
+                            <span class="text-slate-600 pl-4">• ${fee.name} :</span>
+                            <span class="font-medium text-slate-800">${formatAmount(fee.amount)}</span>
+                        </div>
+                    `;
+                });
+            }
+            
+            // Total des frais
+            summaryHtml += `
+                <div class="flex justify-between items-center text-sm border-t border-slate-200 pt-1 mt-1">
+                    <span class="text-slate-600 font-medium">Total des frais :</span>
                     <span class="font-medium text-slate-800">${formatAmount(totalFee)}</span>
                 </div>
             `;
