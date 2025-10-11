@@ -546,8 +546,8 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
         let summaryHtml = '';
 
         if (feeApplication === 'inclusive') {
-            const netAmount = baseAmount - totalFee;
-            totalDebit = baseAmount;
+            const netAmount = baseAmount - additionalFeesTotal;
+            totalDebit = baseAmount; // Le client paie exactement ce montant
             summaryHtml = `
                 <div class="flex justify-between items-center text-sm">
                     <span class="text-slate-600">Montant total (client) :</span>
@@ -555,17 +555,17 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
                 </div>
             `;
             
-            // Afficher le détail des frais inclus
-            if (feeBreakdown.commissionFee > 0) {
+            // Afficher les frais supplémentaires inclus
+            if (additionalFeesTotal > 0) {
                 summaryHtml += `
-                    <div class="flex justify-between items-center text-sm">
-                        <span class="text-slate-600 pl-4">• Frais de commission (inclus) :</span>
-                        <span class="font-medium text-slate-800">${formatAmount(feeBreakdown.commissionFee)}</span>
+                    <div class="flex justify-between items-center text-sm border-t border-slate-200 pt-1 mt-1">
+                        <span class="text-slate-600 font-medium">Frais supplémentaires (inclus) :</span>
+                        <span class="font-medium text-slate-800">${formatAmount(additionalFeesTotal)}</span>
                     </div>
                 `;
             }
             
-            // Afficher les frais supplémentaires inclus
+            // Afficher le détail des frais supplémentaires inclus
             if (feeBreakdown.additionalFees && feeBreakdown.additionalFees.length > 0) {
                 feeBreakdown.additionalFees.forEach((fee: any) => {
                     summaryHtml += `
@@ -578,15 +578,21 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
             }
             
             summaryHtml += `
-                <div class="flex justify-between items-center text-sm border-t border-slate-200 pt-1 mt-1">
-                    <span class="text-slate-600 font-medium">Total des frais (inclus) :</span>
-                    <span class="font-medium text-slate-800">${formatAmount(totalFee)}</span>
-                </div>
                 <div class="flex justify-between items-center text-sm">
                     <span class="text-slate-600">Montant net du service :</span>
                     <span class="font-medium text-slate-800">${formatAmount(netAmount)}</span>
                 </div>
             `;
+            
+            // Afficher la commission qui s'ajoute (pas incluse)
+            if (commissionFee > 0) {
+                summaryHtml += `
+                    <div class="flex justify-between items-center text-sm border-t border-slate-200 pt-1 mt-1">
+                        <span class="text-slate-600 font-medium">Frais de commission (en plus) :</span>
+                        <span class="font-medium text-slate-800">${formatAmount(commissionFee)}</span>
+                    </div>
+                `;
+            }
         } else { // additive
             totalDebit = baseAmount + totalFee;
             summaryHtml = `

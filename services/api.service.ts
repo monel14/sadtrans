@@ -796,12 +796,18 @@ export class ApiService {
         if (!opType || !user || !user.agency) throw new Error("Operation Type, User, or Agency not found");
 
         const amount = parseFloat(data.montant_principal) || 0;
-        const { totalFee, partnerShare } = await this.getFeePreview(userId, opTypeId, amount, data);
+        const { totalFee, partnerShare, commissionFee, additionalFeesTotal } = await this.getFeePreview(userId, opTypeId, amount, data);
         const totalCommission = totalFee; // La commission totale est égale aux frais
 
         let totalDebit = 0;
         if (opType.impactsBalance) {
-            totalDebit = opType.feeApplication === 'inclusive' ? amount : amount + totalFee;
+            if (opType.feeApplication === 'inclusive') {
+                // Mode inclusif : le client paie exactement le montant affiché
+                totalDebit = amount;
+            } else {
+                // Mode additif : montant de base + tous les frais
+                totalDebit = amount + totalFee;
+            }
         }
 
         // 1. Vérifier le solde AVANT toute opération
@@ -1261,6 +1267,8 @@ export class ApiService {
         totalFee: number; 
         partnerShare: number; 
         companyShare: number;
+        commissionFee: number;
+        additionalFeesTotal: number;
         feeBreakdown: {
             commissionFee: number;
             additionalFees: Array<{
@@ -1308,33 +1316,35 @@ export class ApiService {
                 }
             }
 
-            if (relevantConfig) {
-                companySharePercent = relevantConfig.partageSociete ?? companySharePercent;
-                switch (relevantConfig.type) {
-                    case 'fixed':
-                        totalFee = relevantConfig.amount ?? 0;
-                        break;
-                    case 'percentage':
-                        totalFee = amount * (relevantConfig.rate ?? 0) / 100;
-                        break;
-                    case 'tiers':
-                        const tier = relevantConfig.tiers?.find(t => amount >= t.from && amount <= t.to);
-                        if (tier) totalFee = tier.type === 'fixed' ? tier.value : amount * tier.value / 100;
-                        break;
-                }
-            }
-
-            // Calculer les frais supplémentaires
+            // Calculer d'abord les frais supplémentaires sur le montant de base
             let additionalFeesResult = { total: 0, appliedFees: [] };
             if (opType.commissionConfig.additionalFees && transactionData) {
                 additionalFeesResult = this.calculateAdditionalFees(opType.commissionConfig.additionalFees, amount, transactionData);
             }
 
-            // Stocker les frais de commission de base
-            const commissionFee = Math.round(totalFee);
+            // Calculer le montant total sur lequel appliquer la commission
+            const totalAmountForCommission = amount + additionalFeesResult.total;
 
-            // Ajouter les frais supplémentaires au total
-            totalFee += additionalFeesResult.total;
+            // Calculer la commission sur le montant total (montant de base + frais supplémentaires)
+            let commissionFee = 0;
+            if (relevantConfig) {
+                companySharePercent = relevantConfig.partageSociete ?? companySharePercent;
+                switch (relevantConfig.type) {
+                    case 'fixed':
+                        commissionFee = relevantConfig.amount ?? 0;
+                        break;
+                    case 'percentage':
+                        commissionFee = totalAmountForCommission * (relevantConfig.rate ?? 0) / 100;
+                        break;
+                    case 'tiers':
+                        const tier = relevantConfig.tiers?.find(t => totalAmountForCommission >= t.from && totalAmountForCommission <= t.to);
+                        if (tier) commissionFee = tier.type === 'fixed' ? tier.value : totalAmountForCommission * tier.value / 100;
+                        break;
+                }
+            }
+
+            // Total des frais = commission + frais supplémentaires
+            totalFee = commissionFee + additionalFeesResult.total;
 
             totalFee = Math.round(totalFee);
             const companyShare = Math.round(totalFee * (companySharePercent / 100));
@@ -1344,8 +1354,10 @@ export class ApiService {
                 totalFee, 
                 partnerShare, 
                 companyShare,
+                commissionFee: Math.round(commissionFee),
+                additionalFeesTotal: additionalFeesResult.total,
                 feeBreakdown: {
-                    commissionFee,
+                    commissionFee: Math.round(commissionFee),
                     additionalFees: additionalFeesResult.appliedFees
                 }
             };
@@ -1356,6 +1368,8 @@ export class ApiService {
                 totalFee: 0, 
                 partnerShare: 0, 
                 companyShare: 0,
+                commissionFee: 0,
+                additionalFeesTotal: 0,
                 feeBreakdown: {
                     commissionFee: 0,
                     additionalFees: []
