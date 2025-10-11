@@ -130,6 +130,7 @@ export interface CommissionConfig {
     rate?: number; // for 'percentage'
     tiers?: CommissionTier[]; // for 'tiers'
     partageSociete?: number; // Percentage share for the company (0-100)
+    additionalFees?: AdditionalFee[]; // Frais supplémentaires configurables
 }
 
 export interface CommissionTier {
@@ -137,6 +138,24 @@ export interface CommissionTier {
     to: number;
     type: 'fixed' | 'percentage';
     value: number;
+}
+
+export interface AdditionalFee {
+    id: string;
+    name: string; // Nom du frais (ex: "Frais de traitement", "Frais express")
+    description?: string; // Description optionnelle
+    type: 'fixed' | 'percentage'; // Type de calcul
+    value: number; // Valeur (montant fixe ou pourcentage)
+    condition?: 'always' | 'amount_range' | 'field_value'; // Condition d'application
+    conditionConfig?: {
+        // Pour 'amount_range'
+        minAmount?: number;
+        maxAmount?: number;
+        // Pour 'field_value'
+        fieldName?: string;
+        fieldValue?: string | string[];
+    };
+    active: boolean; // Actif ou non
 }
 
 // Commission profiles have been removed - commissions are now configured directly in contracts

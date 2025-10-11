@@ -183,18 +183,34 @@ function renderDetailView() {
                     </div>
                 </div>
                 <div class="pt-4 border-t">
-                    <h4 class="font-semibold text-slate-700 mb-2">Paliers de Frais de Service</h4>
-                    <div id="tiers-list-container" class="space-y-2"></div>
-                    <button id="add-tier-btn" class="btn btn-sm btn-outline-secondary mt-4"><i class="fas fa-plus mr-2"></i>Ajouter un palier</button>
+                    <h4 class="font-semibold text-slate-700 mb-2">Frais Supplémentaires</h4>
+                    <p class="text-sm text-slate-500 mb-3">Configurez des frais supplémentaires qui s'ajoutent au montant principal selon des conditions spécifiques.</p>
+                    <div id="additional-fees-container" class="space-y-2"></div>
+                    <button id="add-additional-fee-btn" class="btn btn-sm btn-outline-secondary mt-4"><i class="fas fa-plus mr-2"></i>Ajouter un frais supplémentaire</button>
                 </div>
             </form>
         `;
-        const tiersContainer = $('#tiers-list-container', tabContent) as HTMLElement;
-        if (config.type === 'tiers' && config.tiers) {
-            config.tiers.forEach((tier: CommissionTier) => tiersContainer.appendChild(createTierEditor(tier)));
+        const additionalFeesContainer = $('#additional-fees-container', tabContent) as HTMLElement;
+        if (config.additionalFees && config.additionalFees.length > 0) {
+            config.additionalFees.forEach((fee: any) => additionalFeesContainer.appendChild(createAdditionalFeeEditor(fee)));
         } else {
-            tiersContainer.innerHTML = `<p class="text-sm text-slate-500 p-2 bg-slate-100 rounded">Ce service utilise une commission simple (fixe/pourcentage), non éditable ici.</p>`;
-            (tiersContainer.nextElementSibling as HTMLButtonElement).style.display = 'none';
+            additionalFeesContainer.innerHTML = `<p class="text-sm text-slate-500 p-2 bg-slate-100 rounded">Aucun frais supplémentaire configuré. Cliquez sur "Ajouter un frais supplémentaire" pour en créer un.</p>`;
+        }
+        
+        // Garder aussi les paliers de commission existants pour la rétrocompatibilité
+        if (config.type === 'tiers' && config.tiers && config.tiers.length > 0) {
+            const tiersSection = document.createElement('div');
+            tiersSection.className = 'pt-4 border-t';
+            tiersSection.innerHTML = `
+                <h4 class="font-semibold text-slate-700 mb-2">Paliers de Commission (Legacy)</h4>
+                <p class="text-sm text-slate-500 mb-3">Configuration héritée des paliers de commission.</p>
+                <div id="tiers-list-container" class="space-y-2"></div>
+                <button id="add-tier-btn" class="btn btn-sm btn-outline-secondary mt-4"><i class="fas fa-plus mr-2"></i>Ajouter un palier</button>
+            `;
+            tabContent.appendChild(tiersSection);
+            
+            const tiersContainer = $('#tiers-list-container', tiersSection) as HTMLElement;
+            config.tiers.forEach((tier: any) => tiersContainer.appendChild(createTierEditor(tier)));
         }
     };
 
@@ -297,6 +313,91 @@ function createTierEditor(tier: CommissionTier): HTMLElement {
     `;
     return editor;
 }
+
+/**
+ * Creates an HTML element for editing a single additional fee.
+ */
+function createAdditionalFeeEditor(fee: any): HTMLElement {
+    const editor = document.createElement('div');
+    editor.className = 'additional-fee-editor p-4 border rounded-md bg-slate-50';
+    editor.dataset.id = fee.id || 'fee_' + Date.now();
+    
+    editor.innerHTML = `
+        <div class="flex justify-between items-center mb-3">
+            <div class="flex items-center gap-2">
+                <input type="checkbox" data-prop="active" class="mr-2" ${fee.active !== false ? 'checked' : ''}>
+                <input type="text" class="form-input form-input-sm font-semibold !p-1 !border-transparent bg-transparent" data-prop="name" value="${fee.name || 'Nouveau frais'}" placeholder="Nom du frais">
+            </div>
+            <button type="button" class="btn btn-xs btn-danger" data-action="remove-additional-fee"><i class="fas fa-trash-alt"></i></button>
+        </div>
+        
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+            <div>
+                <label class="form-label form-label-sm">Description</label>
+                <input type="text" class="form-input form-input-sm" data-prop="description" value="${fee.description || ''}" placeholder="Description optionnelle">
+            </div>
+            <div>
+                <label class="form-label form-label-sm">Type</label>
+                <select class="form-select form-select-sm" data-prop="type">
+                    <option value="fixed" ${fee.type === 'fixed' ? 'selected' : ''}>Montant fixe (XOF)</option>
+                    <option value="percentage" ${fee.type === 'percentage' ? 'selected' : ''}>Pourcentage (%)</option>
+                </select>
+            </div>
+            <div>
+                <label class="form-label form-label-sm">Valeur</label>
+                <input type="number" step="0.01" class="form-input form-input-sm" data-prop="value" value="${fee.value || 0}" placeholder="Montant ou %">
+            </div>
+        </div>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+                <label class="form-label form-label-sm">Condition d'application</label>
+                <select class="form-select form-select-sm" data-prop="condition" onchange="toggleConditionConfig(this)">
+                    <option value="always" ${fee.condition === 'always' || !fee.condition ? 'selected' : ''}>Toujours</option>
+                    <option value="amount_range" ${fee.condition === 'amount_range' ? 'selected' : ''}>Plage de montant</option>
+                    <option value="field_value" ${fee.condition === 'field_value' ? 'selected' : ''}>Valeur de champ</option>
+                </select>
+            </div>
+            <div class="condition-config" style="display: ${fee.condition && fee.condition !== 'always' ? 'block' : 'none'}">
+                <div class="amount-range-config" style="display: ${fee.condition === 'amount_range' ? 'block' : 'none'}">
+                    <label class="form-label form-label-sm">Montant min - max (XOF)</label>
+                    <div class="flex gap-2">
+                        <input type="number" class="form-input form-input-sm" data-prop="minAmount" value="${fee.conditionConfig?.minAmount || ''}" placeholder="Min">
+                        <input type="number" class="form-input form-input-sm" data-prop="maxAmount" value="${fee.conditionConfig?.maxAmount || ''}" placeholder="Max">
+                    </div>
+                </div>
+                <div class="field-value-config" style="display: ${fee.condition === 'field_value' ? 'block' : 'none'}">
+                    <label class="form-label form-label-sm">Champ et valeur</label>
+                    <div class="flex gap-2">
+                        <input type="text" class="form-input form-input-sm" data-prop="fieldName" value="${fee.conditionConfig?.fieldName || ''}" placeholder="Nom du champ">
+                        <input type="text" class="form-input form-input-sm" data-prop="fieldValue" value="${fee.conditionConfig?.fieldValue || ''}" placeholder="Valeur attendue">
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    return editor;
+}
+
+// Fonction globale pour gérer l'affichage conditionnel des configurations de frais
+(window as any).toggleConditionConfig = function(selectElement: HTMLSelectElement) {
+    const feeEditor = selectElement.closest('.additional-fee-editor');
+    if (!feeEditor) return;
+    
+    const conditionConfig = feeEditor.querySelector('.condition-config') as HTMLElement;
+    const amountRangeConfig = feeEditor.querySelector('.amount-range-config') as HTMLElement;
+    const fieldValueConfig = feeEditor.querySelector('.field-value-config') as HTMLElement;
+    
+    const condition = selectElement.value;
+    
+    if (condition === 'always') {
+        conditionConfig.style.display = 'none';
+    } else {
+        conditionConfig.style.display = 'block';
+        amountRangeConfig.style.display = condition === 'amount_range' ? 'block' : 'none';
+        fieldValueConfig.style.display = condition === 'field_value' ? 'block' : 'none';
+    }
+};
 
 /**
  * Renders the master list of operation types.
@@ -530,6 +631,50 @@ export async function renderDeveloperManageOperationTypesView(user: User): Promi
                 
                 document.body.dispatchEvent(new CustomEvent('showToast', { 
                     detail: { message: 'Palier supprimé', type: 'success' } 
+                }));
+            }
+            return;
+        }
+
+        // Check for remove-additional-fee button
+        let removeAdditionalFeeBtn: HTMLButtonElement | null = null;
+        if (target.dataset.action === 'remove-additional-fee') {
+            removeAdditionalFeeBtn = target as HTMLButtonElement;
+        } else if (target.parentElement?.dataset.action === 'remove-additional-fee') {
+            removeAdditionalFeeBtn = target.parentElement as HTMLButtonElement;
+        } else {
+            removeAdditionalFeeBtn = target.closest<HTMLButtonElement>('[data-action="remove-additional-fee"]');
+        }
+
+        if (removeAdditionalFeeBtn && selectedOpType) {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('Remove additional fee button clicked');
+            
+            // Find the additional fee editor container
+            const feeEditor = removeAdditionalFeeBtn.closest('.additional-fee-editor');
+            if (feeEditor && selectedOpType.commissionConfig.additionalFees) {
+                const feeId = feeEditor.dataset.id;
+                // Remove the fee by ID
+                selectedOpType.commissionConfig.additionalFees = selectedOpType.commissionConfig.additionalFees.filter(f => f.id !== feeId);
+                
+                // Re-render the fees tab
+                const activeTab = detailView?.querySelector('.tabs button.active') as HTMLButtonElement;
+                const activeTabName = activeTab?.dataset.tab || 'fees';
+                renderDetailView();
+                
+                // Restore the active tab
+                setTimeout(() => {
+                    const tabToActivate = detailView?.querySelector(`[data-tab="${activeTabName}"]`) as HTMLButtonElement;
+                    if (tabToActivate) {
+                        detailView?.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
+                        tabToActivate.classList.add('active');
+                        tabToActivate.click();
+                    }
+                }, 10);
+                
+                document.body.dispatchEvent(new CustomEvent('showToast', { 
+                    detail: { message: 'Frais supplémentaire supprimé', type: 'success' } 
                 }));
             }
             return;
@@ -825,6 +970,48 @@ export async function renderDeveloperManageOperationTypesView(user: User): Promi
             return;
         }
 
+        // Add additional fee button
+        const addAdditionalFeeBtn = target.id === 'add-additional-fee-btn' ? target : target.closest('#add-additional-fee-btn');
+        if (addAdditionalFeeBtn && selectedOpType) {
+            // Préserver l'onglet actif
+            const activeTab = detailView?.querySelector('.tabs button.active') as HTMLButtonElement;
+            const activeTabName = activeTab?.dataset.tab || 'fees';
+            
+            const newAdditionalFee = {
+                id: 'fee_' + Date.now(),
+                name: 'Nouveau frais',
+                description: '',
+                type: 'fixed',
+                value: 0,
+                condition: 'always',
+                conditionConfig: {},
+                active: true
+            };
+            
+            // Initialiser additionalFees si nécessaire
+            if (!selectedOpType.commissionConfig.additionalFees) {
+                selectedOpType.commissionConfig.additionalFees = [];
+            }
+            
+            selectedOpType.commissionConfig.additionalFees.push(newAdditionalFee);
+            renderDetailView();
+            
+            // Restaurer l'onglet actif après le re-rendu
+            setTimeout(() => {
+                const tabToActivate = detailView?.querySelector(`[data-tab="${activeTabName}"]`) as HTMLButtonElement;
+                if (tabToActivate) {
+                    detailView?.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
+                    tabToActivate.classList.add('active');
+                    tabToActivate.click();
+                }
+            }, 10);
+            
+            document.body.dispatchEvent(new CustomEvent('showToast', { 
+                detail: { message: 'Nouveau frais supplémentaire ajouté', type: 'success' } 
+            }));
+            return;
+        }
+
         // Save button
         const saveBtn = target.closest('#save-op-type-btn');
         if (saveBtn) {
@@ -959,6 +1146,41 @@ export async function renderDeveloperManageOperationTypesView(user: User): Promi
                 });
             });
 
+            // Collecter les frais supplémentaires
+            const additionalFees: any[] = [];
+            detailView.querySelectorAll<HTMLElement>('.additional-fee-editor').forEach(editor => {
+                const conditionSelect = editor.querySelector('[data-prop="condition"]') as HTMLSelectElement;
+                const condition = conditionSelect.value;
+                
+                let conditionConfig = {};
+                if (condition === 'amount_range') {
+                    const minAmount = (editor.querySelector('[data-prop="minAmount"]') as HTMLInputElement).value;
+                    const maxAmount = (editor.querySelector('[data-prop="maxAmount"]') as HTMLInputElement).value;
+                    conditionConfig = {
+                        minAmount: minAmount ? parseFloat(minAmount) : undefined,
+                        maxAmount: maxAmount ? parseFloat(maxAmount) : undefined
+                    };
+                } else if (condition === 'field_value') {
+                    const fieldName = (editor.querySelector('[data-prop="fieldName"]') as HTMLInputElement).value;
+                    const fieldValue = (editor.querySelector('[data-prop="fieldValue"]') as HTMLInputElement).value;
+                    conditionConfig = {
+                        fieldName: fieldName || undefined,
+                        fieldValue: fieldValue || undefined
+                    };
+                }
+                
+                additionalFees.push({
+                    id: editor.dataset.id,
+                    name: (editor.querySelector('[data-prop="name"]') as HTMLInputElement).value,
+                    description: (editor.querySelector('[data-prop="description"]') as HTMLInputElement).value,
+                    type: (editor.querySelector('[data-prop="type"]') as HTMLSelectElement).value,
+                    value: parseFloat((editor.querySelector('[data-prop="value"]') as HTMLInputElement).value) || 0,
+                    condition: condition,
+                    conditionConfig: conditionConfig,
+                    active: (editor.querySelector('[data-prop="active"]') as HTMLInputElement).checked
+                });
+            });
+
             const updatedOpType: OperationType = {
                 ...selectedOpType,
                 name: settingsForm.get('name') as string,
@@ -972,6 +1194,7 @@ export async function renderDeveloperManageOperationTypesView(user: User): Promi
                     ...selectedOpType.commissionConfig,
                     partageSociete: parseInt(feesForm.get('partageSociete') as string),
                     tiers: tiers,
+                    additionalFees: additionalFees
                 }
             };
 
