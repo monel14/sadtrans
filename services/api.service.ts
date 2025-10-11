@@ -796,7 +796,7 @@ export class ApiService {
         if (!opType || !user || !user.agency) throw new Error("Operation Type, User, or Agency not found");
 
         const amount = parseFloat(data.montant_principal) || 0;
-        const { totalFee, partnerShare } = await this.getFeePreview(userId, opTypeId, amount);
+        const { totalFee, partnerShare } = await this.getFeePreview(userId, opTypeId, amount, data);
         const totalCommission = totalFee; // La commission totale est égale aux frais
 
         let totalDebit = 0;
@@ -1257,7 +1257,7 @@ export class ApiService {
 
     // Commission profile update method removed - commissions are now configured directly in contracts
 
-    public async getFeePreview(userId: string, opTypeId: string, amount: number): Promise<{ totalFee: number; partnerShare: number; companyShare: number }> {
+    public async getFeePreview(userId: string, opTypeId: string, amount: number, transactionData?: any): Promise<{ totalFee: number; partnerShare: number; companyShare: number }> {
         const dataService = DataService.getInstance();
         try {
             const [user, opType, activeContractsMap] = await Promise.all([
@@ -1312,6 +1312,15 @@ export class ApiService {
                 }
             }
 
+            // Calculer les frais supplémentaires
+            let additionalFeesTotal = 0;
+            if (opType.commissionConfig.additionalFees && transactionData) {
+                additionalFeesTotal = this.calculateAdditionalFees(opType.commissionConfig.additionalFees, amount, transactionData);
+            }
+
+            // Ajouter les frais supplémentaires au total
+            totalFee += additionalFeesTotal;
+
             totalFee = Math.round(totalFee);
             const companyShare = Math.round(totalFee * (companySharePercent / 100));
             const partnerShare = totalFee - companyShare;
@@ -1322,6 +1331,67 @@ export class ApiService {
             console.error("Error calculating fee preview:", error);
             return { totalFee: 0, partnerShare: 0, companyShare: 0 };
         }
+    }
+
+    /**
+     * Calcule les frais supplémentaires basés sur les conditions configurées
+     */
+    private calculateAdditionalFees(additionalFees: any[], amount: number, transactionData: any): number {
+        let totalAdditionalFees = 0;
+
+        additionalFees.forEach(fee => {
+            // Vérifier si le frais est actif
+            if (!fee.active) return;
+
+            // Évaluer la condition d'application
+            let applies = false;
+            
+            switch (fee.condition) {
+                case 'always':
+                    applies = true;
+                    break;
+                    
+                case 'amount_range':
+                    const minAmount = fee.conditionConfig?.minAmount || 0;
+                    const maxAmount = fee.conditionConfig?.maxAmount || Infinity;
+                    applies = amount >= minAmount && amount <= maxAmount;
+                    break;
+                    
+                case 'field_value':
+                    const fieldName = fee.conditionConfig?.fieldName;
+                    const expectedValue = fee.conditionConfig?.fieldValue;
+                    if (fieldName && expectedValue !== undefined) {
+                        const actualValue = transactionData[fieldName];
+                        // Support pour les valeurs multiples (array)
+                        if (Array.isArray(expectedValue)) {
+                            applies = expectedValue.includes(actualValue);
+                        } else {
+                            applies = actualValue === expectedValue;
+                        }
+                    }
+                    break;
+                    
+                default:
+                    applies = false;
+            }
+
+            // Si la condition est remplie, calculer le frais
+            if (applies) {
+                let feeAmount = 0;
+                
+                if (fee.type === 'fixed') {
+                    feeAmount = fee.value || 0;
+                } else if (fee.type === 'percentage') {
+                    feeAmount = amount * ((fee.value || 0) / 100);
+                }
+                
+                totalAdditionalFees += feeAmount;
+                
+                console.log(`Frais supplémentaire appliqué: ${fee.name} = ${feeAmount} XOF`);
+            }
+        });
+
+        return Math.round(totalAdditionalFees);
     }
 
     public async updateContract(contract: Contract): Promise<Contract> {

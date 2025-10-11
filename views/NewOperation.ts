@@ -60,8 +60,8 @@ function handleCancelNavigation(container: HTMLElement, user: User) {
     }));
 }
 
-async function calculateFeeAndCommissionPreview(montant: number, user: User, opType: OperationType, api: ApiService): Promise<{ totalFee: number; partnerShare: number }> {
-    const preview = await api.getFeePreview(user.id, opType.id, montant);
+async function calculateFeeAndCommissionPreview(montant: number, user: User, opType: OperationType, api: ApiService, formData?: any): Promise<{ totalFee: number; partnerShare: number }> {
+    const preview = await api.getFeePreview(user.id, opType.id, montant, formData);
     return { totalFee: preview.totalFee, partnerShare: preview.partnerShare };
 }
 
@@ -493,7 +493,17 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
         let partnerShare: number;
 
         try {
-            const preview = await calculateFeeAndCommissionPreview(baseAmount, user, selectedOperationType, api);
+            // Collecter les données du formulaire pour le calcul des frais supplémentaires
+            const formData: { [key: string]: any } = {};
+            const formInputs = opDynamicFields.querySelectorAll('input, select, textarea');
+            formInputs.forEach(input => {
+                const element = input as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
+                if (element.name) {
+                    formData[element.name] = element.value;
+                }
+            });
+            
+            const preview = await calculateFeeAndCommissionPreview(baseAmount, user, selectedOperationType, api, formData);
             totalFee = preview.totalFee;
             partnerShare = preview.partnerShare;
             if (submitBtn && selectedOperationType) submitBtn.disabled = false; // Re-enable on success
