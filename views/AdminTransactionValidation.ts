@@ -211,15 +211,13 @@ function renderTransactionList(
             
             if (!item.assignedTo) {
                 actions += `<button class="btn btn-xs btn-success !py-1 !px-2" data-task-id="${item.id}" data-action="assign-self" title="S'assigner"><i class="fas fa-user-plus mr-1"></i>S'assigner</button>`;
-                if (user.role === 'admin_general') {
-                    actions += `<button class="btn btn-xs btn-info text-white !py-1 !px-2" data-task-id="${item.id}" data-action="assign-other" title="Assigner à Sous-Admin"><i class="fas fa-user-tag"></i></button>`;
-                }
+                // Bouton d'assignation à un sous-admin retiré
             } else if (item.assignedTo === user.id) {
                 actions += `<button class="btn btn-xs btn-success !py-1 !px-2" data-task-id="${item.id}" data-action="validate" title="${validateButtonText}"><i class="fas fa-check"></i> ${validateButtonText}</button>
                             <button class="btn btn-xs btn-danger !py-1 !px-2" data-task-id="${item.id}" data-action="reject" title="Rejeter"><i class="fas fa-times"></i> Rejeter</button>
                             <button class="btn btn-xs btn-outline-secondary !py-1 !px-2" data-task-id="${item.id}" data-action="unassign" title="Libérer"><i class="fas fa-undo"></i></button>`;
             } else if (user.role === 'admin_general') {
-                 actions += `<button class="btn btn-xs btn-info text-white !py-1 !px-2" data-task-id="${item.id}" data-action="assign-other" title="Réassigner"><i class="fas fa-user-edit"></i></button>`;
+                 // Bouton de réassignation à un sous-admin retiré
             }
             actions += `<button class="btn btn-xs btn-outline-secondary !py-1 !px-2" data-task-id="${item.id}" data-action="view-details" title="Voir Détails"><i class="fas fa-search-plus"></i></button>`;
             buttonsWrapper.innerHTML = actions;
@@ -538,9 +536,7 @@ export async function renderAdminTransactionValidationView(user: User, defaultFi
             case 'view-details':
                 if (transaction) showDetailsModal(transaction);
                 return;
-            case 'assign-other':
-                document.body.dispatchEvent(new CustomEvent('openAssignModal', { detail: { taskId } }));
-                return;
+            // Action d'assignation à un sous-admin retirée
             case 'validate':
                 if (actionsContainer) actionsContainer.classList.add('hidden');
                 if (assignedText) assignedText.classList.add('hidden');

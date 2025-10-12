@@ -12,7 +12,7 @@ import { navigationLinks } from "./config/navigation";
 import {
   AgentRequestRechargeModal,
   ViewProofModal,
-  AssignToSubAdminModal,
+
   PartnerEditAgentModal,
   AdminEditUserModal,
   AdminEditPartnerModal,
@@ -32,7 +32,7 @@ export class App {
 
   private agentRequestRechargeModal: AgentRequestRechargeModal | null = null;
   private viewProofModal: ViewProofModal | null = null;
-  private assignToSubAdminModal: AssignToSubAdminModal | null = null;
+
   private partnerEditAgentModal: PartnerEditAgentModal | null = null;
   private adminEditUserModal: AdminEditUserModal | null = null;
   private adminEditPartnerModal: AdminEditPartnerModal | null = null;
@@ -123,10 +123,7 @@ export class App {
       "openAgentRechargeModal",
       this.handleOpenAgentRechargeModal as EventListener,
     );
-    document.body.addEventListener(
-      "openAssignModal",
-      this.handleOpenAssignModal as EventListener,
-    );
+
     document.body.addEventListener(
       "openViewProofModal",
       this.handleOpenViewProofModal as EventListener,
@@ -525,9 +522,7 @@ export class App {
     this.confirmationModal = new ConfirmationModal();
     this.adminAdjustBalanceModal = new AdminAdjustBalanceModal();
 
-    const allUsers = await DataService.getInstance().getUsers();
-    const subAdmins = allUsers.filter((u) => u.role === "sous_admin");
-    this.assignToSubAdminModal = new AssignToSubAdminModal(subAdmins);
+
   };
 
   private handleOpenAgentRechargeModal = () => {
@@ -561,8 +556,7 @@ export class App {
       event.detail.onConfirm,
       event.detail.options,
     );
-  private handleOpenAssignModal = (event: CustomEvent) =>
-    this.assignToSubAdminModal?.show(event.detail.taskId);
+
   private handleOpenViewProofModal = (event: CustomEvent) =>
     this.viewProofModal?.show(event.detail.imageUrl);
 }

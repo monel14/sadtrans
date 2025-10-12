@@ -11,7 +11,7 @@ export { AdminEditUserModal } from './AdminEditUserModal';
 export { AdminRejectRechargeModal } from './AdminRejectRechargeModal';
 export { AdminStandardExceptionModal } from './AdminStandardExceptionModal';
 export { AgentRequestRechargeModal } from './AgentRequestRechargeModal';
-export { AssignToSubAdminModal } from './AssignToSubAdminModal';
+
 export { BaseModal } from './BaseModal';
 export { ConfirmationModal } from './ConfirmationModal';
 export { PartnerEditAgentModal } from './PartnerEditAgentModal';

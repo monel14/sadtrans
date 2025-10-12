@@ -28,13 +28,13 @@ function createKpiCard(title: string, value: string, icon: string): string {
 }
 
 // Helper to create an item list for a queue
-function createQueueList(items: {html: string, actionNavId?: string}[]): HTMLElement {
+function createQueueList(items: { html: string, actionNavId?: string }[]): HTMLElement {
     const container = document.createElement('div');
     if (items.length === 0) {
         container.innerHTML = '<p class="text-sm text-slate-500 px-4 py-2">Aucun élément dans la file.</p>';
         return container;
     }
-    
+
     const list = document.createElement('ul');
     list.className = 'divide-y divide-slate-200';
     items.forEach(item => {
@@ -60,7 +60,7 @@ function createQueueCard(
 ): HTMLElement {
     const card = document.createElement('div');
     card.className = 'card flex flex-col';
-    
+
     const header = document.createElement('div');
     header.className = 'flex justify-between items-start mb-2';
     header.innerHTML = `
@@ -70,7 +70,7 @@ function createQueueCard(
         </div>
         <i class="fas ${icon} text-2xl text-slate-300"></i>
     `;
-    
+
     const contentWrapper = document.createElement('div');
     contentWrapper.className = 'flex-grow my-2 -mx-6';
     contentWrapper.appendChild(contentElement);
@@ -113,13 +113,13 @@ export async function renderAdminDashboardView(user: User): Promise<HTMLElement>
         dataService.getOpTypeMap(),
         dataService.getMethodMap(),
     ]);
-    
+
     const allPendingTransactions = allTransactions.filter(t => t.statut.includes('En attente') || t.statut.includes('Assignée'));
     const unassignedTransactions = allPendingTransactions.filter(t => !t.assignedTo);
     const pendingTransactionsForQueue = unassignedTransactions.slice(0, 4);
-    
+
     const pendingAgentRecharges = allPendingAgentRecharges.slice(0, 3);
-    
+
     const pendingTransactionsCount = unassignedTransactions.length;
     const pendingAgentRechargesCount = allPendingAgentRecharges.length;
 
@@ -134,13 +134,11 @@ export async function renderAdminDashboardView(user: User): Promise<HTMLElement>
     const transactionItems = pendingTransactionsForQueue.map(t => {
         const agent = userMap.get(t.agentId);
         const opType = opTypeMap.get(t.opTypeId);
-        
+
         let assignOtherButton = '';
-        if (user.role === 'admin_general') {
-             assignOtherButton = `<button class="btn btn-xs btn-info text-white !py-1 !px-2" data-task-id="${t.id}" data-action="assign-other" title="Assigner à Sous-Admin"><i class="fas fa-user-tag"></i></button>`;
-        }
-        
-        const amountDisplay = opType?.impactsBalance 
+        // Bouton d'assignation à un sous-admin retiré
+
+        const amountDisplay = opType?.impactsBalance
             ? `<p class="font-semibold">${formatAmount(t.montant_principal)} <span class="font-normal text-slate-500">- ${opType?.name || 'Opération'}</span></p>`
             : `<p class="font-semibold text-blue-600">Demande de Service <span class="font-normal text-slate-500">- ${opType?.name || 'Opération'}</span></p>`;
 
@@ -165,7 +163,8 @@ export async function renderAdminDashboardView(user: User): Promise<HTMLElement>
         // FIX: Use `methodId` and `notes` to match the AgentRechargeRequest model.
         const method = methodMap.get(r.methodId);
         const referenceText = r.notes ? ` (${r.notes})` : '';
-        return { html:`
+        return {
+            html: `
             <div class="leading-tight">
                 <div class="flex justify-between items-center">
                     <span><strong>${formatAmount(r.montant)}</strong> par ${agent?.name || 'Inconnu'}</span>
@@ -196,7 +195,7 @@ export async function renderAdminDashboardView(user: User): Promise<HTMLElement>
             `<span class="font-semibold text-emerald-600">${formatAmount(companyCommission)}</span>`,
         ];
     });
-    
+
     // --- Prepare data for Recent Validated Transactions list ---
     const recentValidatedTransactions = allTransactions
         .filter(t => t.statut === 'Validé')
@@ -205,10 +204,10 @@ export async function renderAdminDashboardView(user: User): Promise<HTMLElement>
     const recentActivityHtml = recentValidatedTransactions.length > 0
         ? `<ul class="space-y-3">
             ${recentValidatedTransactions.map(t => {
-                const agent = userMap.get(t.agentId);
-                const partner = agent ? partnerMap.get(agent.partnerId!) : null;
-                const opType = opTypeMap.get(t.opTypeId);
-                return `
+            const agent = userMap.get(t.agentId);
+            const partner = agent ? partnerMap.get(agent.partnerId!) : null;
+            const opType = opTypeMap.get(t.opTypeId);
+            return `
                     <li class="flex justify-between items-center text-sm p-2 bg-slate-50 rounded-md">
                         <div>
                             <p class="font-medium text-slate-700">${opType?.name || 'Opération'}</p>
@@ -220,7 +219,7 @@ export async function renderAdminDashboardView(user: User): Promise<HTMLElement>
                         </div>
                     </li>
                 `;
-            }).join('')}
+        }).join('')}
            </ul>`
         : '<p class="text-sm text-slate-500 text-center py-4">Aucune opération validée récemment.</p>';
 
@@ -316,13 +315,13 @@ export async function renderAdminDashboardView(user: User): Promise<HTMLElement>
         'admin_manage_cards': { viewFn: renderAdminCardManagementView, label: 'Gestion des Cartes', navId: 'admin_manage_cards' },
         'admin_manage_users': { viewFn: (user: User) => import('../views/AdminManageUsers').then(m => m.renderAdminManageUsersView()), label: 'Tous les Utilisateurs', navId: 'admin_manage_users' },
     };
-    
+
     // Main event listener for the entire dashboard
     container.addEventListener('click', async e => {
         const target = e.target as HTMLElement;
         const navButton = target.closest<HTMLButtonElement>('[data-nav-id]');
         const actionButton = target.closest<HTMLButtonElement>('[data-action]');
-        
+
         // Handle navigation buttons
         if (navButton) {
             e.preventDefault();
@@ -347,7 +346,7 @@ export async function renderAdminDashboardView(user: User): Promise<HTMLElement>
             const reloadDashboard = async () => {
                 const newDashboard = await renderAdminDashboardView(user);
                 const parent = container.parentElement;
-                if(parent) {
+                if (parent) {
                     parent.replaceChild(newDashboard, container);
                 }
             };
@@ -358,9 +357,8 @@ export async function renderAdminDashboardView(user: User): Promise<HTMLElement>
                 await api.assignTask(taskId, 'transaction', user.id);
                 document.body.dispatchEvent(new CustomEvent('showToast', { detail: { message: `Tâche ${taskId} assignée.`, type: 'success' } }));
                 await reloadDashboard();
-            } else if (action === 'assign-other') {
-                document.body.dispatchEvent(new CustomEvent('openAssignModal', { detail: { taskId } }));
             }
+            // Action d'assignation à un sous-admin retirée
         }
     });
 
