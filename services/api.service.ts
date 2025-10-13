@@ -1980,7 +1980,11 @@ export class ApiService {
 
     public async deleteRechargePaymentMethod(methodId: string): Promise<boolean> {
         const { error } = await supabase.from('recharge_payment_methods').delete().eq('id', methodId);
-        return !error;
+        if (error) {
+            console.error('Erreur lors de la suppression:', error);
+            return false;
+        }
+        return true;
     }
 
     public async deleteCardType(cardTypeId: string): Promise<boolean> {

@@ -71,7 +71,8 @@ async function renderContent(methods: RechargePaymentMethod[], allRechargeReques
         const list = document.createElement('ul');
         list.className = 'space-y-3';
         methods.forEach(method => {
-            const isInUse = allRechargeRequests.some(r => r.methodId === method.id);
+            // Compter les demandes qui utilisent cette méthode (pour information)
+            const usageCount = allRechargeRequests.filter(r => r.methodId === method.id).length;
             let feeValueDisplay = 'Aucun';
             if (method.feeType === 'fixed') {
                 feeValueDisplay = `${method.feeValue} XOF (Fixe)`;
@@ -89,7 +90,7 @@ async function renderContent(methods: RechargePaymentMethod[], allRechargeReques
                 <div class="flex items-center gap-2 w-full sm:w-auto justify-end">
                      <span class="badge ${method.status === 'active' ? 'badge-success' : 'badge-gray'}">${method.status === 'active' ? 'Actif' : 'Inactif'}</span>
                      <button class="btn btn-sm btn-outline-secondary" data-action="edit-method" data-method-id="${method.id}"><i class="fas fa-edit mr-2"></i>Éditer</button>
-                     <button class="btn btn-sm btn-danger" data-action="delete-method" data-method-id="${method.id}" data-method-name="${method.name}" ${isInUse ? 'disabled' : ''} title="${isInUse ? 'Méthode utilisée, ne peut être supprimée.' : 'Supprimer'}">
+                     <button class="btn btn-sm btn-danger" data-action="delete-method" data-method-id="${method.id}" data-method-name="${method.name}" data-usage-count="${usageCount}" title="${usageCount > 0 ? `Supprimer cette méthode et ses ${usageCount} demandes associées` : 'Supprimer cette méthode'}">
                         <i class="fas fa-trash-alt"></i>
                     </button>
                 </div>
@@ -124,17 +125,40 @@ function attachEventListeners(methods: RechargePaymentMethod[]) {
         if (deleteButton) {
             const methodId = deleteButton.dataset.methodId!;
             const methodName = deleteButton.dataset.methodName!;
+            const usageCount = parseInt(deleteButton.dataset.usageCount || '0');
+            
+            const title = 'Confirmer la Suppression';
+            const message = usageCount > 0
+                ? `Attention ! Le mode de paiement "<strong>${methodName}</strong>" est utilisé dans <strong>${usageCount}</strong> demande(s) de recharge. Supprimer cette méthode supprimera également toutes les demandes associées. Cette action est irréversible.`
+                : `Voulez-vous vraiment supprimer le mode de paiement "<strong>${methodName}</strong>" ? Cette action est irréversible.`;
+            
             document.body.dispatchEvent(new CustomEvent('openConfirmationModal', {
                 detail: {
-                    title: 'Confirmer la Suppression',
-                    message: `Voulez-vous vraiment supprimer le mode de paiement "<strong>${methodName}</strong>" ? Cette action est irréversible.`,
+                    title,
+                    message,
                     onConfirm: async () => {
-                        const api = ApiService.getInstance();
-                        await api.deleteRechargePaymentMethod(methodId);
-                        document.body.dispatchEvent(new CustomEvent('showToast', { detail: { message: 'Mode de paiement supprimé.', type: 'success' } }));
-                        document.body.dispatchEvent(new CustomEvent('rechargeMethodDeleted', { bubbles: true, composed: true }));
+                        try {
+                            const api = ApiService.getInstance();
+                            const success = await api.deleteRechargePaymentMethod(methodId);
+                            
+                            if (success) {
+                                const successMessage = usageCount > 0 
+                                    ? `Mode de paiement et ${usageCount} demande(s) associée(s) supprimé(s).`
+                                    : 'Mode de paiement supprimé.';
+                                document.body.dispatchEvent(new CustomEvent('showToast', { detail: { message: successMessage, type: 'success' } }));
+                                document.body.dispatchEvent(new CustomEvent('rechargeMethodDeleted', { bubbles: true, composed: true }));
+                            } else {
+                                document.body.dispatchEvent(new CustomEvent('showToast', { detail: { message: 'Erreur lors de la suppression du mode de paiement.', type: 'error' } }));
+                            }
+                        } catch (error) {
+                            console.error('Erreur lors de la suppression:', error);
+                            document.body.dispatchEvent(new CustomEvent('showToast', { detail: { message: 'Erreur lors de la suppression du mode de paiement.', type: 'error' } }));
+                        }
                     },
-                    options: { confirmButtonClass: 'btn-danger', confirmButtonText: 'Oui, Supprimer' }
+                    options: { 
+                        confirmButtonClass: 'btn-danger', 
+                        confirmButtonText: usageCount > 0 ? 'Oui, Supprimer Tout' : 'Oui, Supprimer' 
+                    }
                 },
                 bubbles: true, composed: true
             }));
