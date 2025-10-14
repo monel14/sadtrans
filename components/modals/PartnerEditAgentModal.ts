@@ -21,17 +21,54 @@ export class PartnerEditAgentModal extends BaseModal {
         body.innerHTML = `
             <form id="partnerEditAgentForm" class="space-y-4">
                 <input type="hidden" name="id">
-                <div>
-                    <label class="form-label" for="agentName">Nom Complet</label>
-                    <input type="text" id="agentName" name="name" class="form-input" required>
+                
+                <!-- Informations personnelles -->
+                <div class="border-b pb-4">
+                    <h4 class="text-md font-semibold text-slate-700 mb-3">Informations Personnelles</h4>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="form-label" for="agentFirstName">Prénom *</label>
+                            <input type="text" id="agentFirstName" name="firstName" class="form-input" required>
+                        </div>
+                        <div>
+                            <label class="form-label" for="agentLastName">Nom de famille *</label>
+                            <input type="text" id="agentLastName" name="lastName" class="form-input" required>
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <label class="form-label" for="agentName">Nom complet (généré automatiquement)</label>
+                        <input type="text" id="agentName" name="name" class="form-input bg-slate-50" readonly>
+                    </div>
                 </div>
-                <div>
-                    <label class="form-label" for="agentEmail">Adresse Email</label>
-                    <input type="email" id="agentEmail" name="email" class="form-input" required>
+
+                <!-- Informations de contact -->
+                <div class="border-b pb-4">
+                    <h4 class="text-md font-semibold text-slate-700 mb-3">Informations de Contact</h4>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="form-label" for="agentEmail">Adresse Email *</label>
+                            <input type="email" id="agentEmail" name="email" class="form-input" required>
+                        </div>
+                        <div>
+                            <label class="form-label" for="agentPhone">Téléphone</label>
+                            <input type="tel" id="agentPhone" name="phone" class="form-input" autocomplete="tel">
+                        </div>
+                    </div>
                 </div>
-                <div>
-                    <label class="form-label" for="agentPhone">Téléphone</label>
-                    <input type="tel" id="agentPhone" name="phone" class="form-input" autocomplete="tel">
+
+                <!-- Informations d'identification -->
+                <div class="border-b pb-4">
+                    <h4 class="text-md font-semibold text-slate-700 mb-3">Informations d'Identification</h4>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="form-label" for="agentIdCardNumber">Numéro de Carte d'Identité</label>
+                            <input type="text" id="agentIdCardNumber" name="id_card_number" class="form-input">
+                        </div>
+                        <div>
+                            <label class="form-label" for="agentAddress">Adresse</label>
+                            <input type="text" id="agentAddress" name="address" class="form-input">
+                        </div>
+                    </div>
                 </div>
 
                 <div id="password-section">
@@ -70,10 +107,25 @@ export class PartnerEditAgentModal extends BaseModal {
 
     private populateForm() {
         this.form.reset();
+        
+        // Champs cachés et de base
         (this.form.querySelector('input[name="id"]') as HTMLInputElement).value = this.editingAgent?.id || '';
+        
+        // Informations personnelles
+        ($('#agentFirstName', this.form) as HTMLInputElement).value = this.editingAgent?.firstName || '';
+        ($('#agentLastName', this.form) as HTMLInputElement).value = this.editingAgent?.lastName || '';
         ($('#agentName', this.form) as HTMLInputElement).value = this.editingAgent?.name || '';
+        
+        // Informations de contact
         ($('#agentEmail', this.form) as HTMLInputElement).value = this.editingAgent?.email || '';
         ($('#agentPhone', this.form) as HTMLInputElement).value = this.editingAgent?.phone || '';
+        
+        // Informations d'identification
+        ($('#agentIdCardNumber', this.form) as HTMLInputElement).value = this.editingAgent?.idCardNumber || '';
+        ($('#agentAddress', this.form) as HTMLInputElement).value = this.editingAgent?.address || '';
+
+        // Gestion automatique du nom complet
+        this.setupNameGeneration();
 
         const passwordSection = $('#password-section', this.form) as HTMLElement;
         if (this.editingAgent) {
@@ -81,7 +133,7 @@ export class PartnerEditAgentModal extends BaseModal {
         } else {
             passwordSection.innerHTML = `
                 <div class="border-t pt-4">
-                    <label class="form-label">Mot de passe</label>
+                    <h4 class="text-md font-semibold text-slate-700 mb-3">Mot de passe</h4>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <input type="password" name="password" class="form-input" placeholder="Mot de passe" autocomplete="new-password" required>
@@ -94,9 +146,21 @@ export class PartnerEditAgentModal extends BaseModal {
                 </div>
             `;
         }
+    }
 
+    private setupNameGeneration() {
+        const firstNameInput = $('#agentFirstName', this.form) as HTMLInputElement;
+        const lastNameInput = $('#agentLastName', this.form) as HTMLInputElement;
+        const nameInput = $('#agentName', this.form) as HTMLInputElement;
 
+        const updateFullName = () => {
+            const firstName = firstNameInput.value.trim();
+            const lastName = lastNameInput.value.trim();
+            nameInput.value = `${firstName} ${lastName}`.trim();
+        };
 
+        firstNameInput.addEventListener('input', updateFullName);
+        lastNameInput.addEventListener('input', updateFullName);
     }
 
 
@@ -114,6 +178,20 @@ export class PartnerEditAgentModal extends BaseModal {
 
             try {
                 const formData = new FormData(this.form);
+
+                // Validation des champs requis
+                const firstName = formData.get('firstName') as string;
+                const lastName = formData.get('lastName') as string;
+                const email = formData.get('email') as string;
+
+                if (!firstName?.trim() || !lastName?.trim() || !email?.trim()) {
+                    document.body.dispatchEvent(new CustomEvent('showToast', {
+                        detail: { message: "Veuillez remplir tous les champs obligatoires (prénom, nom, email).", type: 'error' }
+                    }));
+                    submitButton.disabled = false;
+                    submitButton.innerHTML = originalButtonHtml;
+                    return;
+                }
 
                 // Pour la création d'un nouvel agent, vérifier les mots de passe
                 if (!this.editingAgent) {
@@ -141,10 +219,14 @@ export class PartnerEditAgentModal extends BaseModal {
 
                 const agentData: Partial<User> = {
                     id: this.editingAgent?.id,
+                    firstName: formData.get('firstName') as string,
+                    lastName: formData.get('lastName') as string,
                     name: formData.get('name') as string,
                     email: formData.get('email') as string,
                     phone: formData.get('phone') as string,
-                     status: this.editingAgent ? this.editingAgent.status : 'active',
+                    idCardNumber: formData.get('id_card_number') as string,
+                    address: formData.get('address') as string,
+                    status: this.editingAgent ? this.editingAgent.status : 'active',
                 };
 
                 if (!this.editingAgent) {
