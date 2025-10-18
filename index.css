@@ -101,11 +101,45 @@ body {
 }
 
 .logo-icon-wrapper .logo-svg {
-    width: 32px;
-    height: 32px;
+    width: 40px;
+    height: 40px;
     position: relative;
     z-index: 2;
     filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+    transition: transform 0.3s ease;
+}
+
+.logo-glow {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 50px;
+    height: 50px;
+    background: radial-gradient(circle, rgba(124, 58, 237, 0.3) 0%, rgba(124, 58, 237, 0.1) 50%, transparent 70%);
+    border-radius: 50%;
+    z-index: 1;
+    opacity: 0.8;
+    animation: pulse-glow 2s ease-in-out infinite alternate;
+}
+
+@keyframes pulse-glow {
+    0% {
+        transform: translate(-50%, -50%) scale(0.9);
+        opacity: 0.6;
+    }
+    100% {
+        transform: translate(-50%, -50%) scale(1.1);
+        opacity: 0.9;
+    }
+}
+
+.logo-icon-wrapper:hover .logo-svg {
+    transform: scale(1.05);
+}
+
+.logo-icon-wrapper:hover .logo-glow {
+    animation-duration: 1s;
 }
 
 /* Styles pour le logo de la page de connexion */
@@ -116,10 +150,13 @@ body {
 }
 
 .login-logo {
-    width: 80px;
-    height: 80px;
+    width: 100px;
+    height: 100px;
     filter: drop-shadow(0 4px 8px rgba(124, 58, 237, 0.4));
     transition: transform 0.3s ease;
+    background: radial-gradient(circle, rgba(124, 58, 237, 0.1) 0%, transparent 70%);
+    border-radius: 50%;
+    padding: 10px;
 }
 
 .login-logo:hover {
