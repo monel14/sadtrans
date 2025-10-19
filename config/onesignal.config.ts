@@ -44,13 +44,13 @@ export const ONESIGNAL_CONFIG: Record<string, OneSignalEnvironmentConfig> = {
  */
 export function getCurrentEnvironment(): 'production' | 'development' {
   const hostname = window.location.hostname;
-  
-  if (hostname === 'localhost' || 
-      hostname === '127.0.0.1' || 
-      hostname.includes('ngrok')) {
+
+  if (hostname === 'localhost' ||
+    hostname === '127.0.0.1' ||
+    hostname.includes('ngrok')) {
     return 'development';
   }
-  
+
   return 'production';
 }
 
@@ -68,7 +68,7 @@ export function getOneSignalConfig(): OneSignalEnvironmentConfig {
 export function isDomainAllowed(): boolean {
   const config = getOneSignalConfig();
   const hostname = window.location.hostname;
-  
+
   return config.allowedDomains.some(domain => {
     if (domain.startsWith('*.')) {
       // Wildcard domain
@@ -86,17 +86,17 @@ export function getDomainSuggestions(): string[] {
   const config = getOneSignalConfig();
   const currentDomain = window.location.origin;
   const suggestions: string[] = [];
-  
+
   if (!isDomainAllowed()) {
     suggestions.push(`Ajoutez ${currentDomain} aux domaines autorisés dans OneSignal`);
     suggestions.push("Vérifiez Settings > Platforms > Web Push dans OneSignal Dashboard");
-    
+
     if (getCurrentEnvironment() === 'development') {
       suggestions.push("Utilisez localhost ou un tunnel ngrok pour le développement");
     } else {
       suggestions.push(`Utilisez un des domaines configurés: ${config.allowedDomains.join(', ')}`);
     }
   }
-  
+
   return suggestions;
 }

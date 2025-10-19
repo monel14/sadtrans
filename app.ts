@@ -8,6 +8,7 @@ import { RefreshService } from "./services/refresh.service";
 import { OneSignalService } from "./services/onesignal.service";
 import "./utils/onesignal-diagnostics";
 import "./utils/onesignal-fix";
+import "./utils/onesignal-sw-fix";
 import { renderHeader } from "./components/Header";
 import { renderFooter } from "./components/Footer";
 import { navigationLinks } from "./config/navigation";

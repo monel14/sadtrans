@@ -8,13 +8,29 @@ self.addEventListener("message", (event) => {
     switch (event.data.type) {
       case 'ONESIGNAL_SESSION_UPDATE':
         console.log("OneSignal session update reçu");
+        // Répondre à OneSignal pour confirmer la réception
+        if (event.ports && event.ports[0]) {
+          event.ports[0].postMessage({ success: true });
+        }
         break;
       case 'ONESIGNAL_NOTIFICATION_CLICKED':
         console.log("OneSignal notification clicked");
         break;
+      case 'SKIP_WAITING':
+        self.skipWaiting();
+        break;
       default:
         console.log("Message SW non géré:", event.data.type);
     }
+  }
+  
+  // Répondre toujours pour éviter les timeouts
+  try {
+    if (event.ports && event.ports[0]) {
+      event.ports[0].postMessage({ received: true, timestamp: Date.now() });
+    }
+  } catch (error) {
+    console.warn("Erreur lors de la réponse au message:", error);
   }
 });
 
@@ -33,7 +49,20 @@ self.addEventListener('activate', (event) => {
           }
         })
       );
-    }).then(() => self.clients.claim())
+    }).then(() => {
+      // Prendre le contrôle immédiatement
+      return self.clients.claim();
+    }).then(() => {
+      // Notifier tous les clients que le SW est prêt
+      return self.clients.matchAll().then(clients => {
+        clients.forEach(client => {
+          client.postMessage({
+            type: 'SW_ACTIVATED',
+            timestamp: Date.now()
+          });
+        });
+      });
+    })
   );
 });
 

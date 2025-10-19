@@ -131,8 +131,13 @@ export class OneSignalService {
                 };
                 config.serviceWorkerPath = envConfig.serviceWorkerPath || "OneSignalSDKWorker.js";
                 
-                // Désactiver l'auto-registration pour éviter les conflits
-                config.autoRegister = envConfig.autoRegister ?? false;
+                // Configuration spéciale pour éviter les erreurs de communication
+                config.autoRegister = false;
+                config.autoResubscribe = true;
+                config.persistNotification = false;
+                
+                // Attendre que Workbox soit prêt avant d'initialiser OneSignal
+                await this.waitForWorkboxReady();
               } else {
                 // Configuration normale
                 config.serviceWorkerParam = { 
@@ -341,6 +346,30 @@ export class OneSignalService {
     }
 
     console.groupEnd();
+  }
+
+  /**
+   * Attend que Workbox soit prêt avant d'initialiser OneSignal
+   */
+  private static async waitForWorkboxReady(): Promise<void> {
+    try {
+      console.log("⏳ Attente que Workbox soit prêt...");
+      
+      // Attendre que le service worker soit actif
+      if ('serviceWorker' in navigator) {
+        const registration = await navigator.serviceWorker.ready;
+        console.log("✅ Service Worker principal prêt:", registration.scope);
+        
+        // Attendre un peu plus pour s'assurer que Workbox est complètement initialisé
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        console.log("✅ Workbox prêt, OneSignal peut s'initialiser");
+      }
+    } catch (error) {
+      console.warn("⚠️ Erreur lors de l'attente de Workbox:", error);
+      // Continuer quand même après 2 secondes
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
   }
 
   /**
