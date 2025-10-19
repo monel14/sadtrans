@@ -83,7 +83,7 @@ export class AdminEditPartnerModal extends BaseModal {
                 </div>
                 <div>
                     <label class="form-label" for="partnerRccm">Numéro RCCM</label>
-                    <input type="text" id="partnerRccm" name="rccm" class="form-input">
+                    <input type="text" id="partnerRccm" name="rccm" class="form-input" autocomplete="organization">
                 </div>
                 <div>
                     <label class="form-label" for="partnerAddress">Adresse Complète</label>

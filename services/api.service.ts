@@ -247,24 +247,51 @@ export class ApiService {
             throw error;
         }
 
-        return (data || []).map(item => ({
-            id: item.id,
-            date: item.created_at,
-            agentId: item.agent_id,
-            opTypeId: item.operation_type_id,
-            data: item.form_data || {},
-            montant_principal: item.montant_principal,
-            frais: item.frais || 0,
-            montant_total: item.montant_total, // Now provided by the function
-            statut: item.statut,
-            preuveUrl: item.preuve_url,
-            // Note: Le nom du champ de la commission totale peut être 'commission'
-            commission_societe: (item.commission || 0) - (item.commission_partenaire || 0),
-            commission_partenaire: item.commission_partenaire || 0, // Now provided by the function
-            validateurId: item.validateur_id,
-            motif_rejet: item.motif_rejet,
-            assignedTo: item.assigned_to
-        }));
+        // Récupérer les données nécessaires pour calculer les commissions
+        const dataService = DataService.getInstance();
+        const [activeContractsMap, opTypeMap] = await Promise.all([
+            dataService.getActiveContractsMap(),
+            dataService.getOpTypeMap()
+        ]);
+
+        return (data || []).map(item => {
+            const totalCommission = item.commission || 0;
+            let companySharePercent = 60; // Valeur par défaut
+            
+            // Calculer le partage de commission basé sur la configuration
+            if (item.partner_id && activeContractsMap.has(item.partner_id)) {
+                const contract = activeContractsMap.get(item.partner_id);
+                if (contract?.defaultCommissionConfig?.partageSociete) {
+                    companySharePercent = contract.defaultCommissionConfig.partageSociete;
+                }
+            } else if (item.operation_type_id && opTypeMap.has(item.operation_type_id)) {
+                const opType = opTypeMap.get(item.operation_type_id);
+                if (opType?.commissionConfig?.partageSociete) {
+                    companySharePercent = opType.commissionConfig.partageSociete;
+                }
+            }
+
+            const commission_societe = Math.round(totalCommission * (companySharePercent / 100));
+            const commission_partenaire = totalCommission - commission_societe;
+
+            return {
+                id: item.id,
+                date: item.created_at,
+                agentId: item.agent_id,
+                opTypeId: item.operation_type_id,
+                data: item.form_data || {},
+                montant_principal: item.montant_principal,
+                frais: item.frais || 0,
+                montant_total: item.montant_total,
+                statut: item.statut,
+                preuveUrl: item.preuve_url,
+                commission_societe,
+                commission_partenaire,
+                validateurId: item.validateur_id,
+                motif_rejet: item.motif_rejet,
+                assignedTo: item.assigned_to
+            };
+        });
     }
 
     public async getTransactionsPaginated(filters: {
@@ -302,28 +329,56 @@ export class ApiService {
             }
 
             const totalCount = data[0]?.total_count || 0;
-            const transactions = data.map(item => ({
-                id: item.id,
-                date: item.date,
-                agentId: item.agent_id,
-                agentName: item.agent_name,
-                partnerId: item.partner_id,
-                partnerName: item.partner_name,
-                opTypeId: item.operation_type_id,
-                opTypeName: item.operation_type_name,
-                data: item.form_data || {},
-                montant_principal: item.montant_principal,
-                frais: item.frais || 0,
-                montant_total: item.montant_principal + (item.frais || 0),
-                statut: item.statut,
-                preuveUrl: item.preuve_url,
-                commission_societe: item.commission || 0,
-                commission_partenaire: item.commission_partenaire || 0,
-                validateurId: item.validateur_id,
-                motif_rejet: item.motif_rejet,
-                assignedTo: item.assigned_to,
-                notes: item.notes
-            }));
+            // Récupérer les données nécessaires pour calculer les commissions
+            const dataService = DataService.getInstance();
+            const [activeContractsMap, opTypeMap] = await Promise.all([
+                dataService.getActiveContractsMap(),
+                dataService.getOpTypeMap()
+            ]);
+
+            const transactions = data.map(item => {
+                const totalCommission = item.commission || 0;
+                let companySharePercent = 60; // Valeur par défaut
+                
+                // Calculer le partage de commission basé sur la configuration
+                if (item.partner_id && activeContractsMap.has(item.partner_id)) {
+                    const contract = activeContractsMap.get(item.partner_id);
+                    if (contract?.defaultCommissionConfig?.partageSociete) {
+                        companySharePercent = contract.defaultCommissionConfig.partageSociete;
+                    }
+                } else if (item.operation_type_id && opTypeMap.has(item.operation_type_id)) {
+                    const opType = opTypeMap.get(item.operation_type_id);
+                    if (opType?.commissionConfig?.partageSociete) {
+                        companySharePercent = opType.commissionConfig.partageSociete;
+                    }
+                }
+
+                const commission_societe = Math.round(totalCommission * (companySharePercent / 100));
+                const commission_partenaire = totalCommission - commission_societe;
+
+                return {
+                    id: item.id,
+                    date: item.date,
+                    agentId: item.agent_id,
+                    agentName: item.agent_name,
+                    partnerId: item.partner_id,
+                    partnerName: item.partner_name,
+                    opTypeId: item.operation_type_id,
+                    opTypeName: item.operation_type_name,
+                    data: item.form_data || {},
+                    montant_principal: item.montant_principal,
+                    frais: item.frais || 0,
+                    montant_total: item.montant_principal + (item.frais || 0),
+                    statut: item.statut,
+                    preuveUrl: item.preuve_url,
+                    commission_societe,
+                    commission_partenaire,
+                    validateurId: item.validateur_id,
+                    motif_rejet: item.motif_rejet,
+                    assignedTo: item.assigned_to,
+                    notes: item.notes
+                };
+            });
 
             return {
                 transactions,

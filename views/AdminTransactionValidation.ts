@@ -61,7 +61,7 @@ function renderTransactionKeyDetails(transaction: Transaction, opType: Operation
     let details = '';
     
     // Check if there are any image fields with values
-    const imageFields = opType.fields.filter(field => field.type === 'image' && data[field.name]);
+    const imageFields = opType.fields.filter(field => field.type === 'image' && data[field.name] && typeof data[field.name] === 'string' && data[field.name].trim() !== '');
     let imagePreview = '';
     if (imageFields.length > 0) {
         const firstImage = imageFields[0];
@@ -76,6 +76,21 @@ function renderTransactionKeyDetails(transaction: Transaction, opType: Operation
                 </span>
             </div>
         `;
+    } else {
+        // Vérifier s'il y a des champs image définis mais vides
+        const emptyImageFields = opType.fields.filter(field => field.type === 'image' && (!data[field.name] || (typeof data[field.name] === 'string' && data[field.name].trim() === '')));
+        if (emptyImageFields.length > 0) {
+            imagePreview = `
+                <div class="mt-2 flex items-center gap-2">
+                    <div class="w-8 h-8 rounded border-2 border-dashed border-slate-300 flex items-center justify-center bg-slate-50">
+                        <i class="fas fa-image text-slate-400 text-xs"></i>
+                    </div>
+                    <span class="text-xs text-slate-400 italic">
+                        ${emptyImageFields.length === 1 ? 'Aucune image fournie' : `${emptyImageFields.length} images manquantes`}
+                    </span>
+                </div>
+            `;
+        }
     }
     
     switch (opType.id) {
@@ -310,21 +325,35 @@ export async function renderAdminTransactionValidationView(user: User, defaultFi
             const value = transaction.data[field.name];
             
             // Handle image fields specially
-            if (field.type === 'image' && value) {
-                fieldsHtml += `
-                    <div class="py-2 grid grid-cols-3 gap-4">
-                        <dt class="text-sm font-medium text-slate-500">${field.label}</dt>
-                        <dd class="text-sm text-slate-900 col-span-2">
-                            <div class="image-preview-container">
-                                <img src="${value}" alt="${field.label}" 
-                                     class="max-w-full max-h-48 rounded-lg border shadow-sm cursor-pointer hover:shadow-md transition-shadow"
-                                     onclick="this.classList.toggle('max-h-48'); this.classList.toggle('max-h-96');"
-                                     title="Cliquez pour agrandir/réduire">
-                                <p class="text-xs text-slate-400 mt-1">Cliquez sur l'image pour l'agrandir</p>
-                            </div>
-                        </dd>
-                    </div>
-                `;
+            if (field.type === 'image') {
+                if (value && typeof value === 'string' && value.trim() !== '') {
+                    fieldsHtml += `
+                        <div class="py-2 grid grid-cols-3 gap-4">
+                            <dt class="text-sm font-medium text-slate-500">${field.label}</dt>
+                            <dd class="text-sm text-slate-900 col-span-2">
+                                <div class="image-preview-container">
+                                    <img src="${value}" alt="${field.label}" 
+                                         class="max-w-full max-h-48 rounded-lg border shadow-sm cursor-pointer hover:shadow-md transition-shadow"
+                                         onclick="this.classList.toggle('max-h-48'); this.classList.toggle('max-h-96');"
+                                         title="Cliquez pour agrandir/réduire">
+                                    <p class="text-xs text-slate-400 mt-1">Cliquez sur l'image pour l'agrandir</p>
+                                </div>
+                            </dd>
+                        </div>
+                    `;
+                } else {
+                    fieldsHtml += `
+                        <div class="py-2 grid grid-cols-3 gap-4">
+                            <dt class="text-sm font-medium text-slate-500">${field.label}</dt>
+                            <dd class="text-sm text-slate-900 col-span-2">
+                                <div class="empty-image-field">
+                                    <i class="fas fa-image"></i>
+                                    <span>Aucune image fournie</span>
+                                </div>
+                            </dd>
+                        </div>
+                    `;
+                }
             } else {
                 fieldsHtml += `
                     <div class="py-2 grid grid-cols-3 gap-4">

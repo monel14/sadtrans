@@ -83,6 +83,44 @@ body {
 
 /* stone-500 */
 
+/* Empty Image Field Styles */
+.empty-image-field {
+    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    border: 2px dashed #cbd5e1;
+    border-radius: 0.5rem;
+    padding: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.2s ease;
+}
+
+.empty-image-field:hover {
+    border-color: #94a3b8;
+    background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+}
+
+.empty-image-field i {
+    color: #94a3b8;
+    font-size: 1.125rem;
+}
+
+.empty-image-field span {
+    color: #64748b;
+    font-style: italic;
+    font-size: 0.875rem;
+}
+
+/* Image Preview Improvements */
+.image-preview-container img {
+    transition: all 0.3s ease;
+}
+
+.image-preview-container img:hover {
+    transform: scale(1.02);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+}
+
 /* Sidebar Logo */
 .sidebar-logo {
     position: relative;
@@ -128,6 +166,7 @@ body {
         transform: translate(-50%, -50%) scale(0.9);
         opacity: 0.6;
     }
+
     100% {
         transform: translate(-50%, -50%) scale(1.1);
         opacity: 0.9;
@@ -344,9 +383,17 @@ body {
 }
 
 @keyframes logout-pulse {
-    0% { transform: scale(1); }
-    50% { transform: scale(0.95); }
-    100% { transform: scale(1); }
+    0% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(0.95);
+    }
+
+    100% {
+        transform: scale(1);
+    }
 }
 
 /* Animation de l'icône */
@@ -359,8 +406,15 @@ body {
 }
 
 @keyframes logout-icon-bounce {
-    0%, 100% { transform: scale(1.25) rotate(12deg); }
-    50% { transform: scale(1.4) rotate(15deg) translateX(2px); }
+
+    0%,
+    100% {
+        transform: scale(1.25) rotate(12deg);
+    }
+
+    50% {
+        transform: scale(1.4) rotate(15deg) translateX(2px);
+    }
 }
 
 /* Animation du texte */
@@ -379,12 +433,13 @@ body {
 
 @keyframes logout-glow {
     from {
-        box-shadow: 
+        box-shadow:
             0 2px 8px rgba(239, 68, 68, 0.2),
             0 0 20px rgba(239, 68, 68, 0.1);
     }
+
     to {
-        box-shadow: 
+        box-shadow:
             0 4px 16px rgba(239, 68, 68, 0.3),
             0 0 30px rgba(239, 68, 68, 0.2);
     }
@@ -393,7 +448,7 @@ body {
 
 /* Login Page Background */
 .login-page {
-    background: linear-gradient( 342deg, #3b1e3a 1%, #234042 100%);
+    background: linear-gradient(342deg, #3b1e3a 1%, #234042 100%);
     position: relative;
     overflow: hidden;
 }

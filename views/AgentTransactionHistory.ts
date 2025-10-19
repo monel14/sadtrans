@@ -273,21 +273,35 @@ function showDetailsModal(transaction: Transaction, opType: OperationType, userM
         const value = transaction.data[field.name];
         
         // Handle image fields specially
-        if (field.type === 'image' && value) {
-            dataFields += `
-                <div class="py-2 grid grid-cols-3 gap-4">
-                    <dt class="text-sm font-medium text-slate-500">${field.label}</dt>
-                    <dd class="text-sm text-slate-900 col-span-2">
-                        <div class="image-preview-container">
-                            <img src="${value}" alt="${field.label}" 
-                                 class="max-w-full max-h-48 rounded-lg border shadow-sm cursor-pointer hover:shadow-md transition-shadow"
-                                 onclick="showImageFullscreen(this);"
-                                 title="Cliquez pour agrandir/réduire">
-                            <p class="text-xs text-slate-400 mt-1">Cliquez sur l'image pour l'agrandir</p>
-                        </div>
-                    </dd>
-                </div>
-            `;
+        if (field.type === 'image') {
+            if (value && typeof value === 'string' && value.trim() !== '') {
+                dataFields += `
+                    <div class="py-2 grid grid-cols-3 gap-4">
+                        <dt class="text-sm font-medium text-slate-500">${field.label}</dt>
+                        <dd class="text-sm text-slate-900 col-span-2">
+                            <div class="image-preview-container">
+                                <img src="${value}" alt="${field.label}" 
+                                     class="max-w-full max-h-48 rounded-lg border shadow-sm cursor-pointer hover:shadow-md transition-shadow"
+                                     onclick="showImageFullscreen(this);"
+                                     title="Cliquez pour agrandir/réduire">
+                                <p class="text-xs text-slate-400 mt-1">Cliquez sur l'image pour l'agrandir</p>
+                            </div>
+                        </dd>
+                    </div>
+                `;
+            } else {
+                dataFields += `
+                    <div class="py-2 grid grid-cols-3 gap-4">
+                        <dt class="text-sm font-medium text-slate-500">${field.label}</dt>
+                        <dd class="text-sm text-slate-900 col-span-2">
+                            <div class="empty-image-field">
+                                <i class="fas fa-image"></i>
+                                <span>Aucune image fournie</span>
+                            </div>
+                        </dd>
+                    </div>
+                `;
+            }
         } else {
             dataFields += `
                 <div class="py-2 grid grid-cols-3 gap-4">

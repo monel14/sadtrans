@@ -77,7 +77,7 @@ export class AdminCreatePartnerModal extends BaseModal {
                 </div>
                 <div>
                     <label class="form-label" for="createPartnerRccm">Numéro RCCM</label>
-                    <input type="text" id="createPartnerRccm" name="rccm" class="form-input">
+                    <input type="text" id="createPartnerRccm" name="rccm" class="form-input" autocomplete="organization">
                 </div>
                 <div>
                     <label class="form-label" for="createPartnerAddress">Adresse Complète</label>
