@@ -353,7 +353,6 @@ export const navigationLinks: Record<UserRole, NavLink[]> = {
                 { label: 'Historique des Recharges', navId: 'agent_history_recharges', icon: 'fa-wallet', viewFn: renderAgentRechargeHistoryViewWithRefresh },
             ]
         },
-        { label: 'Demander Recharge', navId: 'agent_request_recharge', icon: 'fa-hand-holding-usd', action: () => document.body.dispatchEvent(new CustomEvent('openAgentRechargeModal')) },
         { label: 'Mon Profil', navId: 'agent_profile', icon: 'fa-user-circle', viewFn: renderProfileView },
     ],
     partner: [
