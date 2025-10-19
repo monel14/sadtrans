@@ -2,7 +2,20 @@
 // Déclarer tous les addEventListener au plus haut niveau.
 self.addEventListener("message", (event) => {
   console.log("Message reçu dans le SW :", event.data);
-  // Ajoutez ici la logique de traitement des messages si nécessaire
+  
+  // Gérer les messages OneSignal spécifiquement
+  if (event.data && event.data.type) {
+    switch (event.data.type) {
+      case 'ONESIGNAL_SESSION_UPDATE':
+        console.log("OneSignal session update reçu");
+        break;
+      case 'ONESIGNAL_NOTIFICATION_CLICKED':
+        console.log("OneSignal notification clicked");
+        break;
+      default:
+        console.log("Message SW non géré:", event.data.type);
+    }
+  }
 });
 
 self.addEventListener('install', (event) => {

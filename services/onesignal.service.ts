@@ -34,6 +34,8 @@ declare global {
   }
 }
 
+import { getOneSignalConfig, isDomainAllowed, getDomainSuggestions } from "../config/onesignal.config";
+
 const ONE_SIGNAL_APP_ID = "aa956232-9277-40b3-b0f0-44c2b67f7a7b";
 
 export class OneSignalService {
@@ -87,10 +89,26 @@ export class OneSignalService {
           clearTimeout(timeout);
           this.oneSignalInstance = OneSignal;
 
+          // Vérifier si le domaine est autorisé
+          if (!isDomainAllowed()) {
+            const suggestions = getDomainSuggestions();
+            console.error("🚫 Domaine non autorisé pour OneSignal");
+            console.error("Domaine actuel:", window.location.origin);
+            console.error("Suggestions:", suggestions);
+            
+            // Continuer sans OneSignal
+            this.isInitialized = false;
+            this.isInitializing = false;
+            this.initPromise = null;
+            resolve();
+            return;
+          }
+
           // Configuration pour éviter les conflits de service workers
+          const envConfig = getOneSignalConfig();
           const config: any = {
-            appId: ONE_SIGNAL_APP_ID,
-            allowLocalhostAsSecureOrigin: true,
+            appId: envConfig.appId,
+            allowLocalhostAsSecureOrigin: envConfig.allowLocalhostAsSecureOrigin,
           };
 
           // Configuration pour éviter les conflits avec Workbox
@@ -100,25 +118,39 @@ export class OneSignalService {
               const hasWorkbox = registrations.some(reg =>
                 reg.active?.scriptURL?.includes('workbox') ||
                 reg.active?.scriptURL?.includes('sw.js') ||
+                reg.active?.scriptURL?.includes('custom-sw') ||
                 reg.scope === window.location.origin + '/'
               );
 
               if (hasWorkbox) {
                 console.log("🔧 Workbox détecté, configuration OneSignal avec scope séparé");
                 // Utiliser un scope différent pour éviter les conflits
-                config.serviceWorkerParam = { scope: "/OneSignalSDKWorker/" };
-                config.serviceWorkerPath = "OneSignalSDKWorker.js";
-                config.allowLocalhostAsSecureOrigin = true;
+                config.serviceWorkerParam = { 
+                  scope: envConfig.serviceWorkerScope || "/OneSignalSDKWorker/",
+                  updateViaCache: 'none'
+                };
+                config.serviceWorkerPath = envConfig.serviceWorkerPath || "OneSignalSDKWorker.js";
+                
+                // Désactiver l'auto-registration pour éviter les conflits
+                config.autoRegister = envConfig.autoRegister ?? false;
               } else {
                 // Configuration normale
-                config.serviceWorkerParam = { scope: "/" };
-                config.serviceWorkerPath = "OneSignalSDKWorker.js";
+                config.serviceWorkerParam = { 
+                  scope: "/",
+                  updateViaCache: 'none'
+                };
+                config.serviceWorkerPath = envConfig.serviceWorkerPath || "OneSignalSDKWorker.js";
+                config.autoRegister = envConfig.autoRegister ?? true;
               }
             } catch (error) {
               console.warn("Impossible de vérifier les service workers existants:", error);
               // Configuration par défaut avec scope séparé pour éviter les conflits
-              config.serviceWorkerParam = { scope: "/OneSignalSDKWorker/" };
-              config.serviceWorkerPath = "OneSignalSDKWorker.js";
+              config.serviceWorkerParam = { 
+                scope: envConfig.serviceWorkerScope || "/OneSignalSDKWorker/",
+                updateViaCache: 'none'
+              };
+              config.serviceWorkerPath = envConfig.serviceWorkerPath || "OneSignalSDKWorker.js";
+              config.autoRegister = envConfig.autoRegister ?? false;
             }
           }
 
@@ -282,16 +314,29 @@ export class OneSignalService {
     console.error("Détails de l'erreur:", error);
 
     if (error && typeof error === 'object') {
-      if (error.message && error.message.includes('postMessage')) {
+      const errorMessage = error.message || '';
+      
+      if (errorMessage.includes('postMessage') || errorMessage.includes('ServiceWorkerRegistration')) {
         console.warn("💡 Problème de communication entre service workers détecté");
         console.warn("Cela peut être causé par un conflit avec Workbox ou un autre SW");
+        
+        // Vérifier si c'est un problème temporaire
+        if (errorMessage.includes('Could not get ServiceWorkerRegistration')) {
+          console.warn("🔄 Service Worker temporairement indisponible");
+          
+          // Programmer une tentative de récupération différée
+          setTimeout(() => {
+            this.attemptServiceWorkerRecovery();
+          }, 5000); // Attendre 5 secondes
+        } else {
+          // Tentative de récupération immédiate pour autres erreurs
+          this.attemptServiceWorkerRecovery();
+        }
+        
         console.warn("Solutions:");
         console.warn("1. Redémarrer le navigateur");
         console.warn("2. Vider le cache et les données du site");
         console.warn("3. Utiliser un service worker unifié");
-
-        // Tentative de récupération automatique
-        this.attemptServiceWorkerRecovery();
       }
     }
 
@@ -305,8 +350,39 @@ export class OneSignalService {
     try {
       console.log("🔄 Tentative de récupération du service worker...");
 
+      // Vérifier d'abord si les service workers sont disponibles
+      if (!('serviceWorker' in navigator)) {
+        console.warn("Service Workers non supportés, abandon de la récupération");
+        return;
+      }
+
       // Attendre un peu avant de réessayer
       await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // Vérifier l'état des service workers
+      try {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        console.log(`🔍 ${registrations.length} service worker(s) actif(s)`);
+        
+        // Vérifier si OneSignal SW est disponible
+        const oneSignalSW = registrations.find(reg => 
+          reg.active?.scriptURL?.includes('OneSignal') ||
+          reg.scope.includes('OneSignalSDKWorker')
+        );
+        
+        if (!oneSignalSW) {
+          console.warn("⚠️ Service Worker OneSignal non trouvé");
+          // Essayer de réinitialiser OneSignal
+          if (this.oneSignalInstance && this.currentUserId) {
+            console.log("🔄 Réinitialisation OneSignal...");
+            await this.init(this.currentUserId);
+          }
+        } else {
+          console.log("✅ Service Worker OneSignal trouvé:", oneSignalSW.scope);
+        }
+      } catch (swError) {
+        console.warn("Erreur lors de la vérification des SW:", swError);
+      }
 
       // Réinitialiser l'état si nécessaire
       if (this.oneSignalInstance && this.currentUserId) {
@@ -314,8 +390,22 @@ export class OneSignalService {
         await this.safeLogin(this.oneSignalInstance, this.currentUserId);
       }
 
-      // Vérifier l'état des notifications
-      await this.checkSubscription();
+      // Vérifier l'état des notifications avec retry
+      let retryCount = 0;
+      const maxRetries = 3;
+      
+      while (retryCount < maxRetries) {
+        try {
+          await this.checkSubscription();
+          break;
+        } catch (checkError) {
+          retryCount++;
+          console.warn(`Tentative ${retryCount}/${maxRetries} de vérification échouée:`, checkError);
+          if (retryCount < maxRetries) {
+            await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+          }
+        }
+      }
 
       console.log("✅ Récupération du service worker terminée");
     } catch (error) {
@@ -342,14 +432,35 @@ export class OneSignalService {
       }
     } catch (error) {
       // Gérer spécifiquement l'erreur 409 (conflit d'identité)
-      if (error && typeof error === 'object' &&
-        (error.message?.includes('409') || error.status === 409)) {
-        console.warn("⚠️ Conflit d'identité OneSignal (409) - utilisateur déjà associé");
-        console.warn("Cela peut arriver si l'utilisateur est déjà connecté sur un autre appareil");
-
-        // Marquer comme connecté malgré l'erreur 409
-        this.currentUserId = userId;
-        return true;
+      if (error && typeof error === 'object') {
+        const errorMessage = error.message || '';
+        const errorStatus = error.status || (error.response?.status);
+        
+        if (errorMessage.includes('409') || errorStatus === 409 || errorMessage.includes('Conflict')) {
+          console.warn("⚠️ Conflit d'identité OneSignal (409) - utilisateur déjà associé");
+          console.warn("Tentative de logout puis re-login...");
+          
+          try {
+            // Essayer de logout d'abord puis re-login
+            if (typeof OneSignal.logout === "function") {
+              await OneSignal.logout();
+              await new Promise(resolve => setTimeout(resolve, 1000)); // Attendre 1s
+              await OneSignal.login(userId);
+              this.currentUserId = userId;
+              console.log(`OneSignal user re-logged in après logout : ${userId}`);
+              return true;
+            } else {
+              // Si logout n'est pas disponible, marquer comme connecté quand même
+              this.currentUserId = userId;
+              console.warn("OneSignal.logout non disponible, marquage comme connecté");
+              return true;
+            }
+          } catch (retryError) {
+            console.warn("Échec du retry login, marquage comme connecté:", retryError);
+            this.currentUserId = userId;
+            return true;
+          }
+        }
       }
 
       console.error("Impossible de login l'utilisateur :", error);

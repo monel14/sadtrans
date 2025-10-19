@@ -6,6 +6,8 @@ import { AuthService } from "./services/auth.service";
 import { DataService } from "./services/data.service";
 import { RefreshService } from "./services/refresh.service";
 import { OneSignalService } from "./services/onesignal.service";
+import "./utils/onesignal-diagnostics";
+import "./utils/onesignal-fix";
 import { renderHeader } from "./components/Header";
 import { renderFooter } from "./components/Footer";
 import { navigationLinks } from "./config/navigation";
@@ -66,6 +68,7 @@ export class App {
 
     const user = await authService.getCurrentUser();
 
+    // Initialisation OneSignal avec gestion d'erreur améliorée
     try {
       await OneSignalService.init(user?.id || undefined);
       console.log("OneSignal initialisé avec succès");
@@ -74,6 +77,14 @@ export class App {
         "OneSignal initialization failed, continuing without push notifications:",
         error,
       );
+      
+      // Diagnostic automatique en cas d'erreur
+      if (typeof window !== 'undefined' && (window as any).OneSignalDiagnostics) {
+        console.log("🔍 Lancement du diagnostic OneSignal...");
+        setTimeout(() => {
+          (window as any).OneSignalDiagnostics.runCompleteDiagnostic();
+        }, 2000);
+      }
     }
 
     if (user) {
@@ -84,6 +95,19 @@ export class App {
         console.log("OneSignal utilisateur connecté");
       } catch (error) {
         console.warn("OneSignal login failed, continuing:", error);
+        
+        // En cas d'erreur de login, essayer une récupération
+        if (error && typeof error === 'object' && 
+            (error.message?.includes('409') || error.status === 409)) {
+          console.log("🔄 Tentative de récupération après erreur 409...");
+          setTimeout(async () => {
+            try {
+              await OneSignalService.attemptServiceWorkerRecovery();
+            } catch (recoveryError) {
+              console.warn("Récupération échouée:", recoveryError);
+            }
+          }, 3000);
+        }
       }
 
       DataService.getInstance().reSubscribe();
