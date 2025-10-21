@@ -1,4 +1,4 @@
-import { User, Transaction } from '../models';
+import { User } from '../models';
 import { ApiService } from '../services/api.service';
 import { DataService } from '../services/data.service';
 import { formatAmount, formatDate, formatNumber } from '../utils/formatters';
@@ -9,6 +9,8 @@ import { renderAdminManagePartnersView } from './AdminManagePartners';
 import { renderAdminCardManagementView } from './AdminCardInventory';
 import { createTable } from '../components/Table';
 import { createCard } from '../components/Card';
+import { NotificationIntegration } from '../utils/notification-integration';
+import { createNotificationToggle } from '../components/NotificationSettings';
 
 // Helper function to create a KPI card
 function createKpiCard(title: string, value: string, icon: string): string {
@@ -315,6 +317,41 @@ export async function renderAdminDashboardView(user: User): Promise<HTMLElement>
         'admin_manage_cards': { viewFn: renderAdminCardManagementView, label: 'Gestion des Cartes', navId: 'admin_manage_cards' },
         'admin_manage_users': { viewFn: (user: User) => import('../views/AdminManageUsers').then(m => m.renderAdminManageUsersView()), label: 'Tous les Utilisateurs', navId: 'admin_manage_users' },
     };
+
+    // Écouter les événements de mise à jour des données avec debouncing
+    let refreshTimeout: number | null = null;
+    
+    const handleDataUpdate = async (event: CustomEvent) => {
+        console.log('🔄 Dashboard received data update:', event.detail);
+        
+        // Debouncing pour éviter les rechargements multiples
+        if (refreshTimeout) {
+            clearTimeout(refreshTimeout);
+        }
+        
+        refreshTimeout = window.setTimeout(async () => {
+            try {
+                // Vérifier que le container est toujours dans le DOM
+                if (!container.parentElement) {
+                    console.log('Dashboard container no longer in DOM, skipping refresh');
+                    return;
+                }
+                
+                console.log('🔄 Refreshing dashboard...');
+                const newDashboard = await renderAdminDashboardView(user);
+                const parent = container.parentElement;
+                if (parent) {
+                    parent.replaceChild(newDashboard, container);
+                }
+            } catch (error) {
+                console.error('Erreur lors du rechargement du dashboard:', error);
+            }
+        }, 500); // Attendre 500ms avant de rafraîchir
+    };
+
+    // Écouter uniquement l'événement unifié dataUpdated
+    container.addEventListener('forceRefresh', handleDataUpdate as EventListener);
+    document.body.addEventListener('dataUpdated', handleDataUpdate as EventListener);
 
     // Main event listener for the entire dashboard
     container.addEventListener('click', async e => {

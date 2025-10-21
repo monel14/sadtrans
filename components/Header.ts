@@ -23,6 +23,19 @@ export function renderHeader(user: User): HTMLElement {
             <h2 id="pageTitle" class="text-xl sm:text-2xl font-semibold text-slate-800">Tableau de Bord</h2>
         </div>
         <div class="flex items-center space-x-4">
+            <!-- Indicateur de connexion -->
+            <div id="connectionStatus" class="flex items-center" title="État de la connexion">
+                <div id="connectionIndicator" class="w-2 h-2 rounded-full bg-green-500 mr-2"></div>
+                <span id="connectionText" class="text-xs text-slate-500 hidden sm:inline">En ligne</span>
+            </div>
+            <!-- Bouton de synchronisation manuelle -->
+            <button id="syncButton" class="text-slate-500 hover:text-slate-700 focus:outline-none" aria-label="Synchroniser" title="Forcer la synchronisation des données">
+                <i class="fas fa-sync-alt text-lg"></i>
+            </button>
+            <!-- Bouton pour désactiver/réactiver Realtime -->
+            <button id="realtimeToggle" class="text-slate-500 hover:text-slate-700 focus:outline-none" aria-label="Toggle Realtime" title="Activer/Désactiver les mises à jour en temps réel">
+                <i class="fas fa-broadcast-tower text-lg"></i>
+            </button>
             <!-- Bouton pour activer les notifications push -->
             <button id="enablePushNotifications" class="text-slate-500 hover:text-slate-700 focus:outline-none" aria-label="Activer les notifications" title="Activer les notifications push">
                 <i class="fas fa-bell-slash text-xl"></i>
@@ -58,6 +71,13 @@ export function renderHeader(user: User): HTMLElement {
     const list = $('#notificationsList', header);
     // Bouton pour activer les notifications push
     const enablePushBtn = $('#enablePushNotifications', header);
+    // Indicateurs de connexion
+    const connectionIndicator = $('#connectionIndicator', header);
+    const connectionText = $('#connectionText', header);
+    // Bouton de synchronisation
+    const syncButton = $('#syncButton', header);
+    // Bouton de toggle Realtime
+    const realtimeToggle = $('#realtimeToggle', header);
 
     let notifications: Notification[] = [];
     let unreadCount = 0;
@@ -86,43 +106,210 @@ export function renderHeader(user: User): HTMLElement {
     };
 
     // Vérifier l'état actuel des notifications push
-    const checkPushNotificationStatus = () => {
+    const checkPushNotificationStatus = async () => {
         console.log('Vérification de l\'état des notifications push');
-        // Importer le service OneSignal dynamiquement pour éviter les dépendances circulaires
-        import('../services/onesignal.service').then(({ OneSignalService }) => {
-            if (OneSignalService.isReady()) {
-                OneSignalService.checkSubscription();
+        
+        // D'abord, vérifier l'état persisté
+        const persistedState = localStorage.getItem('pushNotificationsEnabled');
+        if (persistedState !== null) {
+            const isSubscribed = persistedState === 'true';
+            console.log('État persisté des notifications push:', isSubscribed);
+            updatePushNotificationButton(isSubscribed);
+        }
+        
+        // Ensuite, vérifier avec le service pour confirmer
+        try {
+            const { NotificationManagerService } = await import('../services/notification-manager.service');
+            const notificationManager = NotificationManagerService.getInstance();
+            const isSubscribed = await notificationManager.isSubscribed();
+            console.log('État réel des notifications push:', isSubscribed);
+            
+            // Mettre à jour le bouton avec l'état réel
+            updatePushNotificationButton(isSubscribed);
+            
+            // Mettre à jour l'état persisté si différent
+            if (persistedState !== isSubscribed.toString()) {
+                localStorage.setItem('pushNotificationsEnabled', isSubscribed.toString());
             }
-        });
+        } catch (error) {
+            console.error('Erreur lors de la vérification des notifications:', error);
+            // En cas d'erreur, utiliser l'état persisté ou afficher le bouton par défaut
+            if (persistedState === null) {
+                updatePushNotificationButton(false);
+            }
+        }
     };
 
     // Écouter l'événement lorsque l'utilisateur n'est pas abonné aux notifications
     document.body.addEventListener('userNotSubscribedToPush', (event: Event) => {
         console.log('Événement userNotSubscribedToPush reçu');
         updatePushNotificationButton(false);
+        // Persister l'état
+        localStorage.setItem('pushNotificationsEnabled', 'false');
     });
 
     // Écouter l'événement lorsque l'utilisateur est abonné aux notifications
     document.body.addEventListener('userSubscribedToPush', (event: Event) => {
         console.log('Événement userSubscribedToPush reçu');
         const customEvent = event as CustomEvent;
-        updatePushNotificationButton(customEvent.detail?.subscribed ?? true);
+        const isSubscribed = customEvent.detail?.subscribed ?? true;
+        updatePushNotificationButton(isSubscribed);
+        // Persister l'état
+        localStorage.setItem('pushNotificationsEnabled', isSubscribed.toString());
     });
 
-    // Initial check
-    checkPushNotificationStatus();
+    // Initial check avec délai pour laisser le temps aux services de s'initialiser
+    setTimeout(async () => {
+        await checkPushNotificationStatus();
+    }, 1000);
+
+    // Gestion de l'état de connexion
+    const updateConnectionStatus = (isConnected: boolean, message?: string) => {
+        if (connectionIndicator && connectionText) {
+            if (isConnected) {
+                connectionIndicator.className = 'w-2 h-2 rounded-full bg-green-500 mr-2';
+                connectionText.textContent = message || 'En ligne';
+            } else {
+                connectionIndicator.className = 'w-2 h-2 rounded-full bg-red-500 mr-2';
+                connectionText.textContent = message || 'Hors ligne';
+            }
+        }
+    };
+
+    // Écouter les événements de connexion
+    document.body.addEventListener('dataUpdated', () => {
+        updateConnectionStatus(true, 'Synchronisé');
+        setTimeout(() => updateConnectionStatus(true, 'En ligne'), 2000);
+    });
+
+    // Écouter les événements de déconnexion
+    window.addEventListener('offline', () => {
+        updateConnectionStatus(false, 'Hors ligne');
+    });
+
+    window.addEventListener('online', () => {
+        updateConnectionStatus(true, 'Reconnexion...');
+        // Forcer une reconnexion après être revenu en ligne
+        setTimeout(async () => {
+            try {
+                const { DataService } = await import('../services/data.service');
+                const dataService = DataService.getInstance();
+                dataService.forceReconnect();
+            } catch (error) {
+                console.error('Erreur lors de la reconnexion automatique:', error);
+            }
+        }, 1000);
+    });
+
+    // Gestionnaire pour le bouton de synchronisation
+    syncButton?.addEventListener('click', async () => {
+        if (syncButton) {
+            // Animation de rotation
+            const icon = syncButton.querySelector('i');
+            if (icon) {
+                icon.classList.add('fa-spin');
+                syncButton.disabled = true;
+            }
+            
+            updateConnectionStatus(false, 'Synchronisation...');
+            
+            try {
+                const { DataService } = await import('../services/data.service');
+                const dataService = DataService.getInstance();
+                await dataService.forceSyncData();
+                
+                updateConnectionStatus(true, 'Synchronisé');
+                
+                document.body.dispatchEvent(new CustomEvent('showToast', {
+                    detail: {
+                        message: 'Synchronisation terminée avec succès',
+                        type: 'success'
+                    }
+                }));
+                
+            } catch (error) {
+                console.error('Erreur lors de la synchronisation:', error);
+                updateConnectionStatus(false, 'Erreur sync');
+                
+                document.body.dispatchEvent(new CustomEvent('showToast', {
+                    detail: {
+                        message: 'Erreur lors de la synchronisation',
+                        type: 'error'
+                    }
+                }));
+            } finally {
+                // Arrêter l'animation
+                if (icon) {
+                    icon.classList.remove('fa-spin');
+                    syncButton.disabled = false;
+                }
+                
+                // Remettre l'état normal après 2 secondes
+                setTimeout(() => {
+                    updateConnectionStatus(true, 'En ligne');
+                }, 2000);
+            }
+        }
+    });
+
+    // Gestionnaire pour le bouton de toggle Realtime
+    let realtimeEnabled = true;
+    realtimeToggle?.addEventListener('click', async () => {
+        try {
+            const { DataService } = await import('../services/data.service');
+            const dataService = DataService.getInstance();
+            
+            if (realtimeEnabled) {
+                // Désactiver Realtime
+                dataService.disableRealtime();
+                realtimeToggle.classList.add('text-red-500');
+                realtimeToggle.classList.remove('text-slate-500');
+                realtimeToggle.title = 'Realtime désactivé - Cliquer pour réactiver';
+                realtimeEnabled = false;
+                
+                updateConnectionStatus(false, 'Realtime off');
+                
+                document.body.dispatchEvent(new CustomEvent('showToast', {
+                    detail: {
+                        message: 'Mises à jour temps réel désactivées',
+                        type: 'warning'
+                    }
+                }));
+            } else {
+                // Réactiver Realtime
+                dataService.enableRealtime();
+                realtimeToggle.classList.remove('text-red-500');
+                realtimeToggle.classList.add('text-slate-500');
+                realtimeToggle.title = 'Realtime activé - Cliquer pour désactiver';
+                realtimeEnabled = true;
+                
+                updateConnectionStatus(true, 'Realtime on');
+                
+                document.body.dispatchEvent(new CustomEvent('showToast', {
+                    detail: {
+                        message: 'Mises à jour temps réel réactivées',
+                        type: 'success'
+                    }
+                }));
+            }
+        } catch (error) {
+            console.error('Erreur lors du toggle Realtime:', error);
+        }
+    });
 
     // Gestionnaire d'événement pour le bouton d'activation des notifications push
     enablePushBtn?.addEventListener('click', async () => {
-        // Importer le service OneSignal dynamiquement pour éviter les dépendances circulaires
-        const { OneSignalService } = await import('../services/onesignal.service');
-        
         try {
-            // Utiliser la nouvelle méthode pour activer les notifications push
-            const notificationsEnabled = await OneSignalService.enablePushNotifications();
+            const { NotificationManagerService } = await import('../services/notification-manager.service');
+            const notificationManager = NotificationManagerService.getInstance();
+            
+            // Utiliser le système VAPID natif pour activer les notifications push
+            const notificationsEnabled = await notificationManager.subscribe();
             if (notificationsEnabled) {
-                console.log('Notifications push activées avec succès');
+                console.log('Notifications push VAPID activées avec succès');
                 updatePushNotificationButton(true);
+                // Persister l'état
+                localStorage.setItem('pushNotificationsEnabled', 'true');
                 // Afficher un message de confirmation
                 document.body.dispatchEvent(new CustomEvent('showToast', {
                     detail: {
@@ -132,8 +319,9 @@ export function renderHeader(user: User): HTMLElement {
                 }));
             } else {
                 console.log('L\'utilisateur a refusé les notifications push ou elles sont bloquées');
-                // Le message est déjà affiché dans le service, pas besoin de le répéter ici
                 updatePushNotificationButton(false);
+                // Persister l'état
+                localStorage.setItem('pushNotificationsEnabled', 'false');
             }
         } catch (error) {
             console.error('Erreur lors de l\'activation des notifications push:', error);

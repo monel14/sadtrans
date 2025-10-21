@@ -14,8 +14,9 @@ interface ImportMeta {
  
 declare global {
   interface Window {
-    OneSignal: any;
-    OneSignalDeferred: any[];
+    // Types pour les notifications push natives
+    PushManager: any;
+    Notification: any;
   }
 }
 

@@ -840,6 +840,75 @@ export class ApiService {
         return opTypeMap.get(data.id)!;
     }
 
+    /**
+     * Envoie les notifications push de manière asynchrone
+     */
+    private async sendTransactionNotificationsAsync(transactionId: string, eventType: 'created' | 'validated' | 'rejected'): Promise<void> {
+        try {
+            const { error } = await supabase.functions.invoke('process-transaction-notifications', {
+                body: {
+                    transactionId,
+                    eventType
+                }
+            });
+
+            if (error) {
+                console.warn('Push notification service error:', error);
+            }
+        } catch (error) {
+            console.warn('Failed to invoke push notification service:', error);
+        }
+    }
+
+    /**
+     * Nettoie et valide les données JSON pour éviter les erreurs de syntaxe
+     */
+    private sanitizeJsonData(data: any): any {
+        if (data === null || data === undefined) {
+            return {};
+        }
+
+        try {
+            // Convertir en JSON puis parser pour valider la structure
+            const jsonString = JSON.stringify(data);
+            return JSON.parse(jsonString);
+        } catch (error) {
+            console.error('Invalid JSON data detected, cleaning...', error);
+            
+            // Si la conversion échoue, nettoyer manuellement
+            const cleaned: any = {};
+            
+            if (typeof data === 'object' && data !== null) {
+                for (const [key, value] of Object.entries(data)) {
+                    try {
+                        // Nettoyer chaque valeur individuellement
+                        if (typeof value === 'string') {
+                            // Supprimer les caractères de contrôle et les caractères non-UTF8
+                            cleaned[key] = value.replace(/[\x00-\x1F\x7F-\x9F]/g, '').trim();
+                        } else if (typeof value === 'number' && isFinite(value)) {
+                            cleaned[key] = value;
+                        } else if (typeof value === 'boolean') {
+                            cleaned[key] = value;
+                        } else if (value === null) {
+                            cleaned[key] = null;
+                        } else if (typeof value === 'object') {
+                            // Récursion pour les objets imbriqués
+                            cleaned[key] = this.sanitizeJsonData(value);
+                        } else {
+                            // Convertir en string pour les autres types
+                            cleaned[key] = String(value).replace(/[\x00-\x1F\x7F-\x9F]/g, '').trim();
+                        }
+                    } catch (fieldError) {
+                        console.warn(`Skipping invalid field ${key}:`, fieldError);
+                        // Ignorer les champs qui causent des erreurs
+                    }
+                }
+            }
+            
+            return cleaned;
+        }
+    }
+
     public async createTransaction(userId: string, opTypeId: string, data: any): Promise<Transaction> {
         const dataService = DataService.getInstance();
 
@@ -870,11 +939,14 @@ export class ApiService {
             throw new Error('Solde insuffisant pour effectuer cette opération.');
         }
 
-        // 2. Insérer la transaction
+        // 2. Nettoyer et valider les données JSON
+        const cleanedData = this.sanitizeJsonData(data);
+        
+        // 3. Insérer la transaction
         const { data: createdTx, error: createError } = await supabase.from('transactions').insert({
             agent_id: userId,
             operation_type_id: opTypeId,
-            form_data: data,
+            form_data: cleanedData,
             montant_principal: amount,
             frais: totalFee,
             commission: totalCommission,
@@ -903,6 +975,11 @@ export class ApiService {
 
         await dataService.invalidateTransactionsCache();
         await dataService.invalidateUsersCache(); // Pour rafraîchir le solde de l'utilisateur/agence
+
+        // Envoyer les notifications push de manière asynchrone (ne pas attendre)
+        this.sendTransactionNotificationsAsync(createdTx.id, 'created').catch(error => {
+            console.warn('Failed to send push notifications:', error);
+        });
 
         document.body.dispatchEvent(new CustomEvent('transactionCreated', { detail: { transactionId: createdTx.id } }));
 

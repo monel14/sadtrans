@@ -1,15 +1,19 @@
 {
-  "name": "sadtrans-b2b-platform",
+  "name": "sadtrans",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:443": "vite --port 443",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "vapid:generate": "node scripts/generate-vapid-keys.js"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.57.4"
+    "@supabase/supabase-js": "^2.57.4",
+    "web-push": "^3.6.7",
+    "dotenv": "^16.4.5"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

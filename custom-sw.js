@@ -1,21 +1,9 @@
-// Ajout du listener 'message' au début pour éviter le warning
-// Déclarer tous les addEventListener au plus haut niveau.
+// Gestionnaire de messages pour le service worker
 self.addEventListener("message", (event) => {
   console.log("Message reçu dans le SW :", event.data);
-  
-  // Gérer les messages OneSignal spécifiquement
+
   if (event.data && event.data.type) {
     switch (event.data.type) {
-      case 'ONESIGNAL_SESSION_UPDATE':
-        console.log("OneSignal session update reçu");
-        // Répondre à OneSignal pour confirmer la réception
-        if (event.ports && event.ports[0]) {
-          event.ports[0].postMessage({ success: true });
-        }
-        break;
-      case 'ONESIGNAL_NOTIFICATION_CLICKED':
-        console.log("OneSignal notification clicked");
-        break;
       case 'SKIP_WAITING':
         self.skipWaiting();
         break;
@@ -23,7 +11,7 @@ self.addEventListener("message", (event) => {
         console.log("Message SW non géré:", event.data.type);
     }
   }
-  
+
   // Répondre toujours pour éviter les timeouts
   try {
     if (event.ports && event.ports[0]) {
@@ -32,6 +20,79 @@ self.addEventListener("message", (event) => {
   } catch (error) {
     console.warn("Erreur lors de la réponse au message:", error);
   }
+});
+
+// Gestionnaire pour les notifications push
+self.addEventListener('push', (event) => {
+  console.log('Notification push reçue:', event);
+
+  let notificationData = {
+    title: 'SadTrans',
+    body: 'Nouvelle notification',
+    icon: '/favicon.ico',
+    badge: '/favicon.ico',
+    data: {}
+  };
+
+  if (event.data) {
+    try {
+      const payload = event.data.json();
+      notificationData = { ...notificationData, ...payload };
+    } catch (error) {
+      console.error('Erreur parsing notification payload:', error);
+      notificationData.body = event.data.text() || notificationData.body;
+    }
+  }
+
+  const promiseChain = self.registration.showNotification(
+    notificationData.title,
+    {
+      body: notificationData.body,
+      icon: notificationData.icon,
+      badge: notificationData.badge,
+      data: notificationData.data,
+      actions: notificationData.actions,
+      requireInteraction: true,
+      tag: 'sadtrans-notification'
+    }
+  );
+
+  event.waitUntil(promiseChain);
+});
+
+// Gestionnaire pour les clics sur les notifications
+self.addEventListener('notificationclick', (event) => {
+  console.log('Notification cliquée:', event);
+
+  event.notification.close();
+
+  const urlToOpen = event.notification.data?.url || '/';
+
+  const promiseChain = clients.matchAll({
+    type: 'window',
+    includeUncontrolled: true
+  }).then((windowClients) => {
+    // Chercher une fenêtre existante avec l'URL
+    for (let i = 0; i < windowClients.length; i++) {
+      const client = windowClients[i];
+      if (client.url === urlToOpen && 'focus' in client) {
+        return client.focus();
+      }
+    }
+
+    // Si aucune fenêtre n'est trouvée, en ouvrir une nouvelle
+    if (clients.openWindow) {
+      return clients.openWindow(urlToOpen);
+    }
+  });
+
+  event.waitUntil(promiseChain);
+});
+
+// Gestionnaire pour la fermeture des notifications
+self.addEventListener('notificationclose', (event) => {
+  console.log('Notification fermée:', event);
+  // Optionnel: envoyer des analytics sur la fermeture
 });
 
 self.addEventListener('install', (event) => {
@@ -66,48 +127,29 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Service Worker personnalisé - version modifiée pour éviter les conflits avec OneSignal
-// Ne pas charger le SDK OneSignal dans ce Service Worker pour éviter les conflits
-// OneSignal utilise son propre service worker séparé
-
+// Service Worker personnalisé avec support des notifications push natives
 importScripts('/workbox-sw.js');
 
 if (workbox) {
   console.log(`Workbox est chargé`);
-  
+
   // Configuration améliorée pour ignorer les URLs externes
   workbox.setConfig({
     debug: false
   });
-  
+
   // Le manifeste de pré-cache est injecté ici par vite-plugin-pwa
   workbox.precaching.precacheAndRoute(self.__WB_MANIFEST || [], {
     // Ignorer les paramètres de requête pour le pré-caching
     ignoreURLParametersMatching: [/^utm_/, /^fbclid$/]
   });
-  
-  // Exclure les ressources OneSignal du caching
+
+  // Routes pour les API de notifications (si nécessaire)
   workbox.routing.registerRoute(
-    /^https:\/\/cdn\.onesignal\.com/,
+    /^\/api\/push-subscriptions/,
     new workbox.strategies.NetworkOnly()
   );
-  
-  workbox.routing.registerRoute(
-    /^https:\/\/onesignal\.com/,
-    new workbox.strategies.NetworkOnly()
-  );
-  
-  workbox.routing.registerRoute(
-    /^https:\/\/api\.onesignal\.com/,
-    new workbox.strategies.NetworkOnly()
-  );
-  
-  // Exclure le service worker OneSignal lui-même
-  workbox.routing.registerRoute(
-    /OneSignalSDKWorker\.js/,
-    new workbox.strategies.NetworkOnly()
-  );
-  
+
   // Gestion des routes pour les ressources statiques
   workbox.routing.registerRoute(
     /\.(?:png|gif|jpg|jpeg|webp|svg)$/,
@@ -121,7 +163,7 @@ if (workbox) {
       ],
     })
   );
-  
+
   workbox.routing.registerRoute(
     /\.(?:css|js)$/,
     new workbox.strategies.StaleWhileRevalidate({

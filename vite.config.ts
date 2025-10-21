@@ -53,14 +53,7 @@ export default defineConfig(({ mode }) => {
               urlPattern: /^https:\/\/cdn\.tailwindcss\.com/,
               handler: "NetworkOnly",
             },
-            {
-              urlPattern: /^https:\/\/cdn\.onesignal\.com/,
-              handler: "NetworkOnly",
-            },
-            {
-              urlPattern: /^https:\/\/onesignal\.com\/sdks\/.*/,
-              handler: "NetworkOnly",
-            },
+
             {
               urlPattern: /^https:\/\/ui-avatars\.com\/api\/.*/,
               handler: "CacheFirst",
@@ -124,7 +117,7 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       host: "0.0.0.0",
-      port: 5173,
+      port: 443,
       https: {
         key: fs.readFileSync(
           path.resolve(__dirname, "certs/localhost-key.pem"),
@@ -132,14 +125,12 @@ export default defineConfig(({ mode }) => {
         cert: fs.readFileSync(path.resolve(__dirname, "certs/localhost.pem")),
       },
       fs: {
-        // Allow serving files from parent directory for OneSignal service workers
         allow: ["..", "."],
       },
     },
     // Configure public directory and file serving
     publicDir: "public",
     build: {
-      // Copy OneSignal service worker files to root
       rollupOptions: {
         input: {
           main: path.resolve(__dirname, "index.html"),

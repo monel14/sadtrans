@@ -137,7 +137,7 @@ export class NotificationService {
   }
 
   /**
-   * Envoie une notification push à un utilisateur spécifique via OneSignal (Supabase Edge Function).
+   * Envoie une notification push à un utilisateur spécifique via le système de notifications push directes.
    * @param userId L'ID de l'utilisateur destinataire
    * @param title Le titre de la notification
    * @param body Le corps (message) de la notification
@@ -178,105 +178,54 @@ export class NotificationService {
     }
 
     try {
-      console.log("Tentative d'envoi de notification push via OneSignal:", {
+      console.log("Tentative d'envoi de notification push directe:", {
         userId,
         title,
         body,
         url,
       });
 
-      // Vérifier si on est en localhost et utiliser le fallback si nécessaire
-      const isLocalhost =
-        window.location.hostname === "localhost" ||
-        window.location.hostname === "127.0.0.1";
-
-      if (isLocalhost) {
-        console.log(
-          "🔧 Mode localhost détecté - utilisation du fallback notification",
-        );
-        // Utiliser le service OneSignal fallback pour localhost
-        const { OneSignalService } = await import("./onesignal.service");
-        const success =
-          await OneSignalService.sendLocalhostFallbackNotification(
-            title,
-            body,
-            url,
-          );
-
-        if (success) {
-          console.log("✅ Notification localhost fallback envoyée avec succès");
-          return true;
-        } else {
-          console.warn(
-            "⚠️ Fallback notification failed, trying OneSignal anyway",
-          );
-        }
-      }
-
-      // OneSignal gère les abonnements server-side, invocation directe de la fonction Edge
+      // Utiliser le nouveau système de notifications push directes
       const { data, error } = await supabase.functions.invoke(
-        "send-onesignal-notification",
+        "push-notifications",
         {
           body: {
             userId: userId,
-            title: title,
-            message: body,
-            url: url || "/",
+            notification: {
+              title: title,
+              body: body,
+              url: url || "/",
+              icon: "/favicon.ico",
+              badge: "/favicon.ico",
+              data: {
+                timestamp: Date.now(),
+                type: "notification"
+              }
+            },
+            saveToHistory: true
           },
         },
       );
 
       if (error) {
         console.error(
-          "Erreur lors de l'envoi de la notification push OneSignal:",
+          "Erreur lors de l'envoi de la notification push:",
           error,
         );
-
-        // Si on est en localhost et OneSignal échoue, essayer le fallback
-        if (isLocalhost) {
-          console.log("🔄 OneSignal failed on localhost, trying fallback...");
-          const { OneSignalService } = await import("./onesignal.service");
-          return await OneSignalService.sendLocalhostFallbackNotification(
-            title,
-            body,
-            url,
-          );
-        }
-
         return false;
       }
 
-      console.log("Notification push OneSignal envoyée avec succès:", {
+      console.log("Notification push envoyée avec succès:", {
         userId,
         title,
         data,
       });
-      return true;
+      return data?.success || false;
     } catch (error) {
       console.error(
-        "Erreur lors de l'envoi de la notification push OneSignal:",
+        "Erreur lors de l'envoi de la notification push:",
         error,
       );
-
-      // Fallback pour localhost en cas d'erreur
-      const isLocalhost =
-        window.location.hostname === "localhost" ||
-        window.location.hostname === "127.0.0.1";
-
-      if (isLocalhost) {
-        console.log("🔄 OneSignal error on localhost, trying fallback...");
-        try {
-          const { OneSignalService } = await import("./onesignal.service");
-          return await OneSignalService.sendLocalhostFallbackNotification(
-            title,
-            body,
-            url,
-          );
-        } catch (fallbackError) {
-          console.error("❌ Fallback notification also failed:", fallbackError);
-        }
-      }
-
       return false;
     }
   }

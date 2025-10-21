@@ -11,7 +11,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
     throw new Error(errorMsg);
 }
 
-// Configuration améliorée pour la gestion automatique des sessions
+// Configuration simplifiée et stable pour Supabase
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     // Activer le rafraîchissement automatique des tokens
@@ -23,7 +23,14 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
   realtime: {
     params: {
-      eventsPerSecond: 2
+      eventsPerSecond: 5, // Réduire pour éviter les problèmes
+      heartbeatIntervalMs: 60000, // Heartbeat toutes les minutes
+      reconnectAfterMs: (tries: number) => Math.min(tries * 2000, 30000) // Reconnexion plus lente
+    }
+  },
+  global: {
+    headers: {
+      'X-Client-Info': 'sadtrans-app'
     }
   }
 });

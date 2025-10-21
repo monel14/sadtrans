@@ -78,9 +78,23 @@ export class DataService {
 
     // --- Realtime Subscriptions ---
     private setupRealtimeSubscriptions() {
-        // Subscribe to transactions changes
+        console.log('🔄 Configuration des souscriptions Realtime...');
+
+        // Vérifier si Realtime est désactivé
+        if (this.realtimeDisabled) {
+            console.log('⚠️ Realtime is disabled, skipping setup');
+            return;
+        }
+
+        // Éviter les souscriptions multiples
+        if (this.channels.size > 0) {
+            console.log('⚠️ Channels already exist, skipping setup');
+            return;
+        }
+
+        // Subscribe to transactions changes avec gestion d'erreur améliorée
         const transactionsChannel = supabase
-            .channel('transactions-changes')
+            .channel('transactions-changes-' + Date.now())
             .on(
                 'postgres_changes',
                 {
@@ -89,28 +103,29 @@ export class DataService {
                     table: 'transactions'
                 },
                 (payload: any) => {
-                    console.log('Transaction change received:', payload);
+                    console.log('🔄 Transaction change received:', payload);
+
+                    // Invalider les caches de manière synchrone
                     this.invalidateTransactionsCache();
-                    
-                    // Dispatch a custom event for UI updates
-                    document.body.dispatchEvent(new CustomEvent('transactionChanged', {
-                        detail: { change: payload }
+                    this.invalidateUsersCache();
+                    this.invalidateAgenciesCache();
+
+                    // Dispatch un seul événement unifié
+                    document.body.dispatchEvent(new CustomEvent('dataUpdated', {
+                        detail: {
+                            type: 'transaction',
+                            payload,
+                            timestamp: Date.now()
+                        }
                     }));
-                    
-                    // Les notifications push sont maintenant gérées par les triggers PostgreSQL
-                    // qui fonctionnent même quand l'interface est fermée
-                    
-                    // Les notifications sont maintenant gérées par le trigger PostgreSQL
-                    // Plus besoin de créer des notifications manuellement ici
-                    /*
-                    // Créer une notification automatiquement quand une transaction est validée
-                    if (payload.new.statut === 'Validé') {
-                        this.createTransactionNotification(payload.new);
-                    }
-                    */
                 }
             )
-            .subscribe();
+            .subscribe((status, err) => {
+                console.log('📡 Transactions channel status:', status);
+                if (err) {
+                    console.error('❌ Transactions channel error:', err);
+                }
+            });
 
         this.channels.set('transactions', transactionsChannel);
 
@@ -127,7 +142,7 @@ export class DataService {
                 (payload) => {
                     console.log('User change received:', payload);
                     this.invalidateUsersCache();
-                    
+
                     // Dispatch a custom event for UI updates
                     document.body.dispatchEvent(new CustomEvent('userChanged', {
                         detail: { change: payload }
@@ -151,7 +166,7 @@ export class DataService {
                 (payload) => {
                     console.log('Partner change received:', payload);
                     this.invalidatePartnersCache();
-                    
+
                     // Dispatch a custom event for UI updates
                     document.body.dispatchEvent(new CustomEvent('partnerChanged', {
                         detail: { change: payload }
@@ -176,7 +191,7 @@ export class DataService {
                     console.log('Agency balance change received:', payload);
                     this.invalidateAgenciesCache();
                     this.invalidateUsersCache(); // Also invalidate users as they are linked to agencies
-                    
+
                     // Dispatch a custom event for UI updates
                     document.body.dispatchEvent(new CustomEvent('agencyBalanceChanged', {
                         detail: { change: payload }
@@ -187,30 +202,40 @@ export class DataService {
 
         this.channels.set('agencies', agenciesChannel);
 
-        // Subscribe to agent recharge requests changes
+        // Subscribe to agent recharge requests changes avec gestion d'erreur améliorée
         const rechargeRequestsChannel = supabase
-            .channel('agent-recharge-requests-changes')
+            .channel('agent-recharge-requests-changes-' + Date.now())
             .on(
                 'postgres_changes',
                 {
-                    event: 'UPDATE',
+                    event: '*',
                     schema: 'public',
                     table: 'agent_recharge_requests'
                 },
                 (payload: any) => {
-                    console.log('Agent recharge request change received:', payload);
+                    console.log('🔄 Agent recharge request change received:', payload);
+
+                    // Invalider les caches de manière synchrone
                     this.invalidateAgentRechargeRequestsCache();
-                    
-                    // Dispatch a custom event for UI updates
-                    document.body.dispatchEvent(new CustomEvent('agentRechargeRequestChanged', {
-                        detail: { change: payload }
+                    this.invalidateUsersCache();
+                    this.invalidateAgenciesCache();
+
+                    // Dispatch un seul événement unifié
+                    document.body.dispatchEvent(new CustomEvent('dataUpdated', {
+                        detail: {
+                            type: 'recharge_request',
+                            payload,
+                            timestamp: Date.now()
+                        }
                     }));
-                    
-                    // Les notifications push pour les demandes de recharge sont maintenant 
-                    // gérées par les triggers PostgreSQL
                 }
             )
-            .subscribe();
+            .subscribe((status, err) => {
+                console.log('📡 Recharge requests channel status:', status);
+                if (err) {
+                    console.error('❌ Recharge requests channel error:', err);
+                }
+            });
 
         this.channels.set('agent-recharge-requests', rechargeRequestsChannel);
 
@@ -226,10 +251,10 @@ export class DataService {
                 },
                 (payload) => {
                     console.log('New notification received:', payload);
-                    
+
                     // Dispatch a custom event for UI updates
                     document.body.dispatchEvent(new CustomEvent('newNotification', {
-                        detail: { 
+                        detail: {
                             notification: {
                                 id: payload.new.id,
                                 text: payload.new.message || 'Notification sans contenu.',
@@ -240,7 +265,7 @@ export class DataService {
                             }
                         }
                     }));
-                    
+
                     // Suppression de l'événement notificationUpdated pour éviter les doublons
                     // L'événement newNotification suffit à mettre à jour l'interface
                 }
@@ -251,9 +276,10 @@ export class DataService {
     }
 
     public unsubscribeAll() {
+        console.log('🔌 Déconnexion de tous les canaux Realtime...');
         this.channels.forEach((channel, key) => {
             supabase.removeChannel(channel);
-            console.log(`Unsubscribed from channel: ${key}`);
+            console.log(`📡 Unsubscribed from channel: ${key}`);
         });
         this.channels.clear();
     }
@@ -262,52 +288,94 @@ export class DataService {
      * Re-subscribe to all realtime channels (call after authentication)
      */
     public reSubscribe(): void {
-        console.log('Re-subscribing to realtime channels after authentication');
+        console.log('🔄 Re-subscribing to realtime channels after authentication');
+
+        // Éviter les re-souscriptions multiples
+        if (this.isReconnecting) {
+            console.log('⚠️ Already reconnecting, skipping...');
+            return;
+        }
+
+        this.isReconnecting = true;
         this.unsubscribeAll();
-        this.setupRealtimeSubscriptions();
+
+        // Vider tous les caches pour forcer le rechargement
+        this.clearAllCaches();
+
+        // Attendre un peu avant de se reconnecter
+        setTimeout(() => {
+            this.setupRealtimeSubscriptions();
+            this.isReconnecting = false;
+        }, 2000);
     }
 
-
-    
     /**
-     * Envoie une notification push à tous les administrateurs
+     * Forcer la reconnexion des canaux Realtime
      */
-    private async sendPushToAdmins(title: string, message: string): Promise<void> {
-        try {
-            console.log('Envoi de notifications push aux administrateurs:', { title, message });
-            
-            // Récupérer tous les administrateurs
-            const { data: admins, error } = await supabase
-                .from('users')
-                .select('id')
-                .or('role.eq.admin_general,role.eq.sous_admin');
-                
-            if (error) {
-                console.error('Erreur lors de la récupération des administrateurs:', error);
-                return;
+    public forceReconnect(): void {
+        console.log('🔄 Force reconnecting to realtime channels...');
+
+        // Éviter les boucles infinies de reconnexion
+        if (this.isReconnecting) {
+            console.log('⚠️ Reconnection already in progress, skipping...');
+            return;
+        }
+
+        this.isReconnecting = true;
+
+        setTimeout(() => {
+            this.reSubscribe();
+            this.isReconnecting = false;
+        }, 2000); // Attendre 2 secondes avant de reconnecter
+    }
+
+    private isReconnecting: boolean = false;
+
+    /**
+     * Vérifier l'état des connexions Realtime
+     */
+    public checkRealtimeStatus(): void {
+        // Éviter les vérifications trop fréquentes
+        const now = Date.now();
+        if (this.lastStatusCheck && (now - this.lastStatusCheck) < 10000) { // 10 secondes minimum
+            return;
+        }
+        this.lastStatusCheck = now;
+
+        console.log('📡 Checking realtime status...');
+        console.log('Active channels:', Array.from(this.channels.keys()));
+
+        // Vérifier l'état de la connexion Supabase
+        const status = supabase.realtime.isConnected() ? 1 : 0;
+        console.log('Supabase realtime connection state:', status);
+
+        // Compter les canaux en erreur
+        let erroredChannels = 0;
+        this.channels.forEach((channel, key) => {
+            const channelState = channel.state;
+            console.log(`Channel ${key} state:`, channelState);
+
+            if (channelState === 'closed' || channelState === 'errored') {
+                console.warn(`⚠️ Channel ${key} is in bad state: ${channelState}`);
+                erroredChannels++;
             }
-            
-            console.log('Administrateurs trouvés:', admins);
-            
-            // Envoyer une notification push à chaque administrateur
-            if (admins && admins.length > 0) {
-                const notificationService = NotificationService.getInstance();
-                for (const admin of admins) {
-                    console.log('Envoi de notification push à l\'administrateur:', admin.id);
-                    const result = await notificationService.sendPushNotification(
-                        admin.id,
-                        title,
-                        message
-                    );
-                    console.log('Résultat de l\'envoi de notification push:', { adminId: admin.id, success: result });
-                }
-            } else {
-                console.log('Aucun administrateur trouvé');
-            }
-        } catch (error) {
-            console.error('Erreur lors de l\'envoi des notifications push aux administrateurs:', error);
+        });
+
+        // Ne reconnecter que si vraiment nécessaire
+        if (erroredChannels > 0 && erroredChannels === this.channels.size) {
+            console.warn('⚠️ All channels are in error state, attempting reconnection...');
+            this.forceReconnect();
+        } else if (status !== 1 && this.channels.size === 0) { // WebSocket.OPEN = 1
+            console.warn('⚠️ No connection and no channels, attempting reconnection...');
+            this.forceReconnect();
         }
     }
+
+    private lastStatusCheck: number = 0;
+
+
+
+
 
     /**
      * Méthode pour forcer une mise à jour des notifications
@@ -538,7 +606,7 @@ export class DataService {
         try {
             const templates = await this.getCommissionTemplates();
             const exceptions: any[] = [];
-            
+
             templates.forEach((template: any) => {
                 if (template.standard_exceptions && Array.isArray(template.standard_exceptions)) {
                     template.standard_exceptions.forEach((exception: any) => {
@@ -549,7 +617,7 @@ export class DataService {
                     });
                 }
             });
-            
+
             return exceptions;
         } catch (error) {
             console.error('Error loading default exceptions:', error);
@@ -582,6 +650,11 @@ export class DataService {
             this._opTypeMap = new Map(opTypes.map(o => [o.id, o]));
         }
         return this._opTypeMap;
+    }
+
+    public async getOperationTypeById(id: string): Promise<OperationType | undefined> {
+        const opTypeMap = await this.getOpTypeMap();
+        return opTypeMap.get(id);
     }
 
     public async getMethodMap(): Promise<Map<string, RechargePaymentMethod>> {
@@ -777,6 +850,86 @@ export class DataService {
 
         const { getAmountFieldName } = await import('../utils/operation-type-helpers');
         return getAmountFieldName(operationType);
+    }
+
+    /**
+     * Force la synchronisation complète des données
+     */
+    public async forceSyncData(): Promise<void> {
+        console.log('🔄 Forcing complete data synchronization...');
+
+        // Vider tous les caches
+        this.clearAllCaches();
+
+        // Pré-charger les données essentielles
+        try {
+            await Promise.all([
+                this.getUsers(),
+                this.getTransactions(),
+                this.getAgentRechargeRequests(),
+                this.getPartners()
+            ]);
+
+            console.log('✅ Data synchronization completed');
+
+            // Notifier l'interface
+            document.body.dispatchEvent(new CustomEvent('dataUpdated', {
+                detail: {
+                    type: 'sync',
+                    timestamp: Date.now()
+                }
+            }));
+
+        } catch (error) {
+            console.error('❌ Data synchronization failed:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Désactiver temporairement Realtime
+     */
+    public disableRealtime(): void {
+        console.log('🔌 Disabling Realtime temporarily...');
+        this.realtimeDisabled = true;
+        this.unsubscribeAll();
+    }
+
+    /**
+     * Réactiver Realtime
+     */
+    public enableRealtime(): void {
+        console.log('🔌 Re-enabling Realtime...');
+        this.realtimeDisabled = false;
+        this.reSubscribe();
+    }
+
+    private realtimeDisabled: boolean = false;
+
+    /**
+     * Nettoyage complet des connexions Realtime (en cas de problème persistant)
+     */
+    public emergencyCleanup(): void {
+        console.log('🚨 Emergency cleanup of Realtime connections...');
+
+        // Arrêter toutes les tentatives de reconnexion
+        this.isReconnecting = false;
+        this.realtimeDisabled = true;
+
+        // Déconnecter tous les canaux
+        this.unsubscribeAll();
+
+        // Déconnecter complètement Supabase Realtime
+        try {
+            supabase.realtime.disconnect();
+        } catch (error) {
+            console.error('Error during emergency disconnect:', error);
+        }
+
+        // Vider tous les caches
+        this.clearAllCaches();
+
+        console.log('🚨 Emergency cleanup completed');
     }
 
 }

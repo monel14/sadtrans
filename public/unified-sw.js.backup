@@ -1,10 +1,10 @@
-// Service Worker SadTrans - Version nettoyée
-// Gestion du cache, support hors ligne, synchronisation en arrière-plan et notifications push natives
+// Service Worker complet pour SadTrans
+// Gestion du cache, support hors ligne, et synchronisation en arrière-plan
 
 // Configuration du service worker
-const CACHE_NAME = 'sadtrans-v2.0.0';
+const CACHE_NAME = 'sadtrans-v1.0.0';
 const OFFLINE_URL = '/offline.html';
-const API_CACHE_NAME = 'sadtrans-api-v2.0.0';
+const API_CACHE_NAME = 'sadtrans-api-v1.0.0';
 
 // Ressources à mettre en cache
 const STATIC_RESOURCES = [
@@ -13,17 +13,18 @@ const STATIC_RESOURCES = [
   '/index.css',
   '/app.js',
   '/offline.html',
-  '/favicon.ico'
+  // Ajouter d'autres ressources statiques ici
 ];
 
 // URLs d'API à mettre en cache
 const API_URLS = [
   '/api/users',
   '/api/partners',
-  '/api/operations'
+  '/api/operations',
+  // Ajouter d'autres endpoints API ici
 ];
 
-console.log('🚀 Service Worker SadTrans (Clean) chargé');
+console.log('🚀 Service Worker SadTrans chargé');
 
 // ========================================
 // 1. INSTALLATION ET MISE À JOUR
@@ -220,6 +221,8 @@ self.addEventListener('message', (event) => {
   console.log('📨 Message reçu dans le service worker:', event.data);
   
   // Traitement des messages personnalisés
+  
+  // Commandes personnalisées
   if (event.data && event.data.type) {
     switch (event.data.type) {
       case 'SKIP_WAITING':
@@ -275,7 +278,7 @@ self.addEventListener('push', (event) => {
     }
   }
   
-  // Configuration des notifications avec données personnalisées
+  // Configuration par défaut des notifications
   const options = {
     body: notificationData.body || 'Nouvelle notification SadTrans',
     icon: notificationData.icon || '/favicon.ico',
@@ -354,4 +357,4 @@ self.addEventListener('unhandledrejection', (event) => {
   console.error('❌ Promise rejetée dans le Service Worker:', event.reason);
 });
 
-console.log('✅ Service Worker SadTrans (Clean) configuré avec succès');
+console.log('✅ Service Worker SadTrans configuré avec succès');

@@ -5,17 +5,15 @@ import { ToastContainer, ToastType } from "./components/ToastContainer";
 import { AuthService } from "./services/auth.service";
 import { DataService } from "./services/data.service";
 import { RefreshService } from "./services/refresh.service";
-import { OneSignalService } from "./services/onesignal.service";
-import "./utils/onesignal-diagnostics";
-import "./utils/onesignal-fix";
-import "./utils/onesignal-sw-fix";
+import { PushNotificationService } from "./services/push-notification.service";
+import { NotificationManagerService } from "./services/notification-manager.service";
+import { ConnectionMonitorService } from "./services/connection-monitor.service";
 import { renderHeader } from "./components/Header";
 import { renderFooter } from "./components/Footer";
 import { navigationLinks } from "./config/navigation";
 import {
   AgentRequestRechargeModal,
   ViewProofModal,
-
   PartnerEditAgentModal,
   AdminEditUserModal,
   AdminEditPartnerModal,
@@ -32,6 +30,7 @@ export class App {
   private mainLayout: any = null;
   private toastContainer: ToastContainer | null = null;
   private statusCheckInterval: number | null = null;
+  private realtimeCheckInterval: number | null = null;
 
   private agentRequestRechargeModal: AgentRequestRechargeModal | null = null;
   private viewProofModal: ViewProofModal | null = null;
@@ -69,52 +68,44 @@ export class App {
 
     const user = await authService.getCurrentUser();
 
-    // Initialisation OneSignal avec gestion d'erreur améliorée
+    // Initialisation du système de notifications push directes
     try {
-      await OneSignalService.init(user?.id || undefined);
-      console.log("OneSignal initialisé avec succès");
+      const pushService = PushNotificationService.getInstance();
+      const notificationManager = NotificationManagerService.getInstance();
+      
+      await pushService.init(user?.id || undefined);
+      await notificationManager.init(user?.id || undefined);
+      
+      console.log("Système de notifications push initialisé avec succès");
     } catch (error) {
       console.warn(
-        "OneSignal initialization failed, continuing without push notifications:",
+        "Push notification initialization failed, continuing without push notifications:",
         error,
       );
-      
-      // Diagnostic automatique en cas d'erreur
-      if (typeof window !== 'undefined' && (window as any).OneSignalDiagnostics) {
-        console.log("🔍 Lancement du diagnostic OneSignal...");
-        setTimeout(() => {
-          (window as any).OneSignalDiagnostics.runCompleteDiagnostic();
-        }, 2000);
-      }
     }
 
     if (user) {
       this.currentUser = user;
 
       try {
-        await OneSignalService.login(user.id);
-        console.log("OneSignal utilisateur connecté");
-      } catch (error) {
-        console.warn("OneSignal login failed, continuing:", error);
+        const pushService = PushNotificationService.getInstance();
+        const notificationManager = NotificationManagerService.getInstance();
         
-        // En cas d'erreur de login, essayer une récupération
-        if (error && typeof error === 'object' && 
-            (error.message?.includes('409') || error.status === 409)) {
-          console.log("🔄 Tentative de récupération après erreur 409...");
-          setTimeout(async () => {
-            try {
-              await OneSignalService.attemptServiceWorkerRecovery();
-            } catch (recoveryError) {
-              console.warn("Récupération échouée:", recoveryError);
-            }
-          }, 3000);
-        }
+        await pushService.login(user.id);
+        await notificationManager.login(user.id);
+        
+        console.log("Utilisateur associé aux notifications push");
+      } catch (error) {
+        console.warn("Push notification login failed, continuing:", error);
       }
 
       DataService.getInstance().reSubscribe();
-      this.renderMainLayout();
+      await this.renderMainLayout();
       this.preFetchData();
       this.startUserStatusCheck();
+      
+      // Démarrer la surveillance des connexions
+      ConnectionMonitorService.getInstance().startMonitoring();
 
       console.log("Application initialisée et utilisateur connecté");
     } else {
@@ -193,6 +184,10 @@ export class App {
       "servicesLoaded",
       this.handleServicesLoaded as EventListener,
     );
+    document.body.addEventListener(
+      "dataUpdated",
+      this.handleDataUpdated as EventListener,
+    );
   }
 
   private showLoginPage() {
@@ -206,13 +201,18 @@ export class App {
     this.currentUser = customEvent.detail.user;
     DataService.getInstance().reSubscribe();
 
-    this.renderMainLayout();
+    await this.renderMainLayout();
     if (this.currentUser) {
       try {
-        await OneSignalService.login(this.currentUser.id);
-        console.log("OneSignal login successful après connexion");
+        const pushService = PushNotificationService.getInstance();
+        const notificationManager = NotificationManagerService.getInstance();
+        
+        await pushService.login(this.currentUser.id);
+        await notificationManager.login(this.currentUser.id);
+        
+        console.log("Push notifications login successful après connexion");
       } catch (error) {
-        console.warn("OneSignal login failed après connexion:", error);
+        console.warn("Push notifications login failed après connexion:", error);
       }
     }
 
@@ -239,20 +239,35 @@ export class App {
         this.handleLogout();
       }
     }, 30000); // Vérifier toutes les 30 secondes
+
+    // Surveillance des connexions Realtime
+    this.realtimeCheckInterval = window.setInterval(() => {
+      const dataService = DataService.getInstance();
+      dataService.checkRealtimeStatus();
+    }, 60000); // Vérifier toutes les minutes
   };
 
   private stopUserStatusCheck = () => {
     if (this.statusCheckInterval) clearInterval(this.statusCheckInterval);
+    if (this.realtimeCheckInterval) clearInterval(this.realtimeCheckInterval);
+    
+    // Arrêter la surveillance des connexions
+    ConnectionMonitorService.getInstance().stopMonitoring();
   };
 
   private handleLogout = async () => {
     this.stopUserStatusCheck();
 
     try {
-      await OneSignalService.logout();
-      console.log("OneSignal logout successful");
+      const pushService = PushNotificationService.getInstance();
+      const notificationManager = NotificationManagerService.getInstance();
+      
+      await pushService.logout();
+      await notificationManager.logout();
+      
+      console.log("Push notifications logout successful");
     } catch (error) {
-      console.warn("OneSignal logout failed:", error);
+      console.warn("Push notifications logout failed:", error);
     }
 
     await AuthService.getInstance().logout();
@@ -274,7 +289,7 @@ export class App {
     }
   };
 
-  private renderMainLayout = () => {
+  private renderMainLayout = async () => {
     if (!this.currentUser) return;
 
     this.rootElement.innerHTML = "";
@@ -324,7 +339,7 @@ export class App {
     this.restoreNavigationState();
 
     // Gestion du bouton de notifications push
-    const setupNotificationButton = () => {
+    const setupNotificationButton = async () => {
       // Le bouton est déjà créé dans le header, on le récupère
       const enablePushBtn = header.querySelector(
         "#enablePushNotifications",
@@ -344,8 +359,10 @@ export class App {
         }
       };
 
-      // Vérifier l'état initial
-      OneSignalService.checkSubscription();
+      // Vérifier l'état initial des notifications push
+      const notificationManager = NotificationManagerService.getInstance();
+      const isSubscribed = await notificationManager.isSubscribed();
+      console.log('État des notifications push:', isSubscribed);
 
       // Écouter les événements de changement d'état
       const handleSubscribed = (event: CustomEvent) => {
@@ -372,7 +389,8 @@ export class App {
         if (!this.currentUser) return;
 
         try {
-          const success = await OneSignalService.enablePushNotifications();
+          const notificationManager = NotificationManagerService.getInstance();
+          const success = await notificationManager.subscribe();
 
           if (success) {
             this.toastContainer?.showToast(
@@ -414,7 +432,7 @@ export class App {
     };
 
     // Appeler la fonction de configuration
-    setupNotificationButton();
+    await setupNotificationButton();
   };
 
   private restoreNavigationState = () => {
@@ -584,4 +602,18 @@ export class App {
 
   private handleOpenViewProofModal = (event: CustomEvent) =>
     this.viewProofModal?.show(event.detail.imageUrl);
+
+  private handleDataUpdated = (event: CustomEvent) => {
+    console.log('🔄 Data updated event received:', event.detail);
+    
+    // Forcer le rechargement de la vue actuelle si nécessaire
+    const currentPageContent = this.mainLayout?.pageContent;
+    if (currentPageContent && this.currentUser) {
+      // Déclencher un événement de mise à jour pour les composants qui écoutent
+      currentPageContent.dispatchEvent(new CustomEvent('forceRefresh', {
+        detail: event.detail,
+        bubbles: true
+      }));
+    }
+  };
 }

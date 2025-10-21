@@ -11,6 +11,39 @@ import { renderPartnerDashboardView } from './PartnerDashboard';
 import { formatAmount } from '../utils/formatters';
 import { hasAmountField, extractAmountFromTransactionData } from '../utils/operation-type-helpers';
 
+/**
+ * Nettoie les données du formulaire pour éviter les erreurs JSON
+ */
+function cleanFormData(data: { [key: string]: any }): { [key: string]: any } {
+    const cleaned: { [key: string]: any } = {};
+    
+    for (const [key, value] of Object.entries(data)) {
+        if (value === null || value === undefined) {
+            cleaned[key] = null;
+        } else if (typeof value === 'string') {
+            // Supprimer les caractères de contrôle et nettoyer
+            cleaned[key] = value.replace(/[\x00-\x1F\x7F-\x9F]/g, '').trim();
+        } else if (typeof value === 'number' && isFinite(value)) {
+            cleaned[key] = value;
+        } else if (typeof value === 'boolean') {
+            cleaned[key] = value;
+        } else if (typeof value === 'object') {
+            // Pour les objets, les convertir en JSON puis parser pour valider
+            try {
+                cleaned[key] = JSON.parse(JSON.stringify(value));
+            } catch (error) {
+                console.warn(`Invalid object data for field ${key}, converting to string`);
+                cleaned[key] = String(value);
+            }
+        } else {
+            // Convertir les autres types en string et nettoyer
+            cleaned[key] = String(value).replace(/[\x00-\x1F\x7F-\x9F]/g, '').trim();
+        }
+    }
+    
+    return cleaned;
+}
+
 // Helper to assign icons to categories
 const categoryIcons: { [key: string]: string } = {
     'Dépôts': 'fa-money-bill-wave',
@@ -1015,6 +1048,9 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
             submitButton.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i>Soumission en cours...`;
         }
 
+        // Nettoyer les données avant envoi
+        const cleanedData = cleanFormData(data);
+
         try {
             // Validation du champ de montant
             if (selectedOperationType.impactsBalance && !hasAmountField(selectedOperationType)) {
@@ -1049,7 +1085,7 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
                 }
             }
 
-            const newTransaction = await api.createTransaction(user.id, selectedOperationType.id, data);
+            const newTransaction = await api.createTransaction(user.id, selectedOperationType.id, cleanedData);
             // Reset submission flag on success
             isSubmitting = false;
             handleCancelNavigation(container, user);
