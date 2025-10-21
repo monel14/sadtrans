@@ -10,11 +10,11 @@ export class ConnectionMonitorService {
     private monitoringInterval: number | null = null;
     private lastDataUpdate: number = Date.now();
     private isMonitoring: boolean = false;
-    
+
     // Seuil de détection de problème (5 minutes sans mise à jour)
     private readonly STALE_DATA_THRESHOLD = 5 * 60 * 1000; // 5 minutes
-    
-    private constructor() {}
+
+    private constructor() { }
 
     public static getInstance(): ConnectionMonitorService {
         if (!ConnectionMonitorService.instance) {
@@ -98,16 +98,16 @@ export class ConnectionMonitorService {
 
         // Vérifier l'état de la connexion WebSocket Supabase
         await this.checkSupabaseConnection();
-        
+
         // Vérifier si l'utilisateur est toujours en ligne
         if (!navigator.onLine) {
             console.warn('⚠️ User is offline');
             return;
         }
-        
+
         // Test de connectivité simple
         try {
-            const response = await fetch(window.location.origin + '/favicon.ico', { 
+            const response = await fetch(window.location.origin + '/favicon.ico', {
                 method: 'HEAD',
                 cache: 'no-cache'
             });
@@ -125,20 +125,24 @@ export class ConnectionMonitorService {
     private async checkSupabaseConnection(): Promise<void> {
         try {
             const { supabase } = await import('./supabase.service');
-            const connection = supabase.realtime.connection;
-            
-            if (connection) {
-                const state = connection.readyState;
-                console.log(`📡 Supabase WebSocket state: ${state}`);
-                
-                // WebSocket.CONNECTING = 0, WebSocket.OPEN = 1, WebSocket.CLOSING = 2, WebSocket.CLOSED = 3
-                if (state === 3 || state === 2) { // CLOSED or CLOSING
-                    console.warn('⚠️ Supabase connection is closed or closing, attempting reconnection...');
-                    this.attemptReconnection();
-                }
+
+            // Check if realtime is connected by trying to get channels
+            const channels = supabase.realtime.channels;
+            console.log(`📡 Supabase Realtime channels: ${channels.length}`);
+
+            // Try to perform a simple database query to test connectivity
+            const { error } = await supabase.from('users').select('count').limit(1);
+
+            if (error) {
+                console.warn('⚠️ Supabase database connectivity issue:', error.message);
+                this.attemptReconnection();
+            } else {
+                console.log('📡 Supabase connection healthy');
             }
+
         } catch (error) {
             console.error('Error checking Supabase connection:', error);
+            this.attemptReconnection();
         }
     }
 
@@ -147,16 +151,16 @@ export class ConnectionMonitorService {
      */
     private attemptReconnection(): void {
         console.log('🔄 Attempting to reconnect services...');
-        
+
         try {
             const dataService = DataService.getInstance();
-            
+
             // Forcer la reconnexion
             dataService.forceReconnect();
-            
+
             // Réinitialiser le timer
             this.lastDataUpdate = Date.now();
-            
+
             // Notifier l'utilisateur
             document.body.dispatchEvent(new CustomEvent('showToast', {
                 detail: {
@@ -164,12 +168,12 @@ export class ConnectionMonitorService {
                     type: 'info'
                 }
             }));
-            
+
             console.log('🔄 Reconnection attempt completed');
-            
+
         } catch (error) {
             console.error('Error during reconnection attempt:', error);
-            
+
             // Notifier l'utilisateur de l'erreur
             document.body.dispatchEvent(new CustomEvent('showToast', {
                 detail: {

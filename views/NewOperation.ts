@@ -1,7 +1,7 @@
 
 
 // Fix: Import 'OperationTypeField' and 'OperationTypeFieldOption' to resolve type errors.
-import { User, OperationType, CommissionTier, CardType, OperationTypeField, OperationTypeFieldOption } from '../models';
+import { User, OperationType, CardType, OperationTypeField, OperationTypeFieldOption } from '../models';
 import { ApiService } from '../services/api.service';
 import { DataService } from '../services/data.service';
 import { createCard } from '../components/Card';
@@ -16,7 +16,7 @@ import { hasAmountField, extractAmountFromTransactionData } from '../utils/opera
  */
 function cleanFormData(data: { [key: string]: any }): { [key: string]: any } {
     const cleaned: { [key: string]: any } = {};
-    
+
     for (const [key, value] of Object.entries(data)) {
         if (value === null || value === undefined) {
             cleaned[key] = null;
@@ -40,7 +40,7 @@ function cleanFormData(data: { [key: string]: any }): { [key: string]: any } {
             cleaned[key] = String(value).replace(/[\x00-\x1F\x7F-\x9F]/g, '').trim();
         }
     }
-    
+
     return cleaned;
 }
 
@@ -93,9 +93,9 @@ function handleCancelNavigation(container: HTMLElement, user: User) {
     }));
 }
 
-async function calculateFeeAndCommissionPreview(montant: number, user: User, opType: OperationType, api: ApiService, formData?: any): Promise<{ 
-    totalFee: number; 
-    partnerShare: number; 
+async function calculateFeeAndCommissionPreview(montant: number, user: User, opType: OperationType, api: ApiService, formData?: any): Promise<{
+    totalFee: number;
+    partnerShare: number;
     feeBreakdown: {
         commissionFee: number;
         additionalFees: Array<{
@@ -106,8 +106,8 @@ async function calculateFeeAndCommissionPreview(montant: number, user: User, opT
     };
 }> {
     const preview = await api.getFeePreview(user.id, opType.id, montant, formData);
-    return { 
-        totalFee: preview.totalFee, 
+    return {
+        totalFee: preview.totalFee,
         partnerShare: preview.partnerShare,
         feeBreakdown: preview.feeBreakdown
     };
@@ -128,7 +128,7 @@ function getPriceFromFieldOptions(field: OperationTypeField, value: string): num
     if (!field.options || !value) return 0;
 
     for (const option of field.options) {
-        if (typeof option === 'object' && option.valeur === value && option.prix !== undefined) {
+        if (typeof option === 'object' && 'valeur' in option && option.valeur === value && 'prix' in option && option.prix !== undefined) {
             return option.prix;
         }
     }
@@ -138,13 +138,13 @@ function getPriceFromFieldOptions(field: OperationTypeField, value: string): num
 
 async function renderDynamicFields(opType: OperationType, container: HTMLElement, cardTypes: CardType[], updateCallback?: () => void) {
     container.innerHTML = '';
-    
+
     if (!opType.fields || opType.fields.length === 0) {
         container.innerHTML = '<p class="text-slate-500 text-center py-4">Aucun champ défini pour cette opération.</p>';
         container.classList.remove('hidden');
         return;
     }
-    
+
     opType.fields.forEach(field => {
         if (field.obsolete) return;
 
@@ -184,7 +184,7 @@ async function renderDynamicFields(opType: OperationType, container: HTMLElement
                 });
             } else if (field.options) {
                 // Supporter les deux formats : string[] et OperationTypeFieldOption[]
-                field.options.forEach(option => {
+                field.options.forEach((option: string | OperationTypeFieldOption) => {
                     if (typeof option === 'string') {
                         // Format simple : string[]
                         select.add(new Option(option, option));
@@ -212,22 +212,22 @@ async function renderDynamicFields(opType: OperationType, container: HTMLElement
             input.id = `op_field_${field.id}`;
             input.name = field.name;
             input.className = 'form-input mt-1';
-            
+
             // Handle image type specially
             if (field.type === 'image') {
                 input.type = 'file';
                 input.accept = 'image/*';
                 input.className += ' file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-violet-50 file:text-violet-700 hover:file:bg-violet-100';
-                
+
                 // Add image preview functionality
                 input.addEventListener('change', (e) => {
                     const fileInput = e.target as HTMLInputElement;
                     const file = fileInput.files?.[0];
-                    
+
                     // Remove existing preview
                     const existingPreview = fieldWrapper.querySelector('.image-preview');
                     existingPreview?.remove();
-                    
+
                     if (file) {
                         // Validate file size
                         const maxSize = 5 * 1024 * 1024; // 5MB
@@ -238,22 +238,22 @@ async function renderDynamicFields(opType: OperationType, container: HTMLElement
                             fileInput.value = '';
                             return;
                         }
-                        
+
                         // Create preview
                         const preview = document.createElement('div');
                         preview.className = 'image-preview mt-2 p-2 border rounded-lg bg-slate-50';
-                        
+
                         const img = document.createElement('img');
                         img.className = 'max-w-full max-h-32 rounded object-contain mx-auto block';
-                        
+
                         const fileName = document.createElement('p');
                         fileName.className = 'text-xs text-slate-500 mt-1 text-center';
                         fileName.textContent = `${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
-                        
+
                         preview.appendChild(img);
                         preview.appendChild(fileName);
                         fieldWrapper.appendChild(preview);
-                        
+
                         // Load image preview
                         const reader = new FileReader();
                         reader.onload = (e) => {
@@ -265,7 +265,7 @@ async function renderDynamicFields(opType: OperationType, container: HTMLElement
             } else {
                 input.type = field.type;
             }
-            
+
             if (field.required) input.required = true;
             if (field.placeholder && field.type !== 'image') input.placeholder = field.placeholder;
             if (field.readonly) input.readOnly = true;
@@ -426,7 +426,7 @@ async function renderDynamicFields(opType: OperationType, container: HTMLElement
                         'Suggestions basées sur l’historique des opérations Décodeurs'
                     );
                 }
-            } catch {}
+            } catch { }
         }
 
         fieldWrapper.appendChild(inputElement);
@@ -439,12 +439,12 @@ async function renderDynamicFields(opType: OperationType, container: HTMLElement
 export async function renderNewOperationView(user: User, operationTypeId?: string, options: { openModal?: boolean } = {}): Promise<HTMLElement> {
     const api = ApiService.getInstance();
     const dataService = DataService.getInstance();
-    
+
     // Get complete user data with agency information
     const allUsers = await dataService.getUsers();
     const fullUser = allUsers.find(u => u.id === user.id) || user;
     // console.log('Full user data:', fullUser);
-    
+
     const container = document.createElement('div');
     container.id = 'new-operation-view';
 
@@ -551,7 +551,7 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
                     formData[element.name] = element.value;
                 }
             });
-            
+
             const preview = await calculateFeeAndCommissionPreview(baseAmount, user, selectedOperationType, api, formData);
             totalFee = preview.totalFee;
             partnerShare = preview.partnerShare;
@@ -579,6 +579,7 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
         let summaryHtml = '';
 
         if (feeApplication === 'inclusive') {
+            const additionalFeesTotal = feeBreakdown.additionalFees?.reduce((sum: number, fee: any) => sum + fee.amount, 0) || 0;
             const netAmount = baseAmount - additionalFeesTotal;
             totalDebit = baseAmount; // Le client paie exactement ce montant
             summaryHtml = `
@@ -587,7 +588,7 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
                     <span class="font-medium text-slate-800">${formatAmount(baseAmount)}</span>
                 </div>
             `;
-            
+
             // Afficher les frais supplémentaires inclus
             if (additionalFeesTotal > 0) {
                 summaryHtml += `
@@ -597,7 +598,7 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
                     </div>
                 `;
             }
-            
+
             // Afficher le détail des frais supplémentaires inclus
             if (feeBreakdown.additionalFees && feeBreakdown.additionalFees.length > 0) {
                 feeBreakdown.additionalFees.forEach((fee: any) => {
@@ -609,15 +610,16 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
                     `;
                 });
             }
-            
+
             summaryHtml += `
                 <div class="flex justify-between items-center text-sm">
                     <span class="text-slate-600">Montant net du service :</span>
                     <span class="font-medium text-slate-800">${formatAmount(netAmount)}</span>
                 </div>
             `;
-            
+
             // Afficher la commission qui s'ajoute (pas incluse)
+            const commissionFee = feeBreakdown.commissionFee || 0;
             if (commissionFee > 0) {
                 summaryHtml += `
                     <div class="flex justify-between items-center text-sm border-t border-slate-200 pt-1 mt-1">
@@ -634,7 +636,7 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
                     <span class="font-medium text-slate-800">${formatAmount(baseAmount)}</span>
                 </div>
             `;
-            
+
             // Afficher le détail des frais
             if (feeBreakdown.commissionFee > 0) {
                 summaryHtml += `
@@ -644,7 +646,7 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
                     </div>
                 `;
             }
-            
+
             // Afficher les frais supplémentaires
             if (feeBreakdown.additionalFees && feeBreakdown.additionalFees.length > 0) {
                 feeBreakdown.additionalFees.forEach((fee: any) => {
@@ -656,7 +658,7 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
                     `;
                 });
             }
-            
+
             // Total des frais
             summaryHtml += `
                 <div class="flex justify-between items-center text-sm border-t border-slate-200 pt-1 mt-1">
@@ -735,7 +737,6 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
 
             if (formulaSelect && optionSelect && nbrMonthInput && totalInput) {
                 const selectedFormula = formulaSelect.value;
-                const selectedOption = optionSelect.value;
 
                 // Récupérer les prix depuis les options sélectionnées
                 const formulaPrice = getPriceFromSelectOption(formulaSelect);
@@ -794,7 +795,6 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
                     newFormulaPriceInput.value = newFormulaPrice.toString();
                 }
 
-                const selectedOption = optionSelect.value;
                 // Récupérer le prix depuis l'option sélectionnée
                 const optionPrice = getPriceFromSelectOption(optionSelect);
 
@@ -947,14 +947,14 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
     container.querySelector('form')?.addEventListener('submit', async (e) => {
         e.preventDefault();
         const form = e.target as HTMLFormElement;
-        
+
         // Prevent double submission
         const now = Date.now();
         if (isSubmitting) {
             console.log('Submission already in progress, ignoring duplicate click');
             return;
         }
-        
+
         // Prevent rapid successive clicks (minimum 2 seconds between submissions)
         if (now - lastSubmissionTime < 2000) {
             console.log('Too soon after last submission, ignoring click');
@@ -963,16 +963,16 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
             }));
             return;
         }
-        
+
         lastSubmissionTime = now;
-        
+
         if (!selectedOperationType) {
             document.body.dispatchEvent(new CustomEvent('showToast', {
                 detail: { message: "Veuillez d'abord sélectionner une opération.", type: 'warning' }
             }));
             return;
         }
-        
+
         // Set submission flag and disable button immediately
         isSubmitting = true;
         submitButton.disabled = true;
@@ -980,10 +980,10 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
 
         const formData = new FormData(form);
         const data: { [key: string]: any } = {};
-        
+
         // Store original button state for error recovery
         const originalBtnHtml = submitButton.innerHTML;
-        
+
         // Handle files separately - upload them first and store URLs
         for (let [key, value] of formData.entries()) {
             if (value instanceof File && value.size > 0) {
@@ -1034,15 +1034,15 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
 
         // Update button state
         submitButton.disabled = true;
-        
+
         // Check if there are any image files to upload
-        const hasImages = Array.from(formData.entries()).some(([key, value]) => value instanceof File && value.size > 0);
+        const hasImages = Array.from(formData.entries()).some(([, value]) => value instanceof File && value.size > 0);
         if (hasImages) {
             submitButton.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i>Upload des images...`;
         } else {
             submitButton.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i>Soumission en cours...`;
         }
-        
+
         // Update button text after image uploads are complete
         if (hasImages) {
             submitButton.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i>Soumission en cours...`;
@@ -1055,9 +1055,9 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
             // Validation du champ de montant
             if (selectedOperationType.impactsBalance && !hasAmountField(selectedOperationType)) {
                 document.body.dispatchEvent(new CustomEvent('showToast', {
-                    detail: { 
-                        message: 'Ce service nécessite un champ de montant configuré. Contactez l\'administrateur.', 
-                        type: 'error' 
+                    detail: {
+                        message: 'Ce service nécessite un champ de montant configuré. Contactez l\'administrateur.',
+                        type: 'error'
                     }
                 }));
                 submitButton.disabled = false;
@@ -1072,9 +1072,9 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
                 const amount = extractAmountFromTransactionData(selectedOperationType, data);
                 if (amount <= 0) {
                     document.body.dispatchEvent(new CustomEvent('showToast', {
-                        detail: { 
-                            message: 'Le montant doit être supérieur à zéro.', 
-                            type: 'error' 
+                        detail: {
+                            message: 'Le montant doit être supérieur à zéro.',
+                            type: 'error'
                         }
                     }));
                     submitButton.disabled = false;
@@ -1085,7 +1085,7 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
                 }
             }
 
-            const newTransaction = await api.createTransaction(user.id, selectedOperationType.id, cleanedData);
+            await api.createTransaction(user.id, selectedOperationType.id, cleanedData);
             // Reset submission flag on success
             isSubmitting = false;
             handleCancelNavigation(container, user);

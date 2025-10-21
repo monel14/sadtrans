@@ -107,14 +107,14 @@ export class AgentRequestRechargeModal extends BaseModal {
         if (!this.form) return;
         const amountInput = $('#rechargeAmount', this.form) as HTMLInputElement;
         const methodSelect = $('#rechargePaymentMethod', this.form) as HTMLSelectElement;
-        
+
         // Summary elements
         const summaryContainer = $('#rechargeCalculationSummary', this.form) as HTMLElement;
         const summaryAmount = $('#summaryAmount', this.form) as HTMLElement;
         const summaryFeeDetails = $('#summaryFeeDetails', this.form) as HTMLElement;
         const summaryFees = $('#summaryFees', this.form) as HTMLElement;
         const summaryTotal = $('#summaryTotal', this.form) as HTMLElement;
-        
+
         const amount = parseFloat(amountInput.value) || 0;
         const selectedMethod = this.paymentMethods.find(m => m.id === methodSelect.value);
 
@@ -136,7 +136,7 @@ export class AgentRequestRechargeModal extends BaseModal {
                 feeDetailsText = `(${selectedMethod.feeValue}%)`;
             }
         }
-        
+
         fees = Math.round(fees);
         const amountToReceive = amount - fees;
 
@@ -147,19 +147,21 @@ export class AgentRequestRechargeModal extends BaseModal {
     }
 
     private attachEventListeners() {
+        if (!this.form) return;
+
         $('#rechargeAmount', this.form)?.addEventListener('input', () => this.updateCalculations());
         $('#rechargePaymentMethod', this.form)?.addEventListener('change', () => this.updateCalculations());
 
         this.form?.addEventListener('submit', async (e) => {
             e.preventDefault();
-            
+
             // Prevent double submission
             const now = Date.now();
             if (this.isSubmitting) {
                 console.log('Agent recharge submission already in progress, ignoring duplicate click');
                 return;
             }
-            
+
             // Prevent rapid successive clicks (minimum 2 seconds between submissions)
             if (now - this.lastSubmissionTime < 2000) {
                 console.log('Too soon after last agent recharge submission, ignoring click');
@@ -168,9 +170,9 @@ export class AgentRequestRechargeModal extends BaseModal {
                 }));
                 return;
             }
-            
+
             this.lastSubmissionTime = now;
-            
+
             if (!this.currentUser || !this.form) {
                 document.body.dispatchEvent(new CustomEvent('showToast', { detail: { message: "Erreur: Utilisateur non identifié.", type: 'error' } }));
                 return;
@@ -198,7 +200,7 @@ export class AgentRequestRechargeModal extends BaseModal {
                 this.isSubmitting = false; // Reset submission flag
                 return;
             }
-            
+
             // Set submission flag and disable button immediately
             this.isSubmitting = true;
             const originalButtonHtml = submitButton.innerHTML;

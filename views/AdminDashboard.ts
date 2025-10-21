@@ -320,15 +320,16 @@ export async function renderAdminDashboardView(user: User): Promise<HTMLElement>
 
     // Écouter les événements de mise à jour des données avec debouncing
     let refreshTimeout: number | null = null;
-    
-    const handleDataUpdate = async (event: CustomEvent) => {
-        console.log('🔄 Dashboard received data update:', event.detail);
-        
+
+    const handleDataUpdate = async (event: Event) => {
+        const customEvent = event as CustomEvent;
+        console.log('🔄 Dashboard received data update:', customEvent.detail);
+
         // Debouncing pour éviter les rechargements multiples
         if (refreshTimeout) {
             clearTimeout(refreshTimeout);
         }
-        
+
         refreshTimeout = window.setTimeout(async () => {
             try {
                 // Vérifier que le container est toujours dans le DOM
@@ -336,7 +337,7 @@ export async function renderAdminDashboardView(user: User): Promise<HTMLElement>
                     console.log('Dashboard container no longer in DOM, skipping refresh');
                     return;
                 }
-                
+
                 console.log('🔄 Refreshing dashboard...');
                 const newDashboard = await renderAdminDashboardView(user);
                 const parent = container.parentElement;
@@ -350,8 +351,8 @@ export async function renderAdminDashboardView(user: User): Promise<HTMLElement>
     };
 
     // Écouter uniquement l'événement unifié dataUpdated
-    container.addEventListener('forceRefresh', handleDataUpdate as EventListener);
-    document.body.addEventListener('dataUpdated', handleDataUpdate as EventListener);
+    container.addEventListener('forceRefresh', handleDataUpdate);
+    document.body.addEventListener('dataUpdated', handleDataUpdate);
 
     // Main event listener for the entire dashboard
     container.addEventListener('click', async e => {

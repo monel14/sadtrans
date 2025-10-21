@@ -23,19 +23,6 @@ export function renderHeader(user: User): HTMLElement {
             <h2 id="pageTitle" class="text-xl sm:text-2xl font-semibold text-slate-800">Tableau de Bord</h2>
         </div>
         <div class="flex items-center space-x-4">
-            <!-- Indicateur de connexion -->
-            <div id="connectionStatus" class="flex items-center" title="État de la connexion">
-                <div id="connectionIndicator" class="w-2 h-2 rounded-full bg-green-500 mr-2"></div>
-                <span id="connectionText" class="text-xs text-slate-500 hidden sm:inline">En ligne</span>
-            </div>
-            <!-- Bouton de synchronisation manuelle -->
-            <button id="syncButton" class="text-slate-500 hover:text-slate-700 focus:outline-none" aria-label="Synchroniser" title="Forcer la synchronisation des données">
-                <i class="fas fa-sync-alt text-lg"></i>
-            </button>
-            <!-- Bouton pour désactiver/réactiver Realtime -->
-            <button id="realtimeToggle" class="text-slate-500 hover:text-slate-700 focus:outline-none" aria-label="Toggle Realtime" title="Activer/Désactiver les mises à jour en temps réel">
-                <i class="fas fa-broadcast-tower text-lg"></i>
-            </button>
             <!-- Bouton pour activer les notifications push -->
             <button id="enablePushNotifications" class="text-slate-500 hover:text-slate-700 focus:outline-none" aria-label="Activer les notifications" title="Activer les notifications push">
                 <i class="fas fa-bell-slash text-xl"></i>
@@ -71,13 +58,6 @@ export function renderHeader(user: User): HTMLElement {
     const list = $('#notificationsList', header);
     // Bouton pour activer les notifications push
     const enablePushBtn = $('#enablePushNotifications', header);
-    // Indicateurs de connexion
-    const connectionIndicator = $('#connectionIndicator', header);
-    const connectionText = $('#connectionText', header);
-    // Bouton de synchronisation
-    const syncButton = $('#syncButton', header);
-    // Bouton de toggle Realtime
-    const realtimeToggle = $('#realtimeToggle', header);
 
     let notifications: Notification[] = [];
     let unreadCount = 0;
@@ -108,7 +88,7 @@ export function renderHeader(user: User): HTMLElement {
     // Vérifier l'état actuel des notifications push
     const checkPushNotificationStatus = async () => {
         console.log('Vérification de l\'état des notifications push');
-        
+
         // D'abord, vérifier l'état persisté
         const persistedState = localStorage.getItem('pushNotificationsEnabled');
         if (persistedState !== null) {
@@ -116,17 +96,17 @@ export function renderHeader(user: User): HTMLElement {
             console.log('État persisté des notifications push:', isSubscribed);
             updatePushNotificationButton(isSubscribed);
         }
-        
+
         // Ensuite, vérifier avec le service pour confirmer
         try {
             const { NotificationManagerService } = await import('../services/notification-manager.service');
             const notificationManager = NotificationManagerService.getInstance();
             const isSubscribed = await notificationManager.isSubscribed();
             console.log('État réel des notifications push:', isSubscribed);
-            
+
             // Mettre à jour le bouton avec l'état réel
             updatePushNotificationButton(isSubscribed);
-            
+
             // Mettre à jour l'état persisté si différent
             if (persistedState !== isSubscribed.toString()) {
                 localStorage.setItem('pushNotificationsEnabled', isSubscribed.toString());
@@ -141,7 +121,7 @@ export function renderHeader(user: User): HTMLElement {
     };
 
     // Écouter l'événement lorsque l'utilisateur n'est pas abonné aux notifications
-    document.body.addEventListener('userNotSubscribedToPush', (event: Event) => {
+    document.body.addEventListener('userNotSubscribedToPush', () => {
         console.log('Événement userNotSubscribedToPush reçu');
         updatePushNotificationButton(false);
         // Persister l'état
@@ -163,146 +143,18 @@ export function renderHeader(user: User): HTMLElement {
         await checkPushNotificationStatus();
     }, 1000);
 
-    // Gestion de l'état de connexion
-    const updateConnectionStatus = (isConnected: boolean, message?: string) => {
-        if (connectionIndicator && connectionText) {
-            if (isConnected) {
-                connectionIndicator.className = 'w-2 h-2 rounded-full bg-green-500 mr-2';
-                connectionText.textContent = message || 'En ligne';
-            } else {
-                connectionIndicator.className = 'w-2 h-2 rounded-full bg-red-500 mr-2';
-                connectionText.textContent = message || 'Hors ligne';
-            }
-        }
-    };
 
-    // Écouter les événements de connexion
-    document.body.addEventListener('dataUpdated', () => {
-        updateConnectionStatus(true, 'Synchronisé');
-        setTimeout(() => updateConnectionStatus(true, 'En ligne'), 2000);
-    });
 
-    // Écouter les événements de déconnexion
-    window.addEventListener('offline', () => {
-        updateConnectionStatus(false, 'Hors ligne');
-    });
 
-    window.addEventListener('online', () => {
-        updateConnectionStatus(true, 'Reconnexion...');
-        // Forcer une reconnexion après être revenu en ligne
-        setTimeout(async () => {
-            try {
-                const { DataService } = await import('../services/data.service');
-                const dataService = DataService.getInstance();
-                dataService.forceReconnect();
-            } catch (error) {
-                console.error('Erreur lors de la reconnexion automatique:', error);
-            }
-        }, 1000);
-    });
 
-    // Gestionnaire pour le bouton de synchronisation
-    syncButton?.addEventListener('click', async () => {
-        if (syncButton) {
-            // Animation de rotation
-            const icon = syncButton.querySelector('i');
-            if (icon) {
-                icon.classList.add('fa-spin');
-                syncButton.disabled = true;
-            }
-            
-            updateConnectionStatus(false, 'Synchronisation...');
-            
-            try {
-                const { DataService } = await import('../services/data.service');
-                const dataService = DataService.getInstance();
-                await dataService.forceSyncData();
-                
-                updateConnectionStatus(true, 'Synchronisé');
-                
-                document.body.dispatchEvent(new CustomEvent('showToast', {
-                    detail: {
-                        message: 'Synchronisation terminée avec succès',
-                        type: 'success'
-                    }
-                }));
-                
-            } catch (error) {
-                console.error('Erreur lors de la synchronisation:', error);
-                updateConnectionStatus(false, 'Erreur sync');
-                
-                document.body.dispatchEvent(new CustomEvent('showToast', {
-                    detail: {
-                        message: 'Erreur lors de la synchronisation',
-                        type: 'error'
-                    }
-                }));
-            } finally {
-                // Arrêter l'animation
-                if (icon) {
-                    icon.classList.remove('fa-spin');
-                    syncButton.disabled = false;
-                }
-                
-                // Remettre l'état normal après 2 secondes
-                setTimeout(() => {
-                    updateConnectionStatus(true, 'En ligne');
-                }, 2000);
-            }
-        }
-    });
 
-    // Gestionnaire pour le bouton de toggle Realtime
-    let realtimeEnabled = true;
-    realtimeToggle?.addEventListener('click', async () => {
-        try {
-            const { DataService } = await import('../services/data.service');
-            const dataService = DataService.getInstance();
-            
-            if (realtimeEnabled) {
-                // Désactiver Realtime
-                dataService.disableRealtime();
-                realtimeToggle.classList.add('text-red-500');
-                realtimeToggle.classList.remove('text-slate-500');
-                realtimeToggle.title = 'Realtime désactivé - Cliquer pour réactiver';
-                realtimeEnabled = false;
-                
-                updateConnectionStatus(false, 'Realtime off');
-                
-                document.body.dispatchEvent(new CustomEvent('showToast', {
-                    detail: {
-                        message: 'Mises à jour temps réel désactivées',
-                        type: 'warning'
-                    }
-                }));
-            } else {
-                // Réactiver Realtime
-                dataService.enableRealtime();
-                realtimeToggle.classList.remove('text-red-500');
-                realtimeToggle.classList.add('text-slate-500');
-                realtimeToggle.title = 'Realtime activé - Cliquer pour désactiver';
-                realtimeEnabled = true;
-                
-                updateConnectionStatus(true, 'Realtime on');
-                
-                document.body.dispatchEvent(new CustomEvent('showToast', {
-                    detail: {
-                        message: 'Mises à jour temps réel réactivées',
-                        type: 'success'
-                    }
-                }));
-            }
-        } catch (error) {
-            console.error('Erreur lors du toggle Realtime:', error);
-        }
-    });
 
     // Gestionnaire d'événement pour le bouton d'activation des notifications push
     enablePushBtn?.addEventListener('click', async () => {
         try {
             const { NotificationManagerService } = await import('../services/notification-manager.service');
             const notificationManager = NotificationManagerService.getInstance();
-            
+
             // Utiliser le système VAPID natif pour activer les notifications push
             const notificationsEnabled = await notificationManager.subscribe();
             if (notificationsEnabled) {
@@ -353,7 +205,7 @@ export function renderHeader(user: User): HTMLElement {
                     // Ajouter le message au Map avec le timestamp actuel
                     recentNotificationMessages.set(notif.text, Date.now());
                 });
-                
+
                 // Nettoyer les anciens messages (plus de 5 minutes)
                 const now = Date.now();
                 for (const [message, timestamp] of recentNotificationMessages.entries()) {
@@ -374,7 +226,7 @@ export function renderHeader(user: User): HTMLElement {
             console.error('Éléments de badge ou de liste non trouvés');
             return;
         }
-        
+
         // Mettre à jour le badge
         badge.textContent = String(unreadCount);
         if (unreadCount > 0) {
@@ -411,7 +263,7 @@ export function renderHeader(user: User): HTMLElement {
                     updateNotifications();
                     // TODO: Call API to mark as read server-side
                 }
-                
+
                 // If the notification has a target, navigate to it
                 if (notif.target) {
                     header.dispatchEvent(new CustomEvent('navigateTo', {
@@ -434,24 +286,24 @@ export function renderHeader(user: User): HTMLElement {
         const now = Date.now();
         const tenSecondsAgo = now - 10000; // 10 secondes
         const fiveMinutesAgo = now - 300000; // 5 minutes
-        
+
         // Vérifier d'abord par ID
         if (receivedNotificationIds.has(notification.id)) {
             console.log('Notification déjà reçue par ID:', notification.id);
             return true;
         }
-        
+
         // Nettoyer les anciens messages
         for (const [message, timestamp] of recentNotificationMessages.entries()) {
             if (timestamp < fiveMinutesAgo) {
                 recentNotificationMessages.delete(message);
             }
         }
-        
+
         // Nettoyer les anciens IDs (plus de 5 minutes)
         // Note: Comme les IDs sont des strings, nous devons les gérer différemment
         // Pour simplifier, nous nous appuyons principalement sur le message
-        
+
         // Vérifier si un message similaire a été reçu récemment
         if (recentNotificationMessages.has(notification.text || notification.message)) {
             const lastReceived = recentNotificationMessages.get(notification.text || notification.message);
@@ -460,11 +312,11 @@ export function renderHeader(user: User): HTMLElement {
                 return true;
             }
         }
-        
+
         // Ajouter cette notification aux Sets
         receivedNotificationIds.add(notification.id);
         recentNotificationMessages.set(notification.text || notification.message, now);
-        
+
         return false;
     };
 
@@ -473,19 +325,19 @@ export function renderHeader(user: User): HTMLElement {
         const customEvent = event as CustomEvent;
         const newNotif = customEvent.detail.notification;
         console.log('Nouvelle notification reçue:', newNotif);
-        
+
         // Vérifier si la notification est un doublon
         if (isDuplicateNotification(newNotif)) {
             console.log('Notification en double, ignorée:', newNotif.id);
             return;
         }
-        
+
         // Vérifier si la notification est pour l'utilisateur courant ou pour tous
         if (newNotif.userId === user.id || newNotif.userId === 'all') {
             notifications.unshift(newNotif);
             if (!newNotif.read) unreadCount++;
             updateNotifications();
-            
+
             // Show toast only for the recipient and only if added
             document.body.dispatchEvent(new CustomEvent('showToast', {
                 detail: {
@@ -504,7 +356,7 @@ export function renderHeader(user: User): HTMLElement {
         // Juste mettre à jour l'affichage avec les données actuelles
         updateNotifications(false);
     };
-    
+
     // Ajouter les écouteurs pour les différents événements qui peuvent déclencher une mise à jour
     document.body.addEventListener('newNotification', handleNewNotification);
     document.body.addEventListener('notificationUpdated', handleNotificationUpdate);
@@ -521,7 +373,7 @@ export function renderHeader(user: User): HTMLElement {
             // Marquer visuellement comme lues (pas de mise à jour serveur dans cette version)
             unreadCount = 0;
             updateNotifications();
-            
+
             // Marquer toutes les notifications comme lues côté serveur
             notificationService.markAllAsRead(user.id).then(success => {
                 if (success) {
