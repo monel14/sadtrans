@@ -42,11 +42,11 @@ function showImageFullscreen(img: HTMLImageElement) {
             </div>
         </div>
     `;
-    
+
     fullscreenModal.addEventListener('click', () => {
         fullscreenModal.remove();
     });
-    
+
     document.body.appendChild(fullscreenModal);
 }
 
@@ -59,7 +59,7 @@ function renderTransactionKeyDetails(transaction: Transaction, opType: Operation
     if (!data) return '';
 
     let details = '';
-    
+
     // Check if there are any image fields with values
     const imageFields = opType.fields.filter(field => field.type === 'image' && data[field.name] && typeof data[field.name] === 'string' && data[field.name].trim() !== '');
     let imagePreview = '';
@@ -92,7 +92,7 @@ function renderTransactionKeyDetails(transaction: Transaction, opType: Operation
             `;
         }
     }
-    
+
     switch (opType.id) {
         case 'op_transfert_nat':
             details = `Bénéficiaire: <strong>${data.nom_beneficiaire || '?'}</strong> (${data.tel_beneficiaire || '?'})`;
@@ -140,14 +140,14 @@ function renderTransactionKeyDetails(transaction: Transaction, opType: Operation
 
 // Helper to render the new transaction list for a category
 function renderTransactionList(
-    items: Transaction[], 
-    user: User, 
+    items: Transaction[],
+    user: User,
     data: { userMap: Map<string, User>, partnerMap: Map<string, Partner>, opTypeMap: Map<string, OperationType> }
 ): HTMLElement {
     const { userMap, partnerMap, opTypeMap } = data;
-    
+
     const container = document.createElement('div');
-    
+
     if (items.length === 0) {
         const p = document.createElement('p');
         p.className = 'text-center text-slate-500 p-4';
@@ -194,12 +194,12 @@ function renderTransactionList(
         } else {
             detailsDiv.innerHTML = `<p class="font-medium text-red-500">Type d'opération inconnu</p>`;
         }
-        
+
         // Right section: Amount & Actions
         const actionsDiv = document.createElement('div');
         actionsDiv.className = 'flex flex-col items-end gap-2 w-full md:w-1/3';
 
-        const amountDisplay = opType?.impactsBalance 
+        const amountDisplay = opType?.impactsBalance
             ? `<p class="font-bold text-lg text-slate-900 text-right">${formatAmount(item.montant_principal)}</p>`
             : `<p class="font-semibold text-md text-right"><span class="badge badge-info">Service</span></p>`;
 
@@ -218,12 +218,12 @@ function renderTransactionList(
                 <!-- Assigned text goes here -->
             </p>
         `;
-        
+
         const buttonsWrapper = actionsDiv.querySelector(`[data-buttons-for="${item.id}"]`);
         if (buttonsWrapper) {
             let actions = '';
             const validateButtonText = opType?.impactsBalance ? 'Valider' : 'Traiter';
-            
+
             if (!item.assignedTo) {
                 actions += `<button class="btn btn-xs btn-success !py-1 !px-2" data-task-id="${item.id}" data-action="assign-self" title="S'assigner"><i class="fas fa-user-plus mr-1"></i>S'assigner</button>`;
                 // Bouton d'assignation à un sous-admin retiré
@@ -232,12 +232,12 @@ function renderTransactionList(
                             <button class="btn btn-xs btn-danger !py-1 !px-2" data-task-id="${item.id}" data-action="reject" title="Rejeter"><i class="fas fa-times"></i> Rejeter</button>
                             <button class="btn btn-xs btn-outline-secondary !py-1 !px-2" data-task-id="${item.id}" data-action="unassign" title="Libérer"><i class="fas fa-undo"></i></button>`;
             } else if (user.role === 'admin_general') {
-                 // Bouton de réassignation à un sous-admin retiré
+                // Bouton de réassignation à un sous-admin retiré
             }
             actions += `<button class="btn btn-xs btn-outline-secondary !py-1 !px-2" data-task-id="${item.id}" data-action="view-details" title="Voir Détails"><i class="fas fa-search-plus"></i></button>`;
             buttonsWrapper.innerHTML = actions;
         }
-        
+
         const assignedText = actionsDiv.querySelector(`[data-assigned-text-for="${item.id}"]`);
         if (assignedText) {
             assignedText.innerHTML = assignedUser ? `Assigné à: <strong>${assignedUser.name}</strong>` : '<span class="badge badge-gray">Non assignée</span>';
@@ -288,12 +288,12 @@ function renderTransactionList(
 export async function renderAdminTransactionValidationView(user: User, defaultFilter: 'unassigned' | 'assigned_to_me' | 'all' = 'unassigned'): Promise<HTMLElement> {
     const api = ApiService.getInstance();
     const dataService = DataService.getInstance();
-    
+
     let allPending: Transaction[] = [];
     let userMap: Map<string, User>;
     let partnerMap: Map<string, Partner>;
     let opTypeMap: Map<string, OperationType>;
-    
+
     const loadData = async () => {
         [allPending, userMap, partnerMap, opTypeMap] = await Promise.all([
             dataService.getTransactions({ status: 'pending' }),
@@ -302,9 +302,9 @@ export async function renderAdminTransactionValidationView(user: User, defaultFi
             dataService.getOpTypeMap()
         ]);
     };
-    
+
     await loadData();
-    
+
     let unassignedItems = allPending.filter(item => !item.assignedTo);
     let myItems = allPending.filter(item => item.assignedTo === user.id);
 
@@ -318,12 +318,12 @@ export async function renderAdminTransactionValidationView(user: User, defaultFi
         const modal = document.createElement('div');
         modal.id = 'transactionDetailsModal';
         modal.className = 'modal visible';
-        
+
         let fieldsHtml = '';
         opType.fields.forEach(field => {
             if (field.obsolete) return;
             const value = transaction.data[field.name];
-            
+
             // Handle image fields specially
             if (field.type === 'image') {
                 if (value && typeof value === 'string' && value.trim() !== '') {
@@ -363,7 +363,7 @@ export async function renderAdminTransactionValidationView(user: User, defaultFi
                 `;
             }
         });
-        
+
         modal.innerHTML = `
             <div class="modal-content modal-lg">
                 <div class="flex justify-between items-center mb-4">
@@ -394,7 +394,7 @@ export async function renderAdminTransactionValidationView(user: User, defaultFi
             if (target === modal || target.closest('[data-modal-close]')) {
                 modal.remove();
             }
-            
+
             // Handle image click for full-screen view
             if (target.tagName === 'IMG' && target.closest('.image-preview-container')) {
                 e.stopPropagation();
@@ -438,7 +438,7 @@ export async function renderAdminTransactionValidationView(user: User, defaultFi
             acc[category].push(transaction);
             return acc;
         }, {} as Record<string, Transaction[]>);
-        
+
         const sortedCategories = Object.keys(groupedTransactions).sort();
 
         for (const category of sortedCategories) {
@@ -461,9 +461,9 @@ export async function renderAdminTransactionValidationView(user: User, defaultFi
                     <i class="fas fa-chevron-down transform transition-transform duration-200 text-slate-400 group-open:rotate-180"></i>
                 </div>
             `;
-            
+
             const listWrapper = renderTransactionList(transactionsInCategory, user, { userMap, partnerMap, opTypeMap });
-            
+
             details.appendChild(summary);
             details.appendChild(listWrapper);
             tableContainer.appendChild(details);
@@ -506,12 +506,23 @@ export async function renderAdminTransactionValidationView(user: User, defaultFi
         await loadData();
         unassignedItems = allPending.filter(item => !item.assignedTo);
         myItems = allPending.filter(item => item.assignedTo === user.id);
-        
+
         const activeTab = card.querySelector('.tabs button.active')?.getAttribute('data-tab') || defaultFilter;
         renderContentForTab(activeTab);
     };
-    
+
+    // Handler pour les événements dataUpdated
+    const handleDataUpdated = (event: Event) => {
+        // Ne traiter que les événements liés aux transactions
+        const customEvent = event as CustomEvent;
+        if (customEvent.detail?.type === 'transaction') {
+            handleTransactionUpdate();
+        }
+    };
+
+    // Écouter les événements de changement de transactions
     document.body.addEventListener('transactionChanged', handleTransactionUpdate);
+    document.body.addEventListener('dataUpdated', handleDataUpdated);
 
     card.addEventListener('change', (e) => {
         const target = e.target as HTMLInputElement;
@@ -528,7 +539,7 @@ export async function renderAdminTransactionValidationView(user: User, defaultFi
             }
         }
     });
-    
+
     card.addEventListener('click', async e => {
         const target = e.target as HTMLElement;
         const actionButton = target.closest<HTMLButtonElement>('[data-action]');
@@ -537,7 +548,7 @@ export async function renderAdminTransactionValidationView(user: User, defaultFi
         const taskId = actionButton.dataset.taskId;
         const action = actionButton.dataset.action;
         if (!taskId) return;
-        
+
         const reloadView = async () => {
             const activeTab = card.querySelector('.tabs button.active')?.getAttribute('data-tab') || defaultFilter;
             const newCardContent = await renderAdminTransactionValidationView(user, activeTab as any);
@@ -550,10 +561,10 @@ export async function renderAdminTransactionValidationView(user: User, defaultFi
         const actionsContainer = listItem.querySelector<HTMLElement>(`[data-buttons-for="${taskId}"]`);
         const formContainer = listItem.querySelector<HTMLElement>(`[data-form-for="${taskId}"]`);
         const assignedText = listItem.querySelector<HTMLElement>(`[data-assigned-text-for="${taskId}"]`);
-        
+
         const transaction = allPending.find(t => t.id === taskId);
-        
-        switch(action) {
+
+        switch (action) {
             case 'assign-self':
                 await api.assignTask(taskId, 'transaction', user.id);
                 await reloadView();
@@ -606,10 +617,10 @@ export async function renderAdminTransactionValidationView(user: User, defaultFi
             case 'validate-confirm':
                 const fileInput = formContainer?.querySelector<HTMLInputElement>('input[type="file"]');
                 const file = fileInput?.files?.[0];
-                
+
                 actionButton.disabled = true;
                 actionButton.innerHTML = `<i class="fas fa-spinner fa-spin"></i>`;
-                
+
                 await api.validateTransaction(taskId, file || null);
                 await reloadView();
                 break;
@@ -629,9 +640,10 @@ export async function renderAdminTransactionValidationView(user: User, defaultFi
 
     await renderContentForTab(defaultFilter);
 
-    // Cleanup listener when view is destroyed
+    // Cleanup listeners when view is destroyed
     const cleanup = () => {
         document.body.removeEventListener('transactionChanged', handleTransactionUpdate);
+        document.body.removeEventListener('dataUpdated', handleDataUpdated);
     };
     (card as any)._cleanup = cleanup;
 
