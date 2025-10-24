@@ -272,7 +272,7 @@ self.addEventListener("message", (event) => {
 // GESTIONNAIRE PUSH AMÉLIORÉ
 // ==========================================
 self.addEventListener('push', (event) => {
-  console.log('🔔 Notification push reçue:', event);
+  // console.log('🔔 Notification push reçue:', event); // Réduit les logs
 
   const promiseChain = (async () => {
     // Timeout de sécurité
@@ -303,11 +303,11 @@ self.addEventListener('push', (event) => {
       if (event.data) {
         try {
           const text = await event.data.text();
-          console.log('📦 Payload brut reçu:', text);
+          // console.log('📦 Payload brut reçu:', text); // Réduit les logs
 
           if (text && text.trim()) {
             const payload = JSON.parse(text);
-            console.log('✅ Payload parsé:', payload);
+            // console.log('✅ Payload parsé:', payload); // Réduit les logs
 
             // Valider et merger avec les données par défaut
             notificationData = validateNotificationData({
@@ -366,10 +366,7 @@ self.addEventListener('push', (event) => {
         timestamp: notificationData.timestamp
       };
 
-      console.log('🚀 Affichage de la notification:', {
-        title: notificationData.title,
-        options: notificationOptions
-      });
+      // console.log('🚀 Affichage de la notification:', { title: notificationData.title }); // Réduit les logs
 
       try {
         // Afficher la notification
@@ -378,14 +375,14 @@ self.addEventListener('push', (event) => {
           notificationOptions
         );
 
-        console.log('✅ Notification affichée avec succès');
+        // console.log('✅ Notification affichée avec succès'); // Réduit les logs
 
         // Notifier tous les clients de la réception
         const clientsList = await self.clients.matchAll({ 
           includeUncontrolled: true 
         });
         
-        console.log(`📱 Notification de ${clientsList.length} clients`);
+        // console.log(`📱 Notification de ${clientsList.length} clients`); // Réduit les logs
         
         for (const client of clientsList) {
           client.postMessage({
