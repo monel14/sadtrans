@@ -1,10 +1,21 @@
 /**
  * Gestionnaire de notifications unifié
  * Interface simple pour envoyer des notifications dans l'application
+ * Utilise Supabase Edge Functions pour l'envoi côté serveur
  */
 
 import { PushNotificationService, NotificationPayload } from './push-notification.service';
-import { PushServerService, ServerNotificationPayload } from './push-server.service';
+import { supabase } from './supabase.service';
+
+export interface ServerNotificationPayload {
+  title: string;
+  body: string;
+  icon?: string;
+  badge?: string;
+  url?: string;
+  data?: any;
+  actions?: Array<{ action: string; title: string; icon?: string }>;
+}
 
 export interface NotificationTemplate {
   transactionValidated: (amount: string, agentName: string) => ServerNotificationPayload;
@@ -18,12 +29,9 @@ export interface NotificationTemplate {
 export class NotificationManagerService {
   private static instance: NotificationManagerService;
   private pushService: PushNotificationService;
-  private serverService: PushServerService;
-  private currentUserId: string | null = null;
 
   private constructor() {
     this.pushService = PushNotificationService.getInstance();
-    this.serverService = PushServerService.getInstance();
   }
 
   public static getInstance(): NotificationManagerService {
@@ -39,9 +47,6 @@ export class NotificationManagerService {
   public async init(userId?: string): Promise<void> {
     try {
       await this.pushService.init(userId);
-      if (userId) {
-        this.currentUserId = userId;
-      }
       console.log('Gestionnaire de notifications initialisé');
     } catch (error) {
       console.error('Erreur lors de l\'initialisation des notifications:', error);
@@ -79,7 +84,6 @@ export class NotificationManagerService {
    * Associe un utilisateur aux notifications
    */
   public async login(userId: string): Promise<void> {
-    this.currentUserId = userId;
     await this.pushService.login(userId);
   }
 
@@ -87,7 +91,6 @@ export class NotificationManagerService {
    * Dissocie l'utilisateur des notifications
    */
   public async logout(): Promise<void> {
-    this.currentUserId = null;
     await this.pushService.logout();
   }
 
@@ -99,12 +102,27 @@ export class NotificationManagerService {
   }
 
   /**
-   * Envoie une notification à un utilisateur spécifique (côté serveur)
+   * Envoie une notification à un utilisateur spécifique via Supabase Edge Function
    */
   public async sendToUser(userId: string, payload: ServerNotificationPayload): Promise<boolean> {
     try {
-      const result = await this.serverService.sendNotificationToUser(userId, payload);
-      return result.success > 0;
+      const { data, error } = await supabase.functions.invoke('send-push-notification', {
+        body: {
+          userId,
+          title: payload.title,
+          body: payload.body,
+          icon: payload.icon,
+          url: payload.url,
+          data: payload.data
+        }
+      });
+
+      if (error) {
+        console.error('Erreur Supabase lors de l\'envoi de notification:', error);
+        return false;
+      }
+
+      return data?.success === true;
     } catch (error) {
       console.error('Erreur lors de l\'envoi de notification:', error);
       return false;
@@ -115,28 +133,53 @@ export class NotificationManagerService {
    * Envoie une notification à plusieurs utilisateurs
    */
   public async sendToUsers(userIds: string[], payload: ServerNotificationPayload): Promise<{ [userId: string]: boolean }> {
+    const results: { [userId: string]: boolean } = {};
+
     try {
-      const results = await this.serverService.sendNotificationToUsers(userIds, payload);
-      const simplifiedResults: { [userId: string]: boolean } = {};
-      
-      for (const [userId, result] of Object.entries(results)) {
-        simplifiedResults[userId] = result.success > 0;
+      // Envoyer les notifications en parallèle
+      const promises = userIds.map(async (userId) => {
+        const success = await this.sendToUser(userId, payload);
+        return { userId, success };
+      });
+
+      const responses = await Promise.all(promises);
+
+      for (const response of responses) {
+        results[response.userId] = response.success;
       }
-      
-      return simplifiedResults;
+
+      return results;
     } catch (error) {
       console.error('Erreur lors de l\'envoi de notifications multiples:', error);
-      return {};
+      return results;
     }
   }
 
   /**
-   * Diffuse une notification à tous les utilisateurs
+   * Diffuse une notification à tous les utilisateurs abonnés
    */
   public async broadcast(payload: ServerNotificationPayload): Promise<{ success: number; failed: number }> {
     try {
-      const result = await this.serverService.broadcastNotification(payload);
-      return { success: result.totalSuccess, failed: result.totalFailed };
+      // Récupérer tous les utilisateurs avec des abonnements push
+      const { data: subscriptions, error } = await supabase
+        .from('push_subscriptions')
+        .select('user_id');
+
+      if (error || !subscriptions) {
+        console.error('Erreur lors de la récupération des abonnements:', error);
+        return { success: 0, failed: 0 };
+      }
+
+      // Extraire les user_ids uniques
+      const userIds = [...new Set(subscriptions.map(sub => sub.user_id))];
+
+      // Envoyer à tous les utilisateurs
+      const results = await this.sendToUsers(userIds, payload);
+
+      const success = Object.values(results).filter(r => r === true).length;
+      const failed = Object.values(results).filter(r => r === false).length;
+
+      return { success, failed };
     } catch (error) {
       console.error('Erreur lors de la diffusion:', error);
       return { success: 0, failed: 0 };
@@ -226,16 +269,50 @@ export class NotificationManagerService {
   }
 
   /**
-   * Obtient les statistiques des notifications
+   * Obtient les statistiques des notifications depuis Supabase
    */
-  public getStats() {
-    return this.serverService.getStats();
+  public async getStats(): Promise<{
+    totalUsers: number;
+    totalSubscriptions: number;
+    averageSubscriptionsPerUser: number;
+  }> {
+    try {
+      const { data: subscriptions, error } = await supabase
+        .from('push_subscriptions')
+        .select('user_id');
+
+      if (error || !subscriptions) {
+        return { totalUsers: 0, totalSubscriptions: 0, averageSubscriptionsPerUser: 0 };
+      }
+
+      const totalSubscriptions = subscriptions.length;
+      const uniqueUsers = new Set(subscriptions.map(sub => sub.user_id));
+      const totalUsers = uniqueUsers.size;
+      const averageSubscriptionsPerUser = totalUsers > 0 ? totalSubscriptions / totalUsers : 0;
+
+      return { totalUsers, totalSubscriptions, averageSubscriptionsPerUser };
+    } catch (error) {
+      console.error('Erreur lors de la récupération des statistiques:', error);
+      return { totalUsers: 0, totalSubscriptions: 0, averageSubscriptionsPerUser: 0 };
+    }
   }
 
   /**
-   * Nettoie les anciens abonnements
+   * Nettoie les anciens abonnements via Supabase Edge Function
    */
-  public cleanupOldSubscriptions(maxAgeInDays: number = 30): void {
-    this.serverService.cleanupOldSubscriptions(maxAgeInDays);
+  public async cleanupOldSubscriptions(maxAgeInDays: number = 30): Promise<void> {
+    try {
+      const { error } = await supabase.functions.invoke('cleanup-push-subscriptions', {
+        body: { maxAgeInDays }
+      });
+
+      if (error) {
+        console.error('Erreur lors du nettoyage des abonnements:', error);
+      } else {
+        console.log('Nettoyage des anciens abonnements terminé');
+      }
+    } catch (error) {
+      console.error('Erreur lors du nettoyage:', error);
+    }
   }
 }

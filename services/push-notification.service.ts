@@ -237,7 +237,16 @@ export class PushNotificationService {
    * Associe un utilisateur à l'abonnement
    */
   public async login(userId: string): Promise<void> {
-    this.userId = userId;
+    // Récupérer le vrai user_id depuis la table users
+    const { data: user } = await supabase
+      .from('users')
+      .select('id')
+      .eq('id', userId)
+      .single();
+    
+    this.userId = user?.id || userId;
+    console.log('🔐 Push notification login with user_id:', this.userId);
+    
     if (this.subscription) {
       await this.sendSubscriptionToServer(this.subscription);
     }
@@ -266,27 +275,36 @@ export class PushNotificationService {
         }
       };
 
-      // Utiliser Supabase pour envoyer l'abonnement
+      console.log('📤 Envoi abonnement pour user_id:', this.userId);
+      console.log('📦 Endpoint:', subscription.endpoint.substring(0, 50) + '...');
 
-      const { data, error } = await supabase.functions.invoke('manage-push-subscription', {
-        body: {
-          userId: this.userId,
-          subscription: subscriptionData
-        }
-      });
+      // Insérer directement dans la table (plus fiable que l'Edge Function)
+      const { data, error } = await supabase
+        .from('push_subscriptions')
+        .upsert({
+          user_id: this.userId,
+          subscription: subscriptionData,
+          browser_info: {
+            browserName: navigator.userAgent.includes('Chrome') ? 'Chrome' : 
+                        navigator.userAgent.includes('Firefox') ? 'Firefox' : 'Unknown',
+            platform: navigator.platform,
+            deviceType: 'desktop',
+            timestamp: new Date().toISOString()
+          },
+          last_used: new Date().toISOString()
+        }, {
+          onConflict: 'user_id,subscription'
+        });
 
       if (error) {
+        console.error('❌ Erreur lors de l\'enregistrement:', error);
         throw new Error(`Erreur Supabase: ${error.message}`);
       }
 
-      if (!data?.success) {
-        throw new Error('Échec de l\'enregistrement de l\'abonnement');
-      }
-
-      console.log('Abonnement push enregistré avec succès');
+      console.log('✅ Abonnement push enregistré avec succès');
 
     } catch (error) {
-      console.error('Erreur lors de l\'envoi au serveur:', error);
+      console.error('❌ Erreur lors de l\'envoi au serveur:', error);
       // Ne pas faire échouer l'abonnement si le serveur n'est pas disponible
     }
   }
