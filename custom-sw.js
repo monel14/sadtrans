@@ -271,22 +271,25 @@ self.addEventListener("message", (event) => {
 // ==========================================
 // GESTIONNAIRE PUSH AMÉLIORÉ
 // ==========================================
+// ==========================================
+// GESTIONNAIRE PUSH ROBUSTE POUR WEB PUSH CHIFFRÉ
+// ==========================================
+
 self.addEventListener('push', (event) => {
-  // console.log('🔔 Notification push reçue:', event); // Réduit les logs
+  console.log('🔔 Notification push reçue');
 
   const promiseChain = (async () => {
     // Timeout de sécurité
     const timeoutPromise = new Promise((resolve) => {
       setTimeout(() => {
-        console.warn('⏱️ Timeout push notification après', CONFIG.PUSH_TIMEOUT, 'ms');
+        console.warn('⏱️ Timeout push notification');
         resolve();
-      }, CONFIG.PUSH_TIMEOUT);
+      }, 10000);
     });
 
     const mainProcess = async () => {
-      // Vérification critique de la permission
-      if (!self.registration || !self.registration.showNotification) {
-        console.error('⛔ Service Worker registration non disponible');
+      // Vérification critique
+      if (!self.registration?.showNotification) {
         throw new Error('Notifications non disponibles');
       }
 
@@ -294,26 +297,50 @@ self.addEventListener('push', (event) => {
       let notificationData = {
         title: 'SadTrans',
         body: 'Nouvelle notification',
-        icon: CONFIG.DEFAULT_ICON,
-        badge: CONFIG.DEFAULT_ICON,
+        icon: '/favicon.ico',
+        badge: '/favicon.ico',
         timestamp: Date.now()
       };
 
-      // Parser le payload de la notification
+      // ✅ AMÉLIORATION : Parsing robuste du payload
       if (event.data) {
         try {
-          const text = await event.data.text();
-          // console.log('📦 Payload brut reçu:', text); // Réduit les logs
+          let payload = null;
 
-          if (text && text.trim()) {
-            const payload = JSON.parse(text);
-            // console.log('✅ Payload parsé:', payload); // Réduit les logs
+          // Méthode 1 : Essayer event.data.json() (recommandé)
+          try {
+            payload = event.data.json();
+            console.log('✅ Payload parsé via .json():', payload);
+          } catch (jsonError) {
+            console.log('⚠️ .json() échoué, essai .text()');
+            
+            // Méthode 2 : Fallback sur .text() puis JSON.parse
+            const text = await event.data.text();
+            console.log('📦 Payload texte brut:', text);
+            
+            if (text && text.trim()) {
+              try {
+                payload = JSON.parse(text);
+                console.log('✅ Payload parsé via JSON.parse:', payload);
+              } catch (parseError) {
+                console.warn('⚠️ JSON.parse échoué, utilisation du texte comme body');
+                // Utiliser le texte brut comme body
+                notificationData.body = text.substring(0, 300).trim();
+              }
+            }
+          }
 
-            // Valider et merger avec les données par défaut
-            notificationData = validateNotificationData({
+          // Merger avec les données parsées
+          if (payload && typeof payload === 'object') {
+            notificationData = {
               ...notificationData,
-              ...payload
-            });
+              ...payload,
+              // S'assurer que les champs critiques existent
+              title: payload.title || notificationData.title,
+              body: payload.body || notificationData.body,
+              icon: payload.icon || notificationData.icon,
+              data: payload.data || {}
+            };
 
             // Formatage spécial selon le type
             if (payload.type) {
@@ -323,29 +350,19 @@ self.addEventListener('push', (event) => {
               );
             }
           }
+
         } catch (error) {
-          console.warn('⚠️ Erreur de parsing payload:', error);
-          
-          // Fallback: essayer de récupérer le texte brut comme body
-          try {
-            const fallbackText = await event.data.text();
-            if (fallbackText && fallbackText.trim()) {
-              notificationData.body = sanitizeString(
-                fallbackText, 
-                CONFIG.MAX_NOTIFICATION_BODY
-              );
-              console.log('🔄 Fallback: utilisation du texte brut comme body');
-            }
-          } catch (fallbackError) {
-            console.error('❌ Impossible de récupérer le payload:', fallbackError);
-          }
+          console.error('❌ Erreur parsing payload:', error);
+          // Continuer avec les données par défaut
         }
+      } else {
+        console.warn('⚠️ Aucun payload dans l\'événement push');
       }
 
       // Validation finale
       notificationData = validateNotificationData(notificationData);
 
-      // Options de notification enrichies
+      // Options de notification
       const notificationOptions = {
         body: notificationData.body,
         icon: notificationData.icon,
@@ -354,19 +371,22 @@ self.addEventListener('push', (event) => {
         data: {
           ...notificationData.data,
           timestamp: notificationData.timestamp,
-          url: validateURL(notificationData.url),
+          url: validateURL(notificationData.url || notificationData.data?.url || '/'),
           version: SW_VERSION
         },
-        actions: notificationData.actions,
-        requireInteraction: notificationData.requireInteraction,
-        silent: notificationData.silent,
-        tag: notificationData.tag,
+        actions: notificationData.actions || [],
+        requireInteraction: notificationData.requireInteraction !== false,
+        silent: Boolean(notificationData.silent),
+        tag: notificationData.tag || 'sadtrans-notification',
         renotify: true,
-        vibrate: notificationData.vibrate,
+        vibrate: notificationData.vibrate || [200, 100, 200],
         timestamp: notificationData.timestamp
       };
 
-      // console.log('🚀 Affichage de la notification:', { title: notificationData.title }); // Réduit les logs
+      console.log('🚀 Affichage notification:', {
+        title: notificationData.title,
+        body: notificationData.body
+      });
 
       try {
         // Afficher la notification
@@ -375,16 +395,14 @@ self.addEventListener('push', (event) => {
           notificationOptions
         );
 
-        // console.log('✅ Notification affichée avec succès'); // Réduit les logs
+        console.log('✅ Notification affichée');
 
-        // Notifier tous les clients de la réception
-        const clientsList = await self.clients.matchAll({ 
+        // Notifier les clients
+        const clients = await self.clients.matchAll({ 
           includeUncontrolled: true 
         });
         
-        // console.log(`📱 Notification de ${clientsList.length} clients`); // Réduit les logs
-        
-        for (const client of clientsList) {
+        for (const client of clients) {
           client.postMessage({
             type: 'PUSH_RECEIVED',
             data: notificationData,
@@ -392,19 +410,19 @@ self.addEventListener('push', (event) => {
           });
         }
 
-      } catch (error) {
-        console.error('❌ Erreur lors de l\'affichage de la notification:', error);
+      } catch (displayError) {
+        console.error('❌ Erreur affichage notification:', displayError);
 
-        // Essayer une notification de fallback simplifiée
+        // Notification de fallback ultra-simple
         try {
           await self.registration.showNotification('SadTrans', {
-            body: 'Nouvelle notification (mode fallback)',
-            icon: CONFIG.DEFAULT_ICON,
+            body: 'Nouvelle notification',
+            icon: '/favicon.ico',
             tag: 'sadtrans-fallback'
           });
-          console.log('🔄 Notification de fallback affichée');
+          console.log('🔄 Notification fallback affichée');
         } catch (fallbackError) {
-          console.error('❌ Erreur même avec notification de fallback:', fallbackError);
+          console.error('❌ Échec total:', fallbackError);
           throw fallbackError;
         }
       }
@@ -416,6 +434,119 @@ self.addEventListener('push', (event) => {
 
   event.waitUntil(promiseChain);
 });
+
+// ==========================================
+// FONCTIONS UTILITAIRES
+// ==========================================
+
+function validateNotificationData(data) {
+  return {
+    title: sanitizeString(data.title || 'SadTrans', 100),
+    body: sanitizeString(data.body || 'Nouvelle notification', 300),
+    icon: data.icon || '/favicon.ico',
+    badge: data.badge || '/favicon.ico',
+    image: data.image || null,
+    data: data.data || {},
+    actions: Array.isArray(data.actions) ? data.actions.slice(0, 2) : [],
+    silent: Boolean(data.silent),
+    vibrate: Array.isArray(data.vibrate) ? data.vibrate : [200, 100, 200],
+    timestamp: data.timestamp || Date.now(),
+    tag: sanitizeString(data.tag || 'sadtrans-notification', 50),
+    requireInteraction: data.requireInteraction !== false,
+    url: data.url || data.data?.url || '/'
+  };
+}
+
+function sanitizeString(str, maxLength) {
+  if (!str || typeof str !== 'string') return '';
+  return str.substring(0, maxLength).trim();
+}
+
+function validateURL(urlString, baseURL) {
+  try {
+    const url = new URL(urlString, baseURL || self.location.origin);
+    if (url.origin === self.location.origin) {
+      return url.href;
+    }
+    console.warn('URL différente origine, fallback sur /', urlString);
+    return self.location.origin + '/';
+  } catch (error) {
+    console.error('URL invalide:', urlString, error);
+    return self.location.origin + '/';
+  }
+}
+
+function formatNotificationByType(type, data) {
+  const formatters = {
+    'transaction': {
+      title: `💰 ${data.title}`,
+      vibrate: [300, 100, 300, 100, 300],
+      actions: [
+        { action: 'view', title: '👁️ Voir', icon: '/favicon.ico' },
+        { action: 'approve', title: '✅ Approuver', icon: '/favicon.ico' }
+      ],
+      requireInteraction: true
+    },
+    'recharge': {
+      title: `🔋 ${data.title}`,
+      vibrate: [200, 100, 200],
+      actions: [
+        { action: 'view', title: '👁️ Voir', icon: '/favicon.ico' }
+      ]
+    },
+    'system': {
+      title: `⚙️ ${data.title}`,
+      vibrate: [100, 50, 100],
+      silent: data.silent || false
+    },
+    'urgent': {
+      title: `🚨 ${data.title}`,
+      vibrate: [500, 200, 500, 200, 500],
+      requireInteraction: true,
+      actions: [
+        { action: 'view', title: '🚨 Voir maintenant', icon: '/favicon.ico' }
+      ]
+    }
+  };
+
+  const formatter = formatters[type];
+  if (formatter) {
+    return { 
+      ...data, 
+      ...formatter,
+      title: formatter.title
+    };
+  }
+
+  return data;
+}
+
+// ==========================================
+// TEST DE DÉBOGAGE
+// ==========================================
+
+// Fonction pour tester manuellement le parsing
+self.testPushParsing = async (mockData) => {
+  console.log('🧪 Test de parsing avec:', mockData);
+  
+  const mockEvent = {
+    data: {
+      json: () => mockData,
+      text: () => JSON.stringify(mockData)
+    }
+  };
+
+  try {
+    let payload = mockEvent.data.json();
+    console.log('✅ Test réussi:', payload);
+    return payload;
+  } catch (error) {
+    console.error('❌ Test échoué:', error);
+    throw error;
+  }
+};
+
+console.log('🔔 Gestionnaire Push chargé - utilisez self.testPushParsing() pour tester');
 
 // ==========================================
 // GESTIONNAIRE CLIC NOTIFICATION
