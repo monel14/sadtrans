@@ -278,23 +278,48 @@ export class PushNotificationService {
       console.log('📤 Envoi abonnement pour user_id:', this.userId);
       console.log('📦 Endpoint:', subscription.endpoint.substring(0, 50) + '...');
 
-      // Insérer directement dans la table (plus fiable que l'Edge Function)
-      const { data, error } = await supabase
+      // Vérifier si l'abonnement existe déjà
+      const { data: existing } = await supabase
         .from('push_subscriptions')
-        .upsert({
-          user_id: this.userId,
-          subscription: subscriptionData,
-          browser_info: {
-            browserName: navigator.userAgent.includes('Chrome') ? 'Chrome' : 
-                        navigator.userAgent.includes('Firefox') ? 'Firefox' : 'Unknown',
-            platform: navigator.platform,
-            deviceType: 'desktop',
-            timestamp: new Date().toISOString()
-          },
-          last_used: new Date().toISOString()
-        }, {
-          onConflict: 'user_id,subscription'
-        });
+        .select('id')
+        .eq('user_id', this.userId)
+        .eq('subscription->>endpoint', subscriptionData.endpoint)
+        .maybeSingle();
+
+      let data, error;
+
+      if (existing) {
+        // Mettre à jour l'abonnement existant
+        const result = await supabase
+          .from('push_subscriptions')
+          .update({
+            subscription: subscriptionData,
+            last_used: new Date().toISOString()
+          })
+          .eq('id', existing.id);
+        
+        data = result.data;
+        error = result.error;
+      } else {
+        // Créer un nouvel abonnement
+        const result = await supabase
+          .from('push_subscriptions')
+          .insert({
+            user_id: this.userId,
+            subscription: subscriptionData,
+            browser_info: {
+              browserName: navigator.userAgent.includes('Chrome') ? 'Chrome' : 
+                          navigator.userAgent.includes('Firefox') ? 'Firefox' : 'Unknown',
+              platform: navigator.platform,
+              deviceType: 'desktop',
+              timestamp: new Date().toISOString()
+            },
+            last_used: new Date().toISOString()
+          });
+        
+        data = result.data;
+        error = result.error;
+      }
 
       if (error) {
         console.error('❌ Erreur lors de l\'enregistrement:', error);
