@@ -412,51 +412,6 @@ self.addEventListener('push', (event) => {
 // FONCTIONS UTILITAIRES (déjà définies plus haut)
 // ==========================================
 
-function formatNotificationByType(type, data) {
-  const formatters = {
-    'transaction': {
-      title: `💰 ${data.title}`,
-      vibrate: [300, 100, 300, 100, 300],
-      actions: [
-        { action: 'view', title: '👁️ Voir', icon: '/favicon.ico' },
-        { action: 'approve', title: '✅ Approuver', icon: '/favicon.ico' }
-      ],
-      requireInteraction: true
-    },
-    'recharge': {
-      title: `🔋 ${data.title}`,
-      vibrate: [200, 100, 200],
-      actions: [
-        { action: 'view', title: '👁️ Voir', icon: '/favicon.ico' }
-      ]
-    },
-    'system': {
-      title: `⚙️ ${data.title}`,
-      vibrate: [100, 50, 100],
-      silent: data.silent || false
-    },
-    'urgent': {
-      title: `🚨 ${data.title}`,
-      vibrate: [500, 200, 500, 200, 500],
-      requireInteraction: true,
-      actions: [
-        { action: 'view', title: '🚨 Voir maintenant', icon: '/favicon.ico' }
-      ]
-    }
-  };
-
-  const formatter = formatters[type];
-  if (formatter) {
-    return {
-      ...data,
-      ...formatter,
-      title: formatter.title
-    };
-  }
-
-  return data;
-}
-
 // ==========================================
 // TEST DE DÉBOGAGE
 // ==========================================

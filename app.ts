@@ -51,7 +51,6 @@ export class App {
 
   public async init() {
     RefreshService.getInstance();
-    await DataService.getInstance().initialize();
 
     this.toastContainer = new ToastContainer();
     document.body.prepend(this.toastContainer.element);
@@ -67,6 +66,11 @@ export class App {
     });
 
     const user = await authService.getCurrentUser();
+
+    // Initialiser DataService seulement si l'utilisateur est authentifié
+    if (user) {
+      await DataService.getInstance().initialize();
+    }
 
     // Initialisation du système de notifications push directes
     try {
@@ -210,6 +214,13 @@ export class App {
     const customEvent = event as CustomEvent;
     this.currentUser = customEvent.detail.user;
     DataService.getInstance().reSubscribe();
+
+    // Initialiser DataService maintenant que l'utilisateur est authentifié
+    try {
+      await DataService.getInstance().initialize();
+    } catch (error) {
+      console.warn("Failed to initialize DataService after login:", error);
+    }
 
     await this.renderMainLayout();
     if (this.currentUser) {
