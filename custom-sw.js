@@ -409,45 +409,8 @@ self.addEventListener('push', (event) => {
 });
 
 // ==========================================
-// FONCTIONS UTILITAIRES
+// FONCTIONS UTILITAIRES (déjà définies plus haut)
 // ==========================================
-
-function validateNotificationData(data) {
-  return {
-    title: sanitizeString(data.title || 'SadTrans', 100),
-    body: sanitizeString(data.body || 'Nouvelle notification', 300),
-    icon: data.icon || '/favicon.ico',
-    badge: data.badge || '/favicon.ico',
-    image: data.image || null,
-    data: data.data || {},
-    actions: Array.isArray(data.actions) ? data.actions.slice(0, 2) : [],
-    silent: Boolean(data.silent),
-    vibrate: Array.isArray(data.vibrate) ? data.vibrate : [200, 100, 200],
-    timestamp: data.timestamp || Date.now(),
-    tag: sanitizeString(data.tag || 'sadtrans-notification', 50),
-    requireInteraction: data.requireInteraction !== false,
-    url: data.url || data.data?.url || '/'
-  };
-}
-
-function sanitizeString(str, maxLength) {
-  if (!str || typeof str !== 'string') return '';
-  return str.substring(0, maxLength).trim();
-}
-
-function validateURL(urlString, baseURL) {
-  try {
-    const url = new URL(urlString, baseURL || self.location.origin);
-    if (url.origin === self.location.origin) {
-      return url.href;
-    }
-    console.warn('URL différente origine, fallback sur /', urlString);
-    return self.location.origin + '/';
-  } catch (error) {
-    console.error('URL invalide:', urlString, error);
-    return self.location.origin + '/';
-  }
-}
 
 function formatNotificationByType(type, data) {
   const formatters = {
