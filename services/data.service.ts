@@ -342,28 +342,22 @@ export class DataService {
         }
         this.lastStatusCheck = now;
 
-        console.log('📡 Checking realtime status...');
-        console.log('Active channels:', Array.from(this.channels.keys()));
-
         // Vérifier l'état de la connexion Supabase
         const status = supabase.realtime.isConnected() ? 1 : 0;
-        console.log('Supabase realtime connection state:', status);
 
         // Compter les canaux en erreur
         let erroredChannels = 0;
         this.channels.forEach((channel, key) => {
             const channelState = channel.state;
-            console.log(`Channel ${key} state:`, channelState);
 
             if (channelState === 'closed' || channelState === 'errored') {
-                console.warn(`⚠️ Channel ${key} is in bad state: ${channelState}`);
                 erroredChannels++;
             }
         });
 
         // Ne reconnecter que si vraiment nécessaire
         if (erroredChannels > 0 && erroredChannels === this.channels.size) {
-            console.warn('⚠️ All channels are in error state, attempting reconnection...');
+
             this.forceReconnect();
         } else if (status !== 1 && this.channels.size === 0) { // WebSocket.OPEN = 1
             console.warn('⚠️ No connection and no channels, attempting reconnection...');
@@ -432,10 +426,10 @@ export class DataService {
 
     public async getAllOperationTypes(): Promise<OperationType[]> {
         if (!this._operationTypes) {
-            console.log('Debug - Loading operation types from API (cache miss)');
+
             this._operationTypes = await this.api.getAllOperationTypes();
         } else {
-            console.log('Debug - Using cached operation types');
+
         }
         return this._operationTypes;
     }
@@ -446,14 +440,14 @@ export class DataService {
     }
 
     public async forceReloadOperationTypes(): Promise<OperationType[]> {
-        console.log('Debug - Force reloading operation types');
+
         this.clearOperationTypesCache();
         return this.getAllOperationTypes();
     }
 
     // Temporary method to force cache clear on page load
     public debugClearAllCaches(): void {
-        console.log('Debug - Clearing all caches');
+
         this._operationTypes = null;
         this._opTypeMap = null;
         this._transactions = null;

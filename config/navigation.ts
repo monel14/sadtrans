@@ -55,11 +55,8 @@ async function loadDynamicServices(): Promise<NavLink[]> {
     try {
         const dataService = DataService.getInstance();
         const operationTypes = await dataService.getAllOperationTypes();
-        console.log('Debug - Operation types loaded:', operationTypes);
-        
         // Filtrer les types d'opérations actives seulement
         const activeOpTypes = operationTypes.filter(ot => ot.status === 'active');
-        console.log('Debug - Active operation types:', activeOpTypes);
         
         // Regrouper les types d'opérations par catégorie
         const groupedOps = activeOpTypes.reduce((acc, op) => {
@@ -70,8 +67,6 @@ async function loadDynamicServices(): Promise<NavLink[]> {
             acc[category].push(op);
             return acc;
         }, {} as Record<string, typeof activeOpTypes>);
-        
-        console.log('Debug - Grouped operations:', groupedOps);
         
         // Créer les liens de navigation pour chaque catégorie
         const serviceLinks: NavLink[] = [];
@@ -117,29 +112,8 @@ async function loadDynamicServices(): Promise<NavLink[]> {
             });
         });
         
-        console.log('Debug - Service links created:', serviceLinks);
-        console.log('Debug - Number of categories:', Object.keys(groupedOps).length);
-        console.log('Debug - Categories:', Object.keys(groupedOps));
-        
-        // Log détaillé des services créés
-        serviceLinks.forEach((link, index) => {
-            console.log(`Debug - Service ${index + 1}:`, {
-                label: link.label,
-                navId: link.navId,
-                icon: link.icon,
-                hasViewFn: !!link.viewFn,
-                childrenCount: link.children ? link.children.length : 0
-            });
-        });
-        
-        // Log détaillé par catégorie
-        Object.keys(groupedOps).forEach(category => {
-            console.log(`Debug - Catégorie "${category}":`, {
-                icon: categoryIcons[category] || 'fa-concierge-bell',
-                services: groupedOps[category].map(op => ({ id: op.id, name: op.name }))
-            });
-        });
-        
+
+
         return serviceLinks;
     } catch (error) {
         console.error('Erreur lors du chargement des services dynamiques:', error);
@@ -208,9 +182,7 @@ let partnerAndAgentServices: NavLink[] = partnerAndAgentServicesStatic; // Initi
 function updateNavigationServices(services: NavLink[]) {
     partnerAndAgentServices = services;
     
-    // Log pour déboguer
-    console.log('Debug - Navigation services updated:', services.length, 'services loaded');
-    console.log('Debug - Services:', services.map(s => ({ label: s.label, navId: s.navId })));
+
     
     // Mettre à jour les liens de navigation pour tous les rôles concernés
     ['agent', 'partner'].forEach(role => {
@@ -222,7 +194,7 @@ function updateNavigationServices(services: NavLink[]) {
         if (servicesIndex !== -1) {
             // Remplacer complètement les services
             roleLinks[servicesIndex].children = services;
-            console.log(`Debug - Updated ${services.length} services for role ${role}`);
+
         }
     });
     
@@ -234,14 +206,14 @@ function updateNavigationServices(services: NavLink[]) {
 
 // Fonction pour recharger les services (utile pour le débogage)
 async function reloadServices() {
-    console.log('Debug - Reloading services...');
+
     const dataService = DataService.getInstance();
     dataService.clearOperationTypesCache(); // Vider le cache
     
     try {
         const services = await loadDynamicServices();
         updateNavigationServices(services);
-        console.log('Debug - Services reloaded successfully');
+
         return services;
     } catch (error) {
         console.error('Erreur lors du rechargement des services:', error);
@@ -318,12 +290,12 @@ async function testServicesLoading() {
 
 // Chargement initial des services dynamiques
 const initializeServices = async () => {
-    console.log('Debug - Initializing dynamic services...');
+
     
     try {
         const services = await loadDynamicServices();
         updateNavigationServices(services);
-        console.log('Debug - Dynamic services initialized successfully');
+
     } catch (error) {
         console.error('Erreur lors du chargement initial des services:', error);
         // En cas d'erreur, utiliser une liste vide plutôt que les services statiques

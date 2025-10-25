@@ -68,12 +68,12 @@ function updateSidebar(sidebar: HTMLElement, user: User): void {
 // Fonction pour charger les services dynamiquement
 async function loadDynamicServicesForSidebar(): Promise<void> {
     try {
-        console.log('Sidebar - Loading dynamic services...');
+
         
         // Forcer le rechargement des services
         if ((window as any).reloadServices) {
             await (window as any).reloadServices();
-            console.log('Sidebar - Services reloaded successfully');
+
         } else {
             console.warn('Sidebar - reloadServices function not available');
         }
@@ -155,7 +155,7 @@ export function renderSidebar(user: User): HTMLElement {
             // Mettre à jour la sidebar après le chargement
             setTimeout(() => {
                 updateSidebar(sidebar, user);
-                console.log('Sidebar - Updated with dynamic services');
+
             }, 100);
             
         } catch (error) {
@@ -170,7 +170,7 @@ export function renderSidebar(user: User): HTMLElement {
     
     // Écouter l'événement de services chargés pour mettre à jour
     document.addEventListener('servicesLoaded', () => {
-        console.log('Sidebar - Services loaded event received');
+
         updateSidebar(sidebar, user);
     });
 

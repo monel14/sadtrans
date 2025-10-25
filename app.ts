@@ -73,13 +73,23 @@ export class App {
       const pushService = PushNotificationService.getInstance();
       const notificationManager = NotificationManagerService.getInstance();
       
+      // Exposer globalement pour le debug (seulement en dev)
+      if (window.location.hostname === 'localhost' || window.location.hostname.includes('netlify')) {
+        (window as any).pushService = pushService;
+        (window as any).notificationManager = notificationManager;
+        console.log('🔧 Debug helpers disponibles:');
+        console.log('  - window.pushService.diagnose() - Diagnostic complet');
+        console.log('  - window.pushService.showLocalNotification({title: "Test", body: "Message"})');
+        console.log('  - window.notificationManager.sendToUser(userId, payload)');
+      }
+      
       await pushService.init(user?.id || undefined);
       await notificationManager.init(user?.id || undefined);
       
-      console.log("Système de notifications push initialisé avec succès");
+      console.log("✅ Système de notifications push initialisé avec succès");
     } catch (error) {
       console.warn(
-        "Push notification initialization failed, continuing without push notifications:",
+        "⚠️ Push notification initialization failed, continuing without push notifications:",
         error,
       );
     }

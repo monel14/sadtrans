@@ -20,11 +20,11 @@ let workboxAvailable = false;
 
 try {
   importScripts('/workbox-sw.js');
-  
+
   if (workbox) {
     console.log('✅ Workbox chargé avec succès');
     workboxAvailable = true;
-    
+
     // Configuration Workbox
     workbox.setConfig({ debug: false });
 
@@ -97,13 +97,13 @@ if (!workboxAvailable) {
         })
         .catch(error => {
           console.error('Fetch failed:', error);
-          
+
           // Retourner une page offline pour les navigations
           if (event.request.mode === 'navigate') {
             return caches.match(CONFIG.OFFLINE_PAGE)
               .then(offlinePage => {
                 if (offlinePage) return offlinePage;
-                
+
                 // Fallback HTML minimal si pas de page offline
                 return new Response(
                   '<html><body><h1>Offline</h1><p>Pas de connexion Internet</p></body></html>',
@@ -111,7 +111,7 @@ if (!workboxAvailable) {
                 );
               });
           }
-          
+
           return new Response('Offline', { status: 503 });
         })
     );
@@ -213,8 +213,8 @@ function formatNotificationByType(type, data) {
 
   const formatter = formatters[type];
   if (formatter) {
-    return { 
-      ...data, 
+    return {
+      ...data,
       ...formatter,
       title: formatter.title // Assurer que le titre formaté est appliqué
     };
@@ -244,9 +244,9 @@ self.addEventListener("message", (event) => {
       case 'GET_VERSION':
         // Répondre avec la version actuelle
         if (event.ports && event.ports[0]) {
-          event.ports[0].postMessage({ 
+          event.ports[0].postMessage({
             version: SW_VERSION,
-            timestamp: Date.now() 
+            timestamp: Date.now()
           });
         }
         break;
@@ -258,9 +258,9 @@ self.addEventListener("message", (event) => {
   // Répondre toujours pour éviter les timeouts
   try {
     if (event.ports && event.ports[0]) {
-      event.ports[0].postMessage({ 
-        received: true, 
-        timestamp: Date.now() 
+      event.ports[0].postMessage({
+        received: true,
+        timestamp: Date.now()
       });
     }
   } catch (error) {
@@ -269,27 +269,16 @@ self.addEventListener("message", (event) => {
 });
 
 // ==========================================
-// GESTIONNAIRE PUSH AMÉLIORÉ
+// GESTIONNAIRE PUSH POUR FCM DATA MESSAGES
 // ==========================================
-// ==========================================
-// GESTIONNAIRE PUSH ROBUSTE POUR WEB PUSH CHIFFRÉ
-// ==========================================
-
 self.addEventListener('push', (event) => {
-  console.log('🔔 Notification push reçue');
+  console.log('🔔 [PUSH] Notification FCM data message reçue');
+  console.log('🔔 [PUSH] event.data exists:', !!event.data);
 
   const promiseChain = (async () => {
-    // Timeout de sécurité
-    const timeoutPromise = new Promise((resolve) => {
-      setTimeout(() => {
-        console.warn('⏱️ Timeout push notification');
-        resolve();
-      }, 10000);
-    });
-
-    const mainProcess = async () => {
-      // Vérification critique
+    try {
       if (!self.registration?.showNotification) {
+        console.error('❌ [PUSH] showNotification non disponible');
         throw new Error('Notifications non disponibles');
       }
 
@@ -299,137 +288,121 @@ self.addEventListener('push', (event) => {
         body: 'Nouvelle notification',
         icon: '/favicon.ico',
         badge: '/favicon.ico',
+        url: '/',
         timestamp: Date.now()
       };
 
-      // ✅ AMÉLIORATION : Parsing robuste du payload
+      // ✅ PARSING DES DATA MESSAGES FCM
       if (event.data) {
+        console.log('📦 [PUSH] Parsing FCM data message...');
+
         try {
-          let payload = null;
+          // FCM data messages arrivent en JSON
+          const payload = event.data.json();
+          console.log('✅ [PUSH] Payload FCM reçu:', JSON.stringify(payload));
 
-          // Méthode 1 : Essayer event.data.json() (recommandé)
-          try {
-            payload = event.data.json();
-            console.log('✅ Payload parsé via .json():', payload);
-          } catch (jsonError) {
-            console.log('⚠️ .json() échoué, essai .text()');
-            
-            // Méthode 2 : Fallback sur .text() puis JSON.parse
-            const text = await event.data.text();
-            console.log('📦 Payload texte brut:', text);
-            
-            if (text && text.trim()) {
-              try {
-                payload = JSON.parse(text);
-                console.log('✅ Payload parsé via JSON.parse:', payload);
-              } catch (parseError) {
-                console.warn('⚠️ JSON.parse échoué, utilisation du texte comme body');
-                // Utiliser le texte brut comme body
-                notificationData.body = text.substring(0, 300).trim();
-              }
-            }
-          }
-
-          // Merger avec les données parsées
-          if (payload && typeof payload === 'object') {
+          // Les data messages FCM ont leurs données dans la propriété racine
+          if (payload) {
             notificationData = {
-              ...notificationData,
-              ...payload,
-              // S'assurer que les champs critiques existent
               title: payload.title || notificationData.title,
               body: payload.body || notificationData.body,
               icon: payload.icon || notificationData.icon,
-              data: payload.data || {}
+              badge: payload.badge || notificationData.badge,
+              url: payload.url || notificationData.url,
+              userId: payload.userId,
+              timestamp: payload.timestamp ? parseInt(payload.timestamp) : Date.now(),
+              type: payload.type
             };
 
             // Formatage spécial selon le type
             if (payload.type) {
-              notificationData = formatNotificationByType(
-                payload.type, 
-                notificationData
-              );
+              notificationData = formatNotificationByType(payload.type, notificationData);
             }
           }
-
         } catch (error) {
-          console.error('❌ Erreur parsing payload:', error);
-          // Continuer avec les données par défaut
+          console.error('❌ [PUSH] Erreur parsing FCM data:', error);
         }
       } else {
-        console.warn('⚠️ Aucun payload dans l\'événement push');
+        console.warn('⚠️ [PUSH] Aucun payload - notification par défaut');
       }
 
       // Validation finale
       notificationData = validateNotificationData(notificationData);
+      console.log('📋 [PUSH] Données validées:', {
+        title: notificationData.title,
+        body: notificationData.body,
+        icon: notificationData.icon,
+        url: notificationData.url
+      });
 
       // Options de notification
       const notificationOptions = {
         body: notificationData.body,
         icon: notificationData.icon,
         badge: notificationData.badge,
-        image: notificationData.image,
         data: {
-          ...notificationData.data,
+          url: validateURL(notificationData.url),
+          userId: notificationData.userId,
           timestamp: notificationData.timestamp,
-          url: validateURL(notificationData.url || notificationData.data?.url || '/'),
           version: SW_VERSION
         },
-        actions: notificationData.actions || [],
-        requireInteraction: notificationData.requireInteraction !== false,
-        silent: Boolean(notificationData.silent),
-        tag: notificationData.tag || 'sadtrans-notification',
+        actions: notificationData.actions || [
+          {
+            action: 'open',
+            title: '👁️ Voir',
+            icon: '/favicon.ico'
+          }
+        ],
+        requireInteraction: true,
+        tag: 'sadtrans-notification',
         renotify: true,
         vibrate: notificationData.vibrate || [200, 100, 200],
         timestamp: notificationData.timestamp
       };
 
-      console.log('🚀 Affichage notification:', {
-        title: notificationData.title,
-        body: notificationData.body
+      console.log('🚀 [PUSH] Affichage de la notification...');
+
+      // Afficher la notification manuellement
+      await self.registration.showNotification(
+        notificationData.title,
+        notificationOptions
+      );
+
+      console.log('✅ [PUSH] Notification affichée avec succès!');
+
+      // Notifier les clients
+      const clients = await self.clients.matchAll({
+        includeUncontrolled: true
       });
 
-      try {
-        // Afficher la notification
-        await self.registration.showNotification(
-          notificationData.title,
-          notificationOptions
-        );
+      console.log(`📱 [PUSH] Notification de ${clients.length} client(s)`);
 
-        console.log('✅ Notification affichée');
-
-        // Notifier les clients
-        const clients = await self.clients.matchAll({ 
-          includeUncontrolled: true 
+      for (const client of clients) {
+        client.postMessage({
+          type: 'PUSH_RECEIVED',
+          data: notificationData,
+          timestamp: Date.now()
         });
-        
-        for (const client of clients) {
-          client.postMessage({
-            type: 'PUSH_RECEIVED',
-            data: notificationData,
-            timestamp: Date.now()
-          });
-        }
-
-      } catch (displayError) {
-        console.error('❌ Erreur affichage notification:', displayError);
-
-        // Notification de fallback ultra-simple
-        try {
-          await self.registration.showNotification('SadTrans', {
-            body: 'Nouvelle notification',
-            icon: '/favicon.ico',
-            tag: 'sadtrans-fallback'
-          });
-          console.log('🔄 Notification fallback affichée');
-        } catch (fallbackError) {
-          console.error('❌ Échec total:', fallbackError);
-          throw fallbackError;
-        }
       }
-    };
 
-    // Exécuter avec timeout
-    await Promise.race([mainProcess(), timeoutPromise]);
+    } catch (error) {
+      console.error('❌ [PUSH] Erreur critique:', error);
+
+      // Notification de fallback
+      try {
+        console.log('🔄 [PUSH] Tentative de notification fallback...');
+        await self.registration.showNotification('SadTrans', {
+          body: 'Nouvelle notification',
+          icon: '/favicon.ico',
+          tag: 'sadtrans-fallback',
+          requireInteraction: true,
+          data: { url: '/' }
+        });
+        console.log('✅ [PUSH] Notification fallback affichée');
+      } catch (fallbackError) {
+        console.error('❌ [PUSH] Échec total:', fallbackError);
+      }
+    }
   })();
 
   event.waitUntil(promiseChain);
@@ -511,8 +484,8 @@ function formatNotificationByType(type, data) {
 
   const formatter = formatters[type];
   if (formatter) {
-    return { 
-      ...data, 
+    return {
+      ...data,
       ...formatter,
       title: formatter.title
     };
@@ -525,28 +498,81 @@ function formatNotificationByType(type, data) {
 // TEST DE DÉBOGAGE
 // ==========================================
 
-// Fonction pour tester manuellement le parsing
-self.testPushParsing = async (mockData) => {
-  console.log('🧪 Test de parsing avec:', mockData);
-  
-  const mockEvent = {
-    data: {
-      json: () => mockData,
-      text: () => JSON.stringify(mockData)
-    }
-  };
+// Fonction pour tester manuellement une notification
+self.testNotification = async (title = 'Test SadTrans', body = 'Ceci est un test') => {
+  console.log('🧪 [TEST] Démarrage du test de notification...');
 
   try {
-    let payload = mockEvent.data.json();
-    console.log('✅ Test réussi:', payload);
-    return payload;
+    if (!self.registration?.showNotification) {
+      throw new Error('showNotification non disponible');
+    }
+
+    await self.registration.showNotification(title, {
+      body: body,
+      icon: '/favicon.ico',
+      badge: '/favicon.ico',
+      tag: 'test-notification',
+      requireInteraction: true,
+      vibrate: [200, 100, 200],
+      data: {
+        url: '/',
+        test: true,
+        timestamp: Date.now()
+      }
+    });
+
+    console.log('✅ [TEST] Notification de test affichée avec succès!');
+    return { success: true, message: 'Notification affichée' };
   } catch (error) {
-    console.error('❌ Test échoué:', error);
-    throw error;
+    console.error('❌ [TEST] Erreur:', error);
+    return { success: false, error: error.message };
   }
 };
 
-console.log('🔔 Gestionnaire Push chargé - utilisez self.testPushParsing() pour tester');
+// Fonction pour simuler un événement push
+self.simulatePush = async (payload = { title: 'Test Push', body: 'Message de test' }) => {
+  console.log('🧪 [SIMULATE] Simulation d\'un événement push...');
+  console.log('📦 [SIMULATE] Payload:', JSON.stringify(payload));
+
+  try {
+    const mockEvent = {
+      data: {
+        json: () => payload,
+        text: () => JSON.stringify(payload)
+      }
+    };
+
+    // Simuler le traitement
+    let notificationData = validateNotificationData({
+      title: payload.title || 'Test',
+      body: payload.body || 'Message de test',
+      icon: payload.icon || '/favicon.ico',
+      data: payload.data || {}
+    });
+
+    await self.registration.showNotification(
+      notificationData.title,
+      {
+        body: notificationData.body,
+        icon: notificationData.icon,
+        badge: '/favicon.ico',
+        tag: 'simulated-push',
+        requireInteraction: true,
+        data: notificationData.data
+      }
+    );
+
+    console.log('✅ [SIMULATE] Push simulé avec succès!');
+    return { success: true, data: notificationData };
+  } catch (error) {
+    console.error('❌ [SIMULATE] Erreur:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+console.log('🔔 Service Worker chargé avec fonctions de test:');
+console.log('   - self.testNotification(title, body)');
+console.log('   - self.simulatePush(payload)');
 
 // ==========================================
 // GESTIONNAIRE CLIC NOTIFICATION
@@ -620,7 +646,7 @@ self.addEventListener('notificationclick', (event) => {
       for (const client of windowClients) {
         try {
           const clientUrl = new URL(client.url);
-          
+
           // Vérifier si c'est la même origine
           if (clientUrl.origin === targetUrl.origin) {
             targetClient = client;
@@ -659,7 +685,7 @@ self.addEventListener('notificationclick', (event) => {
 // ==========================================
 self.addEventListener('notificationclose', (event) => {
   console.log('❌ Notification fermée:', event.notification.tag);
-  
+
   // Optionnel: envoyer des analytics
   self.clients.matchAll({ includeUncontrolled: true })
     .then(clients => {
@@ -679,10 +705,10 @@ self.addEventListener('notificationclose', (event) => {
 // ==========================================
 self.addEventListener('install', (event) => {
   console.log('📦 Installation du Service Worker v' + SW_VERSION);
-  
+
   // Forcer l'activation immédiate
   self.skipWaiting();
-  
+
   // Optionnel: Pré-cacher des ressources critiques
   event.waitUntil(
     caches.open(`${CACHE_PREFIX}-critical`)
@@ -719,13 +745,13 @@ self.addEventListener('activate', (event) => {
           `${CACHE_PREFIX}-static`,
           `${CACHE_PREFIX}-critical`
         ];
-        
+
         // Garder aussi les caches Workbox actuels
-        const workboxCaches = cacheNames.filter(name => 
-          name.startsWith('workbox-') && 
+        const workboxCaches = cacheNames.filter(name =>
+          name.startsWith('workbox-') &&
           !name.includes('temp')
         );
-        
+
         const expectedCaches = [...currentCaches, ...workboxCaches];
 
         return Promise.all(

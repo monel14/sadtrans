@@ -32,8 +32,8 @@ export class PushNotificationService {
   private subscription: PushSubscription | null = null;
   private userId: string | null = null;
 
-  // Configuration VAPID - clé publique unifiée (corrigée)
-  private vapidPublicKey = 'BE5qnTVWH5QXc70sZUqPOkeKURd6iSmy33qQ-lpmbRNwGACTnUIubTZ8CEPuGAjgIKNh0Fqq3lE1JxqJzR1pQWo';
+  // Configuration VAPID - clé publique générée
+  private vapidPublicKey = 'BM8RpNclAOSp6Fa24SDgb9M12lZIfRLHphItYjCL351VsvYgzzQ2GboXhUFk32jn53IL2wAE--fSUG-doXMec9A';
 
   private constructor() { }
 
@@ -68,12 +68,96 @@ export class PushNotificationService {
         url: window.location.href
       });
 
+      // Écouter les messages du Service Worker
+      navigator.serviceWorker.addEventListener('message', (event) => {
+        console.log('📨 Message du SW:', event.data);
+
+        if (event.data.type === 'SW_ACTIVATED') {
+          console.log('✅ Service Worker activé, version:', event.data.version);
+        }
+      });
+
       // Enregistrer le service worker
-      this.registration = await navigator.serviceWorker.register('/custom-sw.js');
-      console.log('Service Worker enregistré:', this.registration);
+      this.registration = await navigator.serviceWorker.register('/custom-sw.js', {
+        updateViaCache: 'none' // Force la vérification des mises à jour
+      });
+      console.log('✅ Service Worker enregistré:', this.registration);
+
+      // Gérer les mises à jour du SW
+      this.registration.addEventListener('updatefound', () => {
+        const newWorker = this.registration!.installing;
+        console.log('🔄 Nouvelle version du SW détectée');
+
+        newWorker?.addEventListener('statechange', () => {
+          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+            console.log('🆕 Nouvelle version disponible, activation...');
+            newWorker.postMessage({ type: 'SKIP_WAITING' });
+          }
+        });
+      });
 
       // Attendre que le service worker soit prêt
       await navigator.serviceWorker.ready;
+      console.log('✅ Service Worker prêt');
+
+      // Vérifier l'état du contrôleur
+      if (!navigator.serviceWorker.controller) {
+        console.warn('⚠️ SW pas encore en contrôle de la page');
+
+        // Si le SW est actif mais ne contrôle pas la page
+        if (this.registration.active) {
+          console.log('🔄 SW actif mais pas en contrôle - rechargement nécessaire');
+
+          // Vérifier si on a déjà rechargé récemment
+          const lastReload = sessionStorage.getItem('sw-last-reload');
+          const now = Date.now();
+
+          if (!lastReload || (now - parseInt(lastReload)) > 5000) {
+            // Pas de rechargement récent, on recharge
+            sessionStorage.setItem('sw-last-reload', now.toString());
+            console.log('🔄 Rechargement de la page pour activer le SW...');
+
+            // Attendre un peu pour que les logs soient visibles
+            setTimeout(() => {
+              window.location.reload();
+            }, 500);
+            return;
+          } else {
+            console.warn('⚠️ Rechargement récent détecté, on continue sans contrôleur');
+            console.warn('💡 Essayez de recharger manuellement la page (F5)');
+          }
+        } else if (this.registration.installing || this.registration.waiting) {
+          console.log('⏳ SW en cours d\'installation/attente');
+
+          // Attendre que le SW soit activé
+          const waitForActive = new Promise<void>((resolve) => {
+            const checkActive = () => {
+              if (this.registration!.active) {
+                console.log('✅ SW maintenant actif');
+                resolve();
+              } else {
+                setTimeout(checkActive, 100);
+              }
+            };
+            checkActive();
+
+            // Timeout après 5 secondes
+            setTimeout(() => resolve(), 5000);
+          });
+
+          await waitForActive;
+
+          // Maintenant recharger
+          console.log('🔄 Rechargement pour activer le SW...');
+          setTimeout(() => window.location.reload(), 500);
+          return;
+        }
+      } else {
+        console.log('✅ SW contrôle la page');
+        sessionStorage.removeItem('sw-last-reload');
+      }
+
+      console.log('🎮 État final - Controller:', navigator.serviceWorker.controller ? 'Actif ✅' : 'Null ❌');
 
       if (userId) {
         this.userId = userId;
@@ -243,10 +327,10 @@ export class PushNotificationService {
       .select('id')
       .eq('id', userId)
       .single();
-    
+
     this.userId = user?.id || userId;
     console.log('🔐 Push notification login with user_id:', this.userId);
-    
+
     if (this.subscription) {
       await this.sendSubscriptionToServer(this.subscription);
     }
@@ -278,15 +362,14 @@ export class PushNotificationService {
       console.log('📤 Envoi abonnement pour user_id:', this.userId);
       console.log('📦 Endpoint:', subscription.endpoint.substring(0, 50) + '...');
 
-      // Vérifier si l'abonnement existe déjà
+      // Vérifier si l'abonnement existe déjà (utiliser une requête RPC ou filter)
       const { data: existing } = await supabase
         .from('push_subscriptions')
-        .select('id')
-        .eq('user_id', this.userId)
-        .eq('subscription->>endpoint', subscriptionData.endpoint)
+        .select('id, user_id')
+        .filter('subscription->>endpoint', 'eq', subscriptionData.endpoint)
         .maybeSingle();
 
-      let data, error;
+      let error;
 
       if (existing) {
         // Mettre à jour l'abonnement existant
@@ -297,8 +380,7 @@ export class PushNotificationService {
             last_used: new Date().toISOString()
           })
           .eq('id', existing.id);
-        
-        data = result.data;
+
         error = result.error;
       } else {
         // Créer un nouvel abonnement
@@ -308,16 +390,15 @@ export class PushNotificationService {
             user_id: this.userId,
             subscription: subscriptionData,
             browser_info: {
-              browserName: navigator.userAgent.includes('Chrome') ? 'Chrome' : 
-                          navigator.userAgent.includes('Firefox') ? 'Firefox' : 'Unknown',
+              browserName: navigator.userAgent.includes('Chrome') ? 'Chrome' :
+                navigator.userAgent.includes('Firefox') ? 'Firefox' : 'Unknown',
               platform: navigator.platform,
               deviceType: 'desktop',
               timestamp: new Date().toISOString()
             },
             last_used: new Date().toISOString()
           });
-        
-        data = result.data;
+
         error = result.error;
       }
 
@@ -393,6 +474,68 @@ export class PushNotificationService {
       binary += String.fromCharCode(bytes[i]);
     }
     return window.btoa(binary);
+  }
+
+  /**
+   * Diagnostic du Service Worker (pour debug)
+   */
+  public async diagnose(): Promise<void> {
+    console.log('🔍 === DIAGNOSTIC SERVICE WORKER ===');
+    console.log('');
+
+    console.log('📋 Support:');
+    console.log('  - Service Worker:', 'serviceWorker' in navigator ? '✅' : '❌');
+    console.log('  - Push Manager:', 'PushManager' in window ? '✅' : '❌');
+    console.log('  - Notifications:', 'Notification' in window ? '✅' : '❌');
+    console.log('');
+
+    console.log('🌐 Environnement:');
+    console.log('  - Protocol:', window.location.protocol);
+    console.log('  - Host:', window.location.host);
+    console.log('  - En ligne:', navigator.onLine ? '✅' : '❌');
+    console.log('');
+
+    if ('serviceWorker' in navigator) {
+      console.log('🎮 État du Service Worker:');
+      console.log('  - Controller:', navigator.serviceWorker.controller ? '✅ Actif' : '❌ Null');
+
+      if (this.registration) {
+        console.log('  - Registration:', '✅ Présent');
+        console.log('  - Installing:', this.registration.installing ? '⏳ Oui' : '✅ Non');
+        console.log('  - Waiting:', this.registration.waiting ? '⏳ Oui' : '✅ Non');
+        console.log('  - Active:', this.registration.active ? '✅ Oui' : '❌ Non');
+
+        if (this.registration.active) {
+          console.log('  - State:', this.registration.active.state);
+        }
+      } else {
+        console.log('  - Registration:', '❌ Absent');
+      }
+      console.log('');
+
+      console.log('🔔 Notifications:');
+      console.log('  - Permission:', Notification.permission);
+
+      if (this.registration) {
+        const subscription = await this.registration.pushManager.getSubscription();
+        console.log('  - Subscription:', subscription ? '✅ Actif' : '❌ Absent');
+
+        if (subscription) {
+          console.log('  - Endpoint:', subscription.endpoint.substring(0, 50) + '...');
+        }
+      }
+      console.log('');
+
+      console.log('👤 Utilisateur:');
+      console.log('  - User ID:', this.userId || '❌ Non défini');
+    }
+
+    console.log('');
+    console.log('💡 Actions disponibles:');
+    console.log('  - Tester notification: await pushService.showLocalNotification({title: "Test", body: "Message"})');
+    console.log('  - Forcer activation: navigator.serviceWorker.controller?.postMessage({type: "SKIP_WAITING"})');
+    console.log('  - Recharger page: window.location.reload()');
+    console.log('');
   }
 
 

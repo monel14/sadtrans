@@ -28,11 +28,11 @@ export class ConnectionMonitorService {
      */
     public startMonitoring(): void {
         if (this.isMonitoring) {
-            console.log('📡 Connection monitoring already active');
+
             return;
         }
 
-        console.log('📡 Starting connection monitoring...');
+
         this.isMonitoring = true;
         this.lastDataUpdate = Date.now();
 
@@ -46,7 +46,7 @@ export class ConnectionMonitorService {
             await this.checkConnectionHealth();
         }, 60000); // Vérifier toutes les minutes
 
-        console.log('📡 Connection monitoring started');
+
     }
 
     /**
@@ -57,7 +57,7 @@ export class ConnectionMonitorService {
             return;
         }
 
-        console.log('📡 Stopping connection monitoring...');
+
         this.isMonitoring = false;
 
         if (this.monitoringInterval) {
@@ -70,7 +70,7 @@ export class ConnectionMonitorService {
         document.body.removeEventListener('transactionChanged', this.handleDataUpdate);
         document.body.removeEventListener('agentRechargeRequestChanged', this.handleDataUpdate);
 
-        console.log('📡 Connection monitoring stopped');
+
     }
 
     /**
@@ -88,7 +88,7 @@ export class ConnectionMonitorService {
         const now = Date.now();
         const timeSinceLastUpdate = now - this.lastDataUpdate;
 
-        console.log(`📡 Connection health check - Time since last update: ${Math.round(timeSinceLastUpdate / 1000)}s`);
+
 
         // Vérifier si les données sont obsolètes
         if (timeSinceLastUpdate > this.STALE_DATA_THRESHOLD) {
@@ -128,7 +128,7 @@ export class ConnectionMonitorService {
 
             // Check if realtime is connected by trying to get channels
             const channels = supabase.realtime.channels;
-            console.log(`📡 Supabase Realtime channels: ${channels.length}`);
+
 
             // Try to perform a simple database query to test connectivity
             const { error } = await supabase.from('users').select('count').limit(1);
@@ -137,7 +137,7 @@ export class ConnectionMonitorService {
                 console.warn('⚠️ Supabase database connectivity issue:', error.message);
                 this.attemptReconnection();
             } else {
-                console.log('📡 Supabase connection healthy');
+
             }
 
         } catch (error) {
@@ -188,7 +188,7 @@ export class ConnectionMonitorService {
      * Force une vérification immédiate de la santé des connexions
      */
     public async forceHealthCheck(): Promise<void> {
-        console.log('📡 Forcing connection health check...');
+
         await this.checkConnectionHealth();
     }
 
