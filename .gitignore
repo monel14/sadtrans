@@ -25,3 +25,6 @@ dist-ssr
 .kiro/settings/mcp.json
 .kilocode/mcp.json
 supabase
+
+# Push server (deployed separately on Render)
+push-server/
