@@ -31,7 +31,7 @@ console.log('🚀 Service Worker SadTrans (Clean) chargé');
 
 self.addEventListener('install', (event) => {
   console.log('📦 Installation du Service Worker');
-  
+
   event.waitUntil(
     (async () => {
       try {
@@ -39,7 +39,7 @@ self.addEventListener('install', (event) => {
         const cache = await caches.open(CACHE_NAME);
         console.log('💾 Mise en cache des ressources statiques');
         await cache.addAll(STATIC_RESOURCES);
-        
+
         // Forcer l'activation immédiate
         await self.skipWaiting();
         console.log('✅ Service Worker installé avec succès');
@@ -52,23 +52,23 @@ self.addEventListener('install', (event) => {
 
 self.addEventListener('activate', (event) => {
   console.log('🔄 Activation du Service Worker');
-  
+
   event.waitUntil(
     (async () => {
       try {
         // Nettoyer les anciens caches
         const cacheNames = await caches.keys();
-        const oldCaches = cacheNames.filter(name => 
+        const oldCaches = cacheNames.filter(name =>
           name.startsWith('sadtrans-') && name !== CACHE_NAME && name !== API_CACHE_NAME
         );
-        
+
         await Promise.all(
           oldCaches.map(cacheName => {
             console.log('🗑️ Suppression de l\'ancien cache:', cacheName);
             return caches.delete(cacheName);
           })
         );
-        
+
         // Prendre le contrôle de tous les clients
         await self.clients.claim();
         console.log('✅ Service Worker activé avec succès');
@@ -86,28 +86,28 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
-  
+
   // Ignorer les requêtes non-HTTP
   if (!request.url.startsWith('http')) return;
-  
+
   // Stratégie pour les ressources statiques (Cache First)
   if (STATIC_RESOURCES.some(resource => url.pathname === resource)) {
     event.respondWith(cacheFirst(request));
     return;
   }
-  
+
   // Stratégie pour les API (Network First avec fallback)
   if (url.pathname.startsWith('/api/') || url.hostname.includes('supabase.co')) {
     event.respondWith(networkFirstWithCache(request));
     return;
   }
-  
+
   // Stratégie pour les pages HTML (Network First avec fallback offline)
   if (request.destination === 'document') {
     event.respondWith(networkFirstWithOffline(request));
     return;
   }
-  
+
   // Stratégie par défaut (Stale While Revalidate)
   event.respondWith(staleWhileRevalidate(request));
 });
@@ -119,7 +119,7 @@ async function cacheFirst(request) {
     if (cachedResponse) {
       return cachedResponse;
     }
-    
+
     const networkResponse = await fetch(request);
     if (networkResponse.ok) {
       const cache = await caches.open(CACHE_NAME);
@@ -171,14 +171,15 @@ async function networkFirstWithOffline(request) {
 async function staleWhileRevalidate(request) {
   const cache = await caches.open(CACHE_NAME);
   const cachedResponse = await cache.match(request);
-  
+
   const fetchPromise = fetch(request).then(networkResponse => {
-    if (networkResponse.ok) {
+    // Ne mettre en cache que les requêtes GET réussies
+    if (networkResponse.ok && request.method === 'GET') {
       cache.put(request, networkResponse.clone());
     }
     return networkResponse;
   }).catch(() => cachedResponse);
-  
+
   return cachedResponse || fetchPromise;
 }
 
@@ -191,7 +192,7 @@ const failedRequests = [];
 
 self.addEventListener('sync', (event) => {
   console.log('🔄 Synchronisation en arrière-plan:', event.tag);
-  
+
   if (event.tag === 'background-sync') {
     event.waitUntil(syncFailedRequests());
   }
@@ -199,7 +200,7 @@ self.addEventListener('sync', (event) => {
 
 async function syncFailedRequests() {
   console.log('📤 Tentative de synchronisation des requêtes échouées');
-  
+
   for (let i = failedRequests.length - 1; i >= 0; i--) {
     const request = failedRequests[i];
     try {
@@ -218,24 +219,24 @@ async function syncFailedRequests() {
 
 self.addEventListener('message', (event) => {
   console.log('📨 Message reçu dans le service worker:', event.data);
-  
+
   // Traitement des messages personnalisés
   if (event.data && event.data.type) {
     switch (event.data.type) {
       case 'SKIP_WAITING':
         self.skipWaiting();
         break;
-        
+
       case 'GET_VERSION':
         event.ports[0].postMessage({ version: CACHE_NAME });
         break;
-        
+
       case 'CLEAR_CACHE':
         clearAllCaches().then(() => {
           event.ports[0].postMessage({ success: true });
         });
         break;
-        
+
       case 'CACHE_URLS':
         cacheUrls(event.data.urls).then(() => {
           event.ports[0].postMessage({ success: true });
@@ -263,9 +264,9 @@ async function cacheUrls(urls) {
 
 self.addEventListener('push', (event) => {
   console.log('🔔 Notification push reçue:', event);
-  
+
   let notificationData = {};
-  
+
   // Extraire les données de la notification
   if (event.data) {
     try {
@@ -274,7 +275,7 @@ self.addEventListener('push', (event) => {
       console.warn('Impossible de parser les données de notification:', e);
     }
   }
-  
+
   // Configuration des notifications avec données personnalisées
   const options = {
     body: notificationData.body || 'Nouvelle notification SadTrans',
@@ -301,9 +302,9 @@ self.addEventListener('push', (event) => {
     requireInteraction: true,
     tag: 'sadtrans-notification'
   };
-  
+
   const title = notificationData.title || 'SadTrans';
-  
+
   event.waitUntil(
     self.registration.showNotification(title, options)
   );
@@ -311,12 +312,12 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   console.log('🔔 Notification cliquée:', event);
-  
+
   event.notification.close();
-  
+
   const notificationData = event.notification.data || {};
   const targetUrl = notificationData.url || '/';
-  
+
   if (event.action === 'explore') {
     event.waitUntil(
       clients.openWindow(targetUrl)
