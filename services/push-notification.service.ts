@@ -32,8 +32,8 @@ export class PushNotificationService {
   private subscription: PushSubscription | null = null;
   private userId: string | null = null;
 
-  // Configuration VAPID - clé publique générée
-  private vapidPublicKey = 'BM8RpNclAOSp6Fa24SDgb9M12lZIfRLHphItYjCL351VsvYgzzQ2GboXhUFk32jn53IL2wAE--fSUG-doXMec9A';
+  // Configuration VAPID - clés valides (65 bytes)
+  private vapidPublicKey = 'BGbhFIywlEK4o7baz0krZJpMTMVrDlxsqY16wPsbs9xV1694FCI2N6qbWg_qXqd2paQawLyWgY6sYnjf_dVNtwI';
 
   private constructor() { }
 
