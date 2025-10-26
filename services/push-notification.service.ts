@@ -33,7 +33,7 @@ export class PushNotificationService {
   private userId: string | null = null;
 
   // Configuration VAPID - clés URL-safe valides (65 bytes)
-  private vapidPublicKey = 'BLA3lu547ai4lGW0Fqae-74YdwPkhmtTCiGw85PICS43nuKkQVrpE8kvi_1aLJ6yAn9FxOftcUKb4HzUyOKbj-Y';
+  private vapidPublicKey = 'BCK1nQf97ynrMgC-rUoQfKCiBoEiqTzw5urUQXijWk9cSOQEIsyCiwZ2tceqC-f86c6x6KsIeHL2UAeNQGOgnJ8';
 
   private constructor() { }
 

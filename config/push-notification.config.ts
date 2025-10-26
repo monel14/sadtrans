@@ -12,13 +12,13 @@ export interface PushNotificationConfig {
 // Clés VAPID générées pour l'application
 export const PUSH_CONFIG: PushNotificationConfig = {
   // Clé publique VAPID (utilisée côté client)
-  vapidPublicKey: 'BLA3lu547ai4lGW0Fqae-74YdwPkhmtTCiGw85PICS43nuKkQVrpE8kvi_1aLJ6yAn9FxOftcUKb4HzUyOKbj-Y',
+  vapidPublicKey: 'BCK1nQf97ynrMgC-rUoQfKCiBoEiqTzw5urUQXijWk9cSOQEIsyCiwZ2tceqC-f86c6x6KsIeHL2UAeNQGOgnJ8',
   
   // Email de contact pour VAPID
   vapidEmail: 'mailto:admin@sadtrans.com',
   
   // Clé d'application (même que la clé publique pour la compatibilité)
-  applicationServerKey: 'BLA3lu547ai4lGW0Fqae-74YdwPkhmtTCiGw85PICS43nuKkQVrpE8kvi_1aLJ6yAn9FxOftcUKb4HzUyOKbj-Y'
+  applicationServerKey: 'BCK1nQf97ynrMgC-rUoQfKCiBoEiqTzw5urUQXijWk9cSOQEIsyCiwZ2tceqC-f86c6x6KsIeHL2UAeNQGOgnJ8'
 };
 
 /**
