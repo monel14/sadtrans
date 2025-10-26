@@ -453,12 +453,6 @@ self.simulatePush = async (payload = { title: 'Test Push', body: 'Message de tes
   console.log('📦 [SIMULATE] Payload:', JSON.stringify(payload));
 
   try {
-    const mockEvent = {
-      data: {
-        json: () => payload,
-        text: () => JSON.stringify(payload)
-      }
-    };
 
     // Simuler le traitement
     let notificationData = validateNotificationData({
