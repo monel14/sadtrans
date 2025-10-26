@@ -337,12 +337,28 @@ export class PushNotificationService {
   }
 
   /**
-   * Dissocie l'utilisateur
+   * Dissocie l'utilisateur et nettoie les abonnements
    */
   public async logout(): Promise<void> {
-    this.userId = null;
-    if (this.subscription) {
-      await this.removeSubscriptionFromServer();
+    console.log('🔔 Logging out from PushNotificationService...');
+    
+    try {
+      // Supprimer l'abonnement du serveur si il existe
+      if (this.subscription) {
+        await this.removeSubscriptionFromServer();
+        console.log('✅ Push subscription removed from server');
+      }
+      
+      // Nettoyer l'état local
+      this.userId = null;
+      this.subscription = null;
+      
+      console.log('✅ PushNotificationService logout completed');
+    } catch (error) {
+      console.error('❌ Error during PushNotificationService logout:', error);
+      // Nettoyer l'état local même en cas d'erreur
+      this.userId = null;
+      this.subscription = null;
     }
   }
 

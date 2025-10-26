@@ -472,7 +472,9 @@ export class DataService {
 
     // Method to clear all caches (useful for data refresh)
     public clearAllCaches(): void {
+        console.log('🧹 Clearing all data caches...');
         this.debugClearAllCaches();
+        console.log('✅ All data caches cleared');
     }
 
     public async getTransactions(filters: { agentId?: string; limit?: number; status?: string } = {}): Promise<Transaction[]> {

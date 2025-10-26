@@ -213,14 +213,27 @@ export class NotificationIntegration {
     }
   }
 
+  private static cleanupInterval: number | null = null;
+
   /**
    * Vérifie et nettoie périodiquement les abonnements
    */
   public static startPeriodicCleanup(): void {
     // Nettoyer les anciens abonnements toutes les 24 heures
-    setInterval(() => {
+    this.cleanupInterval = window.setInterval(() => {
       this.notificationManager.cleanupOldSubscriptions(30); // 30 jours
     }, 24 * 60 * 60 * 1000);
+  }
+
+  /**
+   * Arrête le nettoyage périodique
+   */
+  public static stopPeriodicCleanup(): void {
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      this.cleanupInterval = null;
+      console.log("✅ Periodic cleanup stopped");
+    }
   }
 
   /**

@@ -8,6 +8,7 @@ import { RefreshService } from "./services/refresh.service";
 import { PushNotificationService } from "./services/push-notification.service";
 import { NotificationManagerService } from "./services/notification-manager.service";
 import { ConnectionMonitorService } from "./services/connection-monitor.service";
+import { NotificationIntegration } from "./utils/notification-integration";
 import { renderHeader } from "./components/Header";
 import { renderFooter } from "./components/Footer";
 import { navigationLinks } from "./config/navigation";
@@ -269,36 +270,131 @@ export class App {
   };
 
   private stopUserStatusCheck = () => {
-    if (this.statusCheckInterval) clearInterval(this.statusCheckInterval);
-    if (this.realtimeCheckInterval) clearInterval(this.realtimeCheckInterval);
+    if (this.statusCheckInterval) {
+      clearInterval(this.statusCheckInterval);
+      this.statusCheckInterval = null;
+      console.log("✅ User status check interval stopped");
+    }
+    if (this.realtimeCheckInterval) {
+      clearInterval(this.realtimeCheckInterval);
+      this.realtimeCheckInterval = null;
+      console.log("✅ Realtime check interval stopped");
+    }
     
     // Arrêter la surveillance des connexions
-    ConnectionMonitorService.getInstance().stopMonitoring();
+    try {
+      ConnectionMonitorService.getInstance().stopMonitoring();
+      console.log("✅ Connection monitoring stopped");
+    } catch (error) {
+      console.warn("⚠️ Error stopping connection monitor:", error);
+    }
   };
 
-  private handleLogout = async () => {
-    this.stopUserStatusCheck();
+  /**
+   * Arrête tous les services et timers de l'application
+   */
+  private stopAllServices(): void {
+    try {
+      // Arrêter le service de rafraîchissement
+      const refreshService = RefreshService.getInstance();
+      refreshService.cleanup();
+      console.log("✅ Refresh service stopped");
+    } catch (error) {
+      console.warn("⚠️ Error stopping refresh service:", error);
+    }
 
     try {
+      // Arrêter le nettoyage périodique des notifications
+      NotificationIntegration.stopPeriodicCleanup();
+    } catch (error) {
+      console.warn("⚠️ Error stopping periodic cleanup:", error);
+    }
+  }
+
+  private handleLogout = async () => {
+    console.log("🔄 Début de la déconnexion...");
+    
+    // 1. Arrêter les vérifications de statut utilisateur et services
+    this.stopUserStatusCheck();
+    this.stopAllServices();
+
+    try {
+      // 2. Déconnexion des services de notifications
       const pushService = PushNotificationService.getInstance();
       const notificationManager = NotificationManagerService.getInstance();
       
       await pushService.logout();
       await notificationManager.logout();
       
-      console.log("Push notifications logout successful");
+      console.log("✅ Push notifications logout successful");
     } catch (error) {
-      console.warn("Push notifications logout failed:", error);
+      console.warn("⚠️ Push notifications logout failed:", error);
     }
 
+    try {
+      // 3. Déconnexion des canaux Realtime
+      const dataService = DataService.getInstance();
+      dataService.unsubscribeAll();
+      console.log("✅ Realtime channels disconnected");
+    } catch (error) {
+      console.warn("⚠️ Realtime disconnection failed:", error);
+    }
+
+    try {
+      // 4. Nettoyage du cache des données
+      const dataService = DataService.getInstance();
+      dataService.clearAllCaches();
+      console.log("✅ Data caches cleared");
+    } catch (error) {
+      console.warn("⚠️ Cache clearing failed:", error);
+    }
+
+    // 5. Déconnexion de l'authentification
     await AuthService.getInstance().logout();
+    
+    // 6. Nettoyage de l'état de l'application
     this.currentUser = null;
     this.mainLayout = null;
-    localStorage.removeItem("currentNavigation");
+    
+    // 7. Nettoyage complet du localStorage
+    this.clearLocalStorage();
+    
+    // 8. Affichage de la page de connexion
     this.showLoginPage();
 
-    console.log("Utilisateur déconnecté");
+    console.log("✅ Utilisateur déconnecté avec succès");
   };
+
+  /**
+   * Nettoie le localStorage en gardant seulement les éléments essentiels
+   */
+  private clearLocalStorage(): void {
+    try {
+      // Sauvegarder les éléments à conserver (si nécessaire)
+      const itemsToKeep = [
+        // 'theme', // Si tu veux garder le thème
+        // 'language', // Si tu veux garder la langue
+      ];
+      
+      const savedItems: { [key: string]: string } = {};
+      itemsToKeep.forEach(key => {
+        const value = localStorage.getItem(key);
+        if (value) savedItems[key] = value;
+      });
+      
+      // Nettoyer tout le localStorage
+      localStorage.clear();
+      
+      // Restaurer les éléments sauvegardés
+      Object.entries(savedItems).forEach(([key, value]) => {
+        localStorage.setItem(key, value);
+      });
+      
+      console.log("✅ localStorage cleared");
+    } catch (error) {
+      console.warn("⚠️ localStorage clearing failed:", error);
+    }
+  }
 
   private handleUpdateCurrentUser = (event: CustomEvent) => {
     if (

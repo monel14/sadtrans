@@ -193,10 +193,17 @@ export class AuthService {
     }
 
     public async logout(): Promise<void> {
+        console.log('🔐 Logging out from AuthService...');
+        
+        // Nettoyer l'état local
         this.currentUser = null;
+        
+        // Déconnexion Supabase
         const { error } = await supabase.auth.signOut();
         if (error) {
-            console.error('Supabase logout error:', error);
+            console.error('❌ Supabase logout error:', error);
+        } else {
+            console.log('✅ Supabase logout successful');
         }
     }
     
