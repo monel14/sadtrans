@@ -420,23 +420,18 @@ export class PushNotificationService {
    */
   private async removeSubscriptionFromServer(): Promise<void> {
     try {
-      if (!this.subscription) return;
+      if (!this.subscription || !this.userId) return;
 
-      // Utiliser Supabase Edge Function pour supprimer l'abonnement
-      const { data, error } = await supabase.functions.invoke('manage-push-subscription', {
-        method: 'DELETE',
-        body: {
-          userId: this.userId,
-          endpoint: this.subscription.endpoint
-        }
-      });
+      // Supprimer directement de la base de données
+      const { error } = await supabase
+        .from('push_subscriptions')
+        .delete()
+        .eq('user_id', this.userId)
+        .eq('subscription->endpoint', this.subscription.endpoint);
 
       if (error) {
-        throw new Error(`Erreur Supabase: ${error.message}`);
-      }
-
-      if (!data?.success) {
-        throw new Error('Échec de la suppression de l\'abonnement');
+        console.warn('Erreur lors de la suppression de l\'abonnement:', error.message);
+        return;
       }
 
       console.log('Abonnement push supprimé avec succès');
