@@ -77,7 +77,6 @@ export class ConnectionMonitorService {
      * Gestionnaire d'événements de mise à jour des données
      */
     private handleDataUpdate = (event: Event) => {
-        console.log('📡 Data update detected, resetting timer');
         this.lastDataUpdate = Date.now();
     };
 
@@ -92,7 +91,6 @@ export class ConnectionMonitorService {
 
         // Vérifier si les données sont obsolètes
         if (timeSinceLastUpdate > this.STALE_DATA_THRESHOLD) {
-            console.warn('⚠️ Stale data detected, attempting to reconnect...');
             this.attemptReconnection();
         }
 
@@ -101,7 +99,6 @@ export class ConnectionMonitorService {
 
         // Vérifier si l'utilisateur est toujours en ligne
         if (!navigator.onLine) {
-            console.warn('⚠️ User is offline');
             return;
         }
 
@@ -111,11 +108,8 @@ export class ConnectionMonitorService {
                 method: 'HEAD',
                 cache: 'no-cache'
             });
-            if (!response.ok) {
-                console.warn('⚠️ Network connectivity issue detected');
-            }
         } catch (error) {
-            console.warn('⚠️ Network test failed:', error);
+            // Connexion réseau défaillante
         }
     }
 
@@ -134,14 +128,10 @@ export class ConnectionMonitorService {
             const { error } = await supabase.from('users').select('count').limit(1);
 
             if (error) {
-                console.warn('⚠️ Supabase database connectivity issue:', error.message);
                 this.attemptReconnection();
-            } else {
-
             }
 
         } catch (error) {
-            console.error('Error checking Supabase connection:', error);
             this.attemptReconnection();
         }
     }
@@ -150,8 +140,6 @@ export class ConnectionMonitorService {
      * Tente de reconnecter les services
      */
     private attemptReconnection(): void {
-        console.log('🔄 Attempting to reconnect services...');
-
         try {
             const dataService = DataService.getInstance();
 
@@ -161,26 +149,8 @@ export class ConnectionMonitorService {
             // Réinitialiser le timer
             this.lastDataUpdate = Date.now();
 
-            // Notifier l'utilisateur
-            document.body.dispatchEvent(new CustomEvent('showToast', {
-                detail: {
-                    message: 'Reconnexion automatique en cours...',
-                    type: 'info'
-                }
-            }));
-
-            console.log('🔄 Reconnection attempt completed');
-
         } catch (error) {
-            console.error('Error during reconnection attempt:', error);
-
-            // Notifier l'utilisateur de l'erreur
-            document.body.dispatchEvent(new CustomEvent('showToast', {
-                detail: {
-                    message: 'Problème de connexion détecté. Veuillez rafraîchir la page.',
-                    type: 'warning'
-                }
-            }));
+            // Erreur silencieuse lors de la reconnexion
         }
     }
 

@@ -840,25 +840,7 @@ export class ApiService {
         return opTypeMap.get(data.id)!;
     }
 
-    /**
-     * Envoie les notifications push de manière asynchrone
-     */
-    private async sendTransactionNotificationsAsync(transactionId: string, eventType: 'created' | 'validated' | 'rejected'): Promise<void> {
-        try {
-            const { error } = await supabase.functions.invoke('process-transaction-notifications', {
-                body: {
-                    transactionId,
-                    eventType
-                }
-            });
 
-            if (error) {
-                console.warn('Push notification service error:', error);
-            }
-        } catch (error) {
-            console.warn('Failed to invoke push notification service:', error);
-        }
-    }
 
     /**
      * Nettoie et valide les données JSON pour éviter les erreurs de syntaxe
@@ -976,10 +958,7 @@ export class ApiService {
         await dataService.invalidateTransactionsCache();
         await dataService.invalidateUsersCache(); // Pour rafraîchir le solde de l'utilisateur/agence
 
-        // Envoyer les notifications push de manière asynchrone (ne pas attendre)
-        this.sendTransactionNotificationsAsync(createdTx.id, 'created').catch(error => {
-            console.warn('Failed to send push notifications:', error);
-        });
+        // Les notifications sont automatiquement créées par le trigger de base de données
 
         document.body.dispatchEvent(new CustomEvent('transactionCreated', { detail: { transactionId: createdTx.id } }));
 

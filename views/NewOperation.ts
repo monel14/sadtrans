@@ -522,6 +522,9 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
     // Selector for elements inside the modal, which is now on document.body
     const opSearchInput = $('#opSearchInput', opSelectionModal) as HTMLInputElement;
 
+    // Debounce timer pour éviter les appels répétés
+    let updateSummaryTimer: NodeJS.Timeout | null = null;
+
     const updateOperationSummary = async () => {
         const summaryContainer = $('#operation-summary', container);
         const summaryBalanceInfo = $('#summary-balance-info', container);
@@ -808,7 +811,15 @@ export async function renderNewOperationView(user: User, operationTypeId?: strin
                 }
             }
         }
-        updateOperationSummary();
+        debouncedUpdateSummary();
+    };
+
+    // Fonction debounced pour éviter les appels répétés
+    const debouncedUpdateSummary = () => {
+        if (updateSummaryTimer) {
+            clearTimeout(updateSummaryTimer);
+        }
+        updateSummaryTimer = setTimeout(updateOperationSummary, 500); // Attendre 500ms après le dernier changement
     };
 
     // Use event delegation for dynamic fields - écouter tous les changements
